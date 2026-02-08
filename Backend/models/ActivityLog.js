@@ -22,6 +22,7 @@ const activityLogSchema = new mongoose.Schema({
       'CREATE_CANVAS',
       'DELETE_CANVAS',
       'RENAME_CANVAS',
+      'UPDATE_CANVAS',
       'DUPLICATE_CANVAS',
       'CREATE_FOLDER',
       'DELETE_FOLDER',
