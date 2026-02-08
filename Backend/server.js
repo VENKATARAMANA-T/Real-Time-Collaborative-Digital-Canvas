@@ -5,6 +5,7 @@ const dotenv = require('dotenv');
 
 const authRoutes = require('./routes/authRoutes.js');
 const canvasRoutes = require('./routes/canvasRoutes.js');
+const meetingRoutes = require('./routes/meetingRoutes.js');
 
 // Load env vars
 dotenv.config();
@@ -20,6 +21,7 @@ app.use(express.json(),express.urlencoded({ extended: true }));
 
 app.use('/api/auth', authRoutes);
 app.use('/api/canvases', canvasRoutes);
+app.use('/api/meetings', meetingRoutes);
 
 app.listen(process.env.PORT || 5000, () => {
   console.log(`Server running on port ${process.env.PORT || 5000}`);

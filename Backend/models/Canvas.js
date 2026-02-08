@@ -30,26 +30,6 @@ const canvasSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
-  isLocked: {
-    type: Boolean,
-    default: false
-  },
-  visibility: {
-    type: String,
-    enum: ['private', 'public', 'shared'],
-    default: 'private'
-  },
-  collaborators: [{
-    user: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User'
-    },
-    permission: {
-      type: String,
-      enum: ['view', 'edit'],
-      default: 'view'
-    }
-  }],
   versions: [{
     data: Object,
     timestamp: {
