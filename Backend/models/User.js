@@ -32,16 +32,13 @@ const userSchema = new mongoose.Schema({
     default: true
   },
   
-  // Storage for tokens (Logic to generate these will be in Controller)
-  jwtToken: {
-    type: String
-  },
-  tokenExpiresIn: {
-    type: Date
+  refreshTokenHash: {
+    type: String,
+    default: null
   },
 
   // Storage for reset flow
-  resetPasswordToken: String,
+  resetPasswordTokenHash: String,
   resetPasswordExpire: Date
 }, 
 { timestamps: true }
