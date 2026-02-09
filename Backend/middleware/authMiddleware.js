@@ -1,32 +1,32 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const { getAccessSecret } = require('../utils/tokenService');
 
 const authMiddleware = async (req, res, next) => {
-  let token;
+  let token = req.cookies?.accessToken;
 
-  if (
-    req.headers.authorization &&
-    req.headers.authorization.startsWith('Bearer')
-  ) {
-    try {
-      // Get token from header (Format: "Bearer <token>")
-      token = req.headers.authorization.split(' ')[1];
-
-      // Verify token
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-      // Get user from the token
-      req.user = await User.findById(decoded.id).select('-password');
-
-      next();
-    } catch (error) {
-      console.error(error);
-      res.status(401).json({ message: 'Not authorized, token failed' });
-    }
+  if (!token && req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+    token = req.headers.authorization.split(' ')[1];
   }
 
   if (!token) {
-    res.status(401).json({ message: 'Not authorized, no token' });
+    return res.status(401).json({ message: 'Not authorized, no token' });
+  }
+
+  try {
+    const secret = getAccessSecret();
+    if (!secret) {
+      return res.status(500).json({ message: 'Access secret not configured' });
+    }
+
+    const decoded = jwt.verify(token, secret);
+
+    req.user = await User.findById(decoded.id).select('-password');
+
+    return next();
+  } catch (error) {
+    console.error(error);
+    return res.status(401).json({ message: 'Not authorized, token failed' });
   }
 };
 
