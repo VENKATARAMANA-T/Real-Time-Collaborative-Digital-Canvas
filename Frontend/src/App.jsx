@@ -11,6 +11,7 @@ function App() {
  return (
     <Router>
       <Routes>
+        <Route path="/" element={<CollabCanvasApp />} />
         <Route path="/home" element={<CollabCanvasApp />} />
         <Route path="/profile" element={<UserProfileUI />} />
         <Route path="/help" element={<HelpSystemUI />} />
