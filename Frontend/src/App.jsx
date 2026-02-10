@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import PaintApp from './pages/PaintApp.jsx';
 import HelpSystemUI from './pages/HelpSystemUI.jsx';
 
+import PaintApp from './pages/PaintApp.jsx';
 function App() {
   
 
