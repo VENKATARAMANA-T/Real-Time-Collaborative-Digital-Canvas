@@ -11,7 +11,7 @@ function App() {
       
         <Route path="/" element={<HelpSystemUI />} />
         <Route path="/paint" element={<PaintApp />} />
-       
+        {/* Complted  */}
       </Routes>
     </Router>
   );
