@@ -29,6 +29,11 @@ const meetingSchema = new mongoose.Schema({
     required: true
   },
 
+  isChatEnabled: {
+    type: Boolean,
+    default: true // Chat is ON by default
+  },
+
   // 👥 Participants Tracking
   participants: [{
     user: {
@@ -47,6 +52,10 @@ const meetingSchema = new mongoose.Schema({
     leaveTime: {
       type: Date,
       default: null // Null means they are still in the meeting
+    },
+    canChat: { 
+      type: Boolean, 
+      default: true // Users can chat by default
     }
   }],
   

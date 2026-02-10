@@ -10,10 +10,7 @@ function App() {
  return (
     <Router>
       <Routes>
-      
-        <Route path="/" element={<HelpSystemUI />} />
-       
-        
+
         <Route path="/paint" element={<PaintApp />} />
        
       </Routes>
