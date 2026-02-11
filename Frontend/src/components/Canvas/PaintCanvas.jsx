@@ -71,14 +71,14 @@ const PaintCanvas = ({
       c.width = width * 2;
       c.height = height * 2;
 
-      const ctx = c.getContext('2d');
+      const ctx = c.getContext('2d', { willReadFrequently: true });
       ctx.scale(2, 2);
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
     });
 
     if (canvas) {
-      const ctx = canvas.getContext('2d');
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
       contextRef.current = ctx;
       ctx.fillStyle = 'white';
       ctx.fillRect(0, 0, width, height);
@@ -87,7 +87,7 @@ const PaintCanvas = ({
       }
     }
     if (tempCanvas) {
-      const ctx = tempCanvas.getContext('2d');
+      const ctx = tempCanvas.getContext('2d', { willReadFrequently: true });
       tempContextRef.current = ctx;
     }
   }, [canvasRef, tempCanvasRef, contextRef, tempContextRef, mainContainerRef, setCanvasSize]);
@@ -277,11 +277,10 @@ const PaintCanvas = ({
       if (tool === 'eraser') {
         const hit = [...elements].reverse().find(el => isPointInElement(coords.x, coords.y, el));
         if (hit) {
-          const nextElements = elements.filter(el => el.id !== hit.id);
-          setElements(nextElements);
+          setElements(prev => prev.filter(el => el.id !== hit.id));
           if (selectedId === hit.id) setSelectedId(null);
           if (editingId === hit.id) setEditingId(null);
-          saveState(nextElements);
+          saveState();
           return;
         }
       }
@@ -350,7 +349,7 @@ const PaintCanvas = ({
         ...textFormat,
         fontSize: textFormat.size
       };
-      setElements([...elements, newText]);
+      setElements(prev => [...prev, newText]);
       setSelectedId(newId);
       return;
     }
@@ -364,7 +363,7 @@ const PaintCanvas = ({
       color, strokeWidth, opacity,
       fill: fillMode
     };
-    setElements([...elements, newEl]);
+    setElements(prev => [...prev, newEl]);
     setSelectedId(newEl.id);
   };
 
@@ -373,14 +372,14 @@ const PaintCanvas = ({
     setCurrPos(coords);
 
     if (dragMode === 'moving' && selectedId) {
-      setElements(elements.map(el => el.id === selectedId ? { ...el, x: coords.x - dragOffset.current.x, y: coords.y - dragOffset.current.y } : el));
+      setElements(prev => prev.map(el => el.id === selectedId ? { ...el, x: coords.x - dragOffset.current.x, y: coords.y - dragOffset.current.y } : el));
     } else if (dragMode === 'resizing' && selectedId) {
-      setElements(elements.map(el => {
+      setElements(prev => prev.map(el => {
         if (el.id !== selectedId) return el;
         return { ...el, w: coords.x - el.x, h: coords.y - el.y };
       }));
     } else if (dragMode === 'creating' && selectedId) {
-      setElements(elements.map(el => {
+      setElements(prev => prev.map(el => {
         if (el.id !== selectedId) return el;
         if (el.type === 'text') {
           return { ...el, w: Math.abs(coords.x - startPos.x), h: Math.abs(coords.y - startPos.y) };

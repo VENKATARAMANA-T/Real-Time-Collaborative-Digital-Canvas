@@ -17,7 +17,7 @@ const PropertiesPanel = ({ strokeWidth, setStrokeWidth }) => {
             value={strokeWidth}
             onChange={e => setStrokeWidth(parseInt(e.target.value))}
             className="appearance-none w-1 h-32 bg-zinc-700 rounded-full accent-blue-500 cursor-pointer"
-            style={{ WebkitAppearance: 'slider-vertical' }}
+            style={{ writingMode: 'vertical-lr', direction: 'rtl' }}
           />
           <span className="text-[10px] font-mono text-zinc-500">{strokeWidth}px</span>
         </div>
