@@ -230,7 +230,7 @@ exports.forgotPassword = async (req, res) => {
     const user = await User.findOne({ email });
 
     if (!user) {
-      return res.status(200).json({ message: 'If the email exists, a reset link was sent' });
+      return res.status(404).json({ message: 'Invalid email address' });
     }
 
     const resetToken = crypto.randomBytes(32).toString('hex');
@@ -249,7 +249,7 @@ exports.forgotPassword = async (req, res) => {
 
     await sendEmail({ to: user.email, subject, text, html });
 
-    res.status(200).json({ message: 'If the email exists, a reset link was sent' });
+    res.status(200).json({ message: 'Reset link sent to your email' });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server Error' });

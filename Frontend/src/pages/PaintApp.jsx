@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import TopMenu from '../components/Canvas/TopMenu';
 import Toolbar from '../components/Canvas/Toolbar';
 import PropertiesPanel from '../components/Canvas/PropertiesPanel';
@@ -6,8 +7,13 @@ import StatusBar from '../components/Canvas/StatusBar';
 import PaintCanvas from '../components/Canvas/PaintCanvas';
 import usePaintHistory from '../hooks/usePaintHistory';
 import usePaintTools from '../hooks/usePaintTools';
+import { canvasAPI } from '../services/api';
+import { useAuth } from '../context/AuthContext.jsx';
 
 const PaintApp = () => {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const { id } = useParams();
   const canvasRef = useRef(null);
   const tempCanvasRef = useRef(null);
   const contextRef = useRef(null);
@@ -15,6 +21,16 @@ const PaintApp = () => {
   const textAreaRef = useRef(null);
   const workspaceRef = useRef(null);
   const mainContainerRef = useRef(null);
+
+  const [activeCanvasId, setActiveCanvasId] = useState(id || null);
+  const [canvasTitle, setCanvasTitle] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState('');
+  const [loadError, setLoadError] = useState('');
+  const [isLoadingCanvas, setIsLoadingCanvas] = useState(true);
+  const [loadedPixelData, setLoadedPixelData] = useState(null);
+  const [showTitleModal, setShowTitleModal] = useState(false);
+  const [titleInput, setTitleInput] = useState('');
 
   const [zoom, setZoom] = useState(100);
   const [canvasSize, setCanvasSize] = useState({ width: 1920, height: 1080 });
@@ -151,17 +167,162 @@ const PaintApp = () => {
     }
   };
 
-  const handleSave = () => {
-    const exportCanvas = document.createElement('canvas');
-    exportCanvas.width = canvasRef.current.width;
-    exportCanvas.height = canvasRef.current.height;
-    const ctx = exportCanvas.getContext('2d');
-    ctx.drawImage(canvasRef.current, 0, 0);
-    const link = document.createElement('a');
-    link.download = 'modern-paint-pro.png';
-    link.href = exportCanvas.toDataURL();
-    link.click();
+  const handleSave = async () => {
+    // If no title and no active ID, show modal
+    if (!activeCanvasId && !canvasTitle.trim()) {
+      setShowTitleModal(true);
+      return;
+    }
+    await performSave(canvasTitle);
   };
+
+  const performSave = async (title) => {
+    try {
+      setIsSaving(true);
+      setSaveMessage('Saving...');
+      const exportCanvas = document.createElement('canvas');
+      exportCanvas.width = canvasRef.current.width;
+      exportCanvas.height = canvasRef.current.height;
+      const exportCtx = exportCanvas.getContext('2d');
+      if (canvasRef.current) {
+        exportCtx.drawImage(canvasRef.current, 0, 0);
+      }
+      if (tempCanvasRef.current) {
+        exportCtx.drawImage(tempCanvasRef.current, 0, 0);
+      }
+      const pixelData = exportCanvas.toDataURL('image/png');
+
+      // Generate username text badge as thumbnail
+      const username = user?.username || 'User';
+      const badgeCanvas = document.createElement('canvas');
+      badgeCanvas.width = 400;
+      badgeCanvas.height = 200;
+      const badgeCtx = badgeCanvas.getContext('2d');
+      badgeCtx.fillStyle = '#1d7ff2';
+      badgeCtx.fillRect(0, 0, 400, 200);
+      badgeCtx.fillStyle = '#ffffff';
+      badgeCtx.font = 'bold 48px Arial';
+      badgeCtx.textAlign = 'center';
+      badgeCtx.textBaseline = 'middle';
+      badgeCtx.fillText(username, 200, 100);
+      const thumbnail = badgeCanvas.toDataURL('image/png');
+
+      const payload = {
+        title: title || 'Untitled Canvas',
+        folderId: null, // Personal Sketches folder (update with actual ID if needed)
+        data: {
+          elements,
+          canvasSize,
+          pixelData
+        },
+        thumbnail
+      };
+
+      console.log('Saving canvas with payload:', payload);
+
+      if (activeCanvasId) {
+        await canvasAPI.update(activeCanvasId, payload);
+      } else {
+        const created = await canvasAPI.create(payload);
+        if (created?._id) {
+          setActiveCanvasId(created._id);
+          setCanvasTitle(created.title);
+          navigate(`/paint/${created._id}`, { replace: true });
+        }
+      }
+      setSaveMessage('Saved');
+      setTimeout(() => setSaveMessage(''), 2000);
+    } catch (error) {
+      setSaveMessage(error.response?.data?.message || 'Save failed');
+      setTimeout(() => setSaveMessage(''), 3000);
+    } finally {
+      setIsSaving(false);
+      setShowTitleModal(false);
+    }
+  };
+
+  const handleTitleSubmit = () => {
+    if (titleInput.trim()) {
+      setCanvasTitle(titleInput.trim());
+      performSave(titleInput.trim());
+    }
+  };
+
+  useEffect(() => {
+    setActiveCanvasId(id || null);
+  }, [id]);
+
+  useEffect(() => {
+    if (!loadedPixelData || !canvasRef.current || !contextRef.current) return;
+
+    const img = new Image();
+    img.src = loadedPixelData;
+    img.onload = () => {
+      if (!canvasRef.current || !contextRef.current) return;
+      const ctx = contextRef.current;
+      ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+      ctx.fillStyle = 'white';
+      ctx.fillRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+      ctx.drawImage(img, 0, 0, canvasRef.current.width, canvasRef.current.height);
+    };
+  }, [loadedPixelData]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadCanvas = async () => {
+      if (!user) {
+        navigate('/');
+        return;
+      }
+
+      setIsLoadingCanvas(true);
+      setLoadError('');
+
+      if (!activeCanvasId) {
+        if (isMounted) setIsLoadingCanvas(false);
+        return;
+      }
+
+      try {
+        const canvas = await canvasAPI.getById(activeCanvasId);
+        if (!isMounted) return;
+
+        const nextElements = canvas?.data?.elements || [];
+        setElements(nextElements);
+        if (canvas?.data?.canvasSize) {
+          setCanvasSize(canvas.data.canvasSize);
+        }
+        if (canvas?.title) {
+          setCanvasTitle(canvas.title);
+        }
+        const serverPixelData = canvas?.data?.pixelData || null;
+        setLoadedPixelData(serverPixelData);
+        if (!serverPixelData && contextRef.current && canvasRef.current) {
+          const ctx = contextRef.current;
+          ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+          ctx.fillStyle = 'white';
+          ctx.fillRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+        }
+        setLoadError('');
+
+        setTimeout(() => {
+          if (isMounted) saveState(nextElements);
+        }, 0);
+      } catch (error) {
+        if (isMounted) {
+          setLoadError(error.response?.data?.message || 'Failed to load canvas');
+        }
+      } finally {
+        if (isMounted) setIsLoadingCanvas(false);
+      }
+    };
+
+    loadCanvas();
+    return () => {
+      isMounted = false;
+    };
+  }, [activeCanvasId, navigate, saveState, user]);
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -216,6 +377,7 @@ const PaintApp = () => {
         redo={redo}
         historyStep={historyStep}
         historyLength={history.length}
+        onBack={() => navigate('/dashboard')}
       />
 
       {alwaysShowToolbar && (
@@ -277,6 +439,37 @@ const PaintApp = () => {
 
       {showStatusBar && (
         <StatusBar currPos={currPos} canvasSize={canvasSize} zoom={zoom} setZoom={setZoom} />
+      )}
+
+      {/* Title Modal */}
+      {showTitleModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md">
+          <div className="bg-[#18181b] border border-zinc-700 rounded-xl p-6 w-96 shadow-2xl">
+            <h3 className="text-lg font-bold text-white mb-4">Enter Canvas Title</h3>
+            <input
+              type="text"
+              value={titleInput}
+              onChange={(e) => setTitleInput(e.target.value)}
+              className="w-full px-4 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="e.g. My Awesome Drawing"
+              autoFocus
+            />
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                onClick={() => setShowTitleModal(false)}
+                className="px-4 py-2 bg-zinc-800 text-white rounded-lg hover:bg-zinc-700 transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleTitleSubmit}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-all"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       <style>{`

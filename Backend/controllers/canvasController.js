@@ -7,13 +7,17 @@ const Meeting = require('../models/Meeting.js');
 // @access  Private
 exports.createCanvas = async (req, res) => {
   try {
-    const { title, folderId } = req.body;
+    const { title, folderId, data, thumbnail } = req.body;
+    const safeTitle = title && title.trim().length > 0
+      ? title.trim()
+      : `Untitled Canvas ${Date.now()}`;
 
     const canvas = new Canvas({
-      title: title || 'Untitled Canvas',
+      title: safeTitle,
       owner: req.user._id, 
       folder: folderId || null,
-      data: {}, // Always start blank
+      data: data || {},
+      thumbnail: thumbnail || ''
     });
 
     const createdCanvas = await canvas.save();
@@ -73,7 +77,7 @@ exports.getCanvasById = async (req, res) => {
 exports.updateCanvas = async (req, res) => {
   try {
     const { data, thumbnail, title } = req.body;
-
+    console.log(data, thumbnail, title);
     // Find and Update strictly by Owner
     const canvas = await Canvas.findOneAndUpdate(
       { _id: req.params.id, owner: req.user._id },

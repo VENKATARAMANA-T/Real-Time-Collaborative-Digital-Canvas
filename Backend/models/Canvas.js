@@ -4,7 +4,6 @@ const canvasSchema = new mongoose.Schema({
   title: {
     type: String,
     required: [true, 'Please provide a canvas title'],
-    unique: true, // Titles must now be unique across the entire collection
     trim: true,
     default: 'Untitled Canvas'
   },

@@ -34,14 +34,17 @@ const TopMenu = ({
   undo,
   redo,
   historyStep,
-  historyLength
+  historyLength,
+  onBack
 }) => {
   return (
     <nav className="h-10 flex items-center px-4 gap-6 text-sm border-b border-zinc-800 bg-[#09090b] relative z-[100]">
-      <div className="flex items-center gap-1 text-zinc-400">
-        <img src="https://upload.wikimedia.org/wikipedia/commons/1/13/Logo_of_Microsoft_Paint.svg" className="w-4 h-4 mr-2" alt="logo" />
-        <span className="text-zinc-100 font-medium">Modern Paint Pro</span>
-      </div>
+      <button
+        onClick={onBack}
+        className="px-3 py-1 rounded-md bg-white/10 hover:bg-white/20 text-white border border-white/10"
+      >
+        Back to Dashboard
+      </button>
       
       <div className="flex gap-1 relative">
         {/* File Menu */}
@@ -179,7 +182,7 @@ const TopMenu = ({
         <IconButton icon={Undo} disabled={historyStep <= 0} onClick={undo} title="Undo (Ctrl+Z)" />
         <IconButton icon={Redo} disabled={historyStep >= historyLength - 1} onClick={redo} title="Redo (Ctrl+Y)" />
         <div className="w-[1px] h-4 bg-zinc-800 mx-1" />
-        <IconButton icon={Save} onClick={handleSave} title="Save (Download)" />
+        <IconButton icon={Save} onClick={handleSave} title="Save" />
       </div>
     </nav>
   );
