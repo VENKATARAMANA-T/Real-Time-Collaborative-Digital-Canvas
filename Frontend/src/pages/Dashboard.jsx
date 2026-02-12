@@ -23,6 +23,15 @@ export default function Dashboard() {
   const [savedCanvases, setSavedCanvases] = useState([]);
   const [isLoadingCanvases, setIsLoadingCanvases] = useState(false);
 
+  // State for rename, export, import features
+  const [openDropdownId, setOpenDropdownId] = useState(null);
+  const [renameModalOpen, setRenameModalOpen] = useState(false);
+  const [renameCanvasId, setRenameCanvasId] = useState(null);
+  const [renameValue, setRenameValue] = useState('');
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [importFile, setImportFile] = useState(null);
+  const [importPreview, setImportPreview] = useState(null);
+
   useEffect(() => {
     if (user) {
       setProfileUsername(user.username || '');
@@ -260,10 +269,10 @@ export default function Dashboard() {
   const avatarUrl = user?.profileImage || 'https://lh3.googleusercontent.com/aida-public/AB6AXuA1G-Hn3vTP4BF8Tw65GNWLXCvphxit-gjaQaTS4e4417fPSGMKmx5zWr3w71xhaFli15vvoNhXAQzFsZhbXrYJnyiMAASvjonWiMDpUrf74kM00j8LO0v8ZIeWjxaTbQuwyPqYZPfUeaOJ0wxlWWLxz3b8aKfJIiOrN14CKccdESbzqpgCNmOz0yLKqEPnT9TLpYA75qsT7GKR2uA3ES71XLf46HSiL3x1oGxqtIPUL_bm67_UVcIPd6dxq-bs8_hsxaiualJBX4s';
   const accountCreatedLabel = user?.createdAt
     ? new Date(user.createdAt).toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-      })
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    })
     : 'Unknown';
 
   const showFlash = (type, message) => {
@@ -375,6 +384,130 @@ export default function Dashboard() {
     }
   };
 
+  // Handler: Open rename modal
+  const handleRenameCanvas = (canvasId, currentTitle) => {
+    setRenameCanvasId(canvasId);
+    setRenameValue(currentTitle);
+    setRenameModalOpen(true);
+    setOpenDropdownId(null);
+  };
+
+  // Handler: Submit rename
+  const handleRenameSubmit = async () => {
+    if (!renameValue || renameValue.trim().length === 0) {
+      showFlash('error', 'Canvas title cannot be empty');
+      return;
+    }
+
+    try {
+      const updated = await canvasAPI.rename(renameCanvasId, renameValue.trim());
+
+      // Optimistic update
+      setSavedCanvases(prev =>
+        prev.map(c => c._id === renameCanvasId ? { ...c, title: updated.title } : c)
+      );
+
+      showFlash('success', 'Canvas renamed successfully');
+      setRenameModalOpen(false);
+      setRenameCanvasId(null);
+      setRenameValue('');
+    } catch (error) {
+      const message = error.response?.data?.message || 'Failed to rename canvas';
+      showFlash('error', message);
+    }
+  };
+
+  // Handler: Export canvas
+  const handleExportCanvas = async (canvasId, canvasTitle) => {
+    try {
+      const exportData = await canvasAPI.exportCanvas(canvasId);
+
+      // Create JSON blob and trigger download
+      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `canvas-${canvasTitle.replace(/[^a-z0-9]/gi, '_')}-${Date.now()}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      showFlash('success', 'Canvas exported successfully');
+      setOpenDropdownId(null);
+    } catch (error) {
+      const message = error.response?.data?.message || 'Failed to export canvas';
+      showFlash('error', message);
+    }
+  };
+
+  // Handler: Import file selection
+  const handleImportFileSelect = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (file.type !== 'application/json' && !file.name.endsWith('.json')) {
+      showFlash('error', 'Please select a valid JSON file');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const json = JSON.parse(e.target.result);
+        if (!json.title || !json.data) {
+          showFlash('error', 'Invalid canvas file: missing required fields');
+          return;
+        }
+        setImportFile(file);
+        setImportPreview(json);
+      } catch (error) {
+        showFlash('error', 'Invalid JSON file');
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  // Handler: Submit import
+  const handleImportSubmit = async () => {
+    if (!importPreview) return;
+
+    try {
+      const newCanvas = await canvasAPI.importCanvas(importPreview);
+
+      showFlash('success', 'Canvas imported successfully');
+      setImportModalOpen(false);
+      setImportFile(null);
+      setImportPreview(null);
+
+      // Refresh canvas list
+      const canvases = await canvasAPI.getAll();
+      setSavedCanvases(canvases || []);
+
+      // Optionally navigate to the imported canvas
+      if (newCanvas?._id) {
+        navigate(`/paint/${newCanvas._id}`);
+      }
+    } catch (error) {
+      const message = error.response?.data?.message || 'Failed to import canvas';
+      showFlash('error', message);
+    }
+  };
+
+  // Handler: Toggle dropdown
+  const handleDropdownToggle = (canvasId) => {
+    setOpenDropdownId(prev => prev === canvasId ? null : canvasId);
+  };
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = () => {
+      if (openDropdownId) setOpenDropdownId(null);
+    };
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, [openDropdownId]);
+
   return (
     <div className="dark bg-[#0f172a] text-slate-100 font-display transition-colors duration-300">
       <style>{`
@@ -399,9 +532,8 @@ export default function Dashboard() {
           </div>
           <nav className="flex-1 px-4 space-y-1 mt-4">
             <button
-              className={`w-full flex items-center px-4 py-3 text-sm font-semibold rounded-xl transition-all ${
-                activeView === 'home' ? 'bg-[#1a2b4a] text-white' : 'text-slate-400 hover:bg-[#1a2b4a] hover:text-white'
-              }`}
+              className={`w-full flex items-center px-4 py-3 text-sm font-semibold rounded-xl transition-all ${activeView === 'home' ? 'bg-[#1a2b4a] text-white' : 'text-slate-400 hover:bg-[#1a2b4a] hover:text-white'
+                }`}
               onClick={() => setActiveView('home')}
               type="button"
             >
@@ -409,11 +541,10 @@ export default function Dashboard() {
               Home
             </button>
             <button
-              className={`w-full flex items-center px-4 py-3 text-sm font-semibold rounded-xl transition-all ${
-                activeView === 'canvases'
-                  ? 'bg-primary/10 text-primary'
-                  : 'text-slate-400 hover:bg-[#1a2b4a] hover:text-white'
-              }`}
+              className={`w-full flex items-center px-4 py-3 text-sm font-semibold rounded-xl transition-all ${activeView === 'canvases'
+                ? 'bg-primary/10 text-primary'
+                : 'text-slate-400 hover:bg-[#1a2b4a] hover:text-white'
+                }`}
               onClick={() => setActiveView('canvases')}
               type="button"
             >
@@ -421,11 +552,10 @@ export default function Dashboard() {
               My Canvases
             </button>
             <button
-              className={`w-full flex items-center px-4 py-3 text-sm font-semibold rounded-xl transition-all ${
-                activeView === 'meetings'
-                  ? 'bg-primary text-white'
-                  : 'text-slate-400 hover:bg-[#1a2b4a] hover:text-white'
-              }`}
+              className={`w-full flex items-center px-4 py-3 text-sm font-semibold rounded-xl transition-all ${activeView === 'meetings'
+                ? 'bg-primary text-white'
+                : 'text-slate-400 hover:bg-[#1a2b4a] hover:text-white'
+                }`}
               onClick={() => setActiveView('meetings')}
               type="button"
             >
@@ -433,11 +563,10 @@ export default function Dashboard() {
               Meetings
             </button>
             <button
-              className={`w-full flex items-center px-4 py-3 text-sm font-semibold rounded-xl transition-all ${
-                activeView === 'notifications'
-                  ? 'bg-primary text-white'
-                  : 'text-slate-400 hover:bg-[#1a2b4a] hover:text-white'
-              }`}
+              className={`w-full flex items-center px-4 py-3 text-sm font-semibold rounded-xl transition-all ${activeView === 'notifications'
+                ? 'bg-primary text-white'
+                : 'text-slate-400 hover:bg-[#1a2b4a] hover:text-white'
+                }`}
               onClick={() => setActiveView('notifications')}
               type="button"
             >
@@ -445,11 +574,10 @@ export default function Dashboard() {
               Notifications
             </button>
             <button
-              className={`w-full flex items-center px-4 py-3 text-sm font-semibold rounded-xl transition-all ${
-                activeView === 'activity'
-                  ? 'bg-primary text-white'
-                  : 'text-slate-400 hover:bg-[#1a2b4a] hover:text-white'
-              }`}
+              className={`w-full flex items-center px-4 py-3 text-sm font-semibold rounded-xl transition-all ${activeView === 'activity'
+                ? 'bg-primary text-white'
+                : 'text-slate-400 hover:bg-[#1a2b4a] hover:text-white'
+                }`}
               onClick={() => setActiveView('activity')}
               type="button"
             >
@@ -457,11 +585,10 @@ export default function Dashboard() {
               Activity
             </button>
             <button
-              className={`w-full flex items-center px-4 py-3 text-sm font-semibold rounded-xl transition-all ${
-                activeView === 'settings'
-                  ? 'bg-primary text-white'
-                  : 'text-slate-400 hover:bg-[#1a2b4a] hover:text-white'
-              }`}
+              className={`w-full flex items-center px-4 py-3 text-sm font-semibold rounded-xl transition-all ${activeView === 'settings'
+                ? 'bg-primary text-white'
+                : 'text-slate-400 hover:bg-[#1a2b4a] hover:text-white'
+                }`}
               onClick={() => setActiveView('settings')}
               type="button"
             >
@@ -507,6 +634,14 @@ export default function Dashboard() {
                 </div>
               </div>
               <div className="flex items-center space-x-4">
+                <button
+                  className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-bold rounded-lg transition-all flex items-center space-x-2"
+                  onClick={() => setImportModalOpen(true)}
+                  type="button"
+                >
+                  <span className="material-icons text-lg">upload</span>
+                  <span>Import Canvas</span>
+                </button>
                 <button className="p-2 text-slate-400 hover:bg-[#111827] rounded-full transition-all relative">
                   <span className="material-icons">notifications</span>
                   <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-[#0f172a]"></span>
@@ -590,11 +725,10 @@ export default function Dashboard() {
             )}
             {flash && (
               <div
-                className={`mb-6 flex items-center justify-between gap-4 rounded-xl border px-4 py-3 text-sm ${
-                  flash.type === 'success'
-                    ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
-                    : 'border-rose-500/30 bg-rose-500/10 text-rose-200'
-                }`}
+                className={`mb-6 flex items-center justify-between gap-4 rounded-xl border px-4 py-3 text-sm ${flash.type === 'success'
+                  ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
+                  : 'border-rose-500/30 bg-rose-500/10 text-rose-200'
+                  }`}
               >
                 <span>{flash.message}</span>
                 <button
@@ -614,399 +748,443 @@ export default function Dashboard() {
                 </section>
 
                 <section className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-              <button
-                className="group relative overflow-hidden p-6 bg-[#1d7ff2] rounded-xl text-left transition-all hover:scale-[1.02] hover:shadow-xl hover:shadow-blue-500/30"
-                onClick={handleNewCanvas}
-                type="button"
-              >
-                <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
-                  <span className="material-icons text-8xl text-white">add_box</span>
-                </div>
-                <div className="relative z-10">
-                  <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center mb-4">
-                    <span className="material-icons text-white">add</span>
-                  </div>
-                  <h3 className="text-xl font-bold text-white mb-1">New Canvas</h3>
-                  <p className="text-white/70 text-sm">Start a blank project from scratch</p>
-                </div>
-              </button>
-              <button className="group relative overflow-hidden p-6 bg-[#5450dd] rounded-xl text-left transition-all hover:scale-[1.02] hover:shadow-xl hover:shadow-indigo-500/30">
-                <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
-                  <span className="material-icons text-8xl text-white">video_call</span>
-                </div>
-                <div className="relative z-10">
-                  <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center mb-4">
-                    <span className="material-icons text-white">groups</span>
-                  </div>
-                  <h3 className="text-xl font-bold text-white mb-1">Create Meeting</h3>
-                  <p className="text-white/70 text-sm">Instant collaboration with your team</p>
-                </div>
-              </button>
-              <button className="group relative overflow-hidden p-6 bg-[#15938c] rounded-xl text-left transition-all hover:scale-[1.02] hover:shadow-xl hover:shadow-emerald-500/30">
-                <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
-                  <span className="material-icons text-8xl text-white">login</span>
-                </div>
-                <div className="relative z-10">
-                  <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center mb-4">
-                    <span className="material-icons text-white">sensors</span>
-                  </div>
-                  <h3 className="text-xl font-bold text-white mb-1">Join Meeting</h3>
-                  <p className="text-white/70 text-sm">Enter a room code or invite link</p>
-                </div>
-              </button>
-            </section>
-
-            <section>
-              <div className="flex items-center space-x-8 mb-6 border-b border-[#1f2a3b]">
-                <button
-                  className={`pb-4 text-sm font-bold border-b-2 transition-all ${
-                    activeTab === 'recent'
-                      ? 'border-primary text-primary'
-                      : 'border-transparent text-slate-400 hover:text-white'
-                  }`}
-                  onClick={() => setActiveTab('recent')}
-                  type="button"
-                >
-                  Recent Canvases
-                </button>
-                <button
-                  className={`pb-4 text-sm font-bold border-b-2 transition-all ${
-                    activeTab === 'upcoming'
-                      ? 'border-primary text-primary'
-                      : 'border-transparent text-slate-400 hover:text-white'
-                  }`}
-                  onClick={() => setActiveTab('upcoming')}
-                  type="button"
-                >
-                  Upcoming Meetings
-                </button>
-                <button
-                  className={`pb-4 text-sm font-bold border-b-2 transition-all ${
-                    activeTab === 'completed'
-                      ? 'border-primary text-primary'
-                      : 'border-transparent text-slate-400 hover:text-white'
-                  }`}
-                  onClick={() => setActiveTab('completed')}
-                  type="button"
-                >
-                  Completed
-                </button>
-              </div>
-
-              {activeTab === 'recent' && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                  {savedCanvases.slice(0, 4).map((canvas) => (
-                    <div key={canvas._id} className="group bg-[#111827] border border-[#1f2a3b] rounded-xl overflow-hidden hover:shadow-lg transition-all border-b-4 border-b-emerald-400/60">
-                      <div className="h-40 bg-[#0b1220] relative overflow-hidden">
-                        <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-transparent"></div>
-                        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 backdrop-blur-sm">
-                          <button
-                            className="px-4 py-2 bg-primary text-white text-xs font-bold rounded-lg shadow-lg"
-                            onClick={() => navigate(`/paint/${canvas._id}`)}
-                            type="button"
-                          >
-                            Open Editor
-                          </button>
-                        </div>
-                        <img
-                          alt={`${canvas.title} Preview`}
-                          className="absolute inset-0 w-full h-full object-cover opacity-50 pointer-events-none group-hover:scale-110 transition-transform duration-500"
-                          src={canvas.thumbnail || 'https://via.placeholder.com/400x200?text=No+Preview'}
-                        />
-                      </div>
-                      <div className="p-4">
-                        <div className="flex items-start justify-between mb-2">
-                          <h4 className="font-bold text-sm truncate">{canvas.title || 'Untitled Canvas'}</h4>
-                          <button className="text-slate-500 hover:text-primary">
-                            <span className="material-icons text-lg">more_vert</span>
-                          </button>
-                        </div>
-                        <div className="flex items-center text-xs text-slate-500 space-x-2">
-                          <span className="material-icons text-sm">schedule</span>
-                          <span>{new Date(canvas.updatedAt).toLocaleString()}</span>
-                        </div>
-                      </div>
+                  <button
+                    className="group relative overflow-hidden p-6 bg-[#1d7ff2] rounded-xl text-left transition-all hover:scale-[1.02] hover:shadow-xl hover:shadow-blue-500/30"
+                    onClick={handleNewCanvas}
+                    type="button"
+                  >
+                    <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
+                      <span className="material-icons text-8xl text-white">add_box</span>
                     </div>
-                  ))}
-                  {savedCanvases.length === 0 && (
-                    <div className="col-span-4 text-center py-12">
-                      <p className="text-slate-500">No canvases yet. Create your first canvas!</p>
+                    <div className="relative z-10">
+                      <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center mb-4">
+                        <span className="material-icons text-white">add</span>
+                      </div>
+                      <h3 className="text-xl font-bold text-white mb-1">New Canvas</h3>
+                      <p className="text-white/70 text-sm">Start a blank project from scratch</p>
+                    </div>
+                  </button>
+                  <button className="group relative overflow-hidden p-6 bg-[#5450dd] rounded-xl text-left transition-all hover:scale-[1.02] hover:shadow-xl hover:shadow-indigo-500/30">
+                    <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
+                      <span className="material-icons text-8xl text-white">video_call</span>
+                    </div>
+                    <div className="relative z-10">
+                      <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center mb-4">
+                        <span className="material-icons text-white">groups</span>
+                      </div>
+                      <h3 className="text-xl font-bold text-white mb-1">Create Meeting</h3>
+                      <p className="text-white/70 text-sm">Instant collaboration with your team</p>
+                    </div>
+                  </button>
+                  <button className="group relative overflow-hidden p-6 bg-[#15938c] rounded-xl text-left transition-all hover:scale-[1.02] hover:shadow-xl hover:shadow-emerald-500/30">
+                    <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
+                      <span className="material-icons text-8xl text-white">login</span>
+                    </div>
+                    <div className="relative z-10">
+                      <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center mb-4">
+                        <span className="material-icons text-white">sensors</span>
+                      </div>
+                      <h3 className="text-xl font-bold text-white mb-1">Join Meeting</h3>
+                      <p className="text-white/70 text-sm">Enter a room code or invite link</p>
+                    </div>
+                  </button>
+                </section>
+
+                <section>
+                  <div className="flex items-center space-x-8 mb-6 border-b border-[#1f2a3b]">
+                    <button
+                      className={`pb-4 text-sm font-bold border-b-2 transition-all ${activeTab === 'recent'
+                        ? 'border-primary text-primary'
+                        : 'border-transparent text-slate-400 hover:text-white'
+                        }`}
+                      onClick={() => setActiveTab('recent')}
+                      type="button"
+                    >
+                      Recent Canvases
+                    </button>
+                    <button
+                      className={`pb-4 text-sm font-bold border-b-2 transition-all ${activeTab === 'upcoming'
+                        ? 'border-primary text-primary'
+                        : 'border-transparent text-slate-400 hover:text-white'
+                        }`}
+                      onClick={() => setActiveTab('upcoming')}
+                      type="button"
+                    >
+                      Upcoming Meetings
+                    </button>
+                    <button
+                      className={`pb-4 text-sm font-bold border-b-2 transition-all ${activeTab === 'completed'
+                        ? 'border-primary text-primary'
+                        : 'border-transparent text-slate-400 hover:text-white'
+                        }`}
+                      onClick={() => setActiveTab('completed')}
+                      type="button"
+                    >
+                      Completed
+                    </button>
+                  </div>
+
+                  {activeTab === 'recent' && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                      {savedCanvases.slice(0, 4).map((canvas) => (
+                        <div key={canvas._id} className="group bg-[#111827] border border-[#1f2a3b] rounded-xl overflow-hidden hover:shadow-lg transition-all border-b-4 border-b-emerald-400/60">
+                          <div className="h-40 bg-[#0b1220] relative overflow-hidden">
+                            <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-transparent"></div>
+                            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 backdrop-blur-sm">
+                              <button
+                                className="px-4 py-2 bg-primary text-white text-xs font-bold rounded-lg shadow-lg"
+                                onClick={() => navigate(`/paint/${canvas._id}`)}
+                                type="button"
+                              >
+                                Open Editor
+                              </button>
+                            </div>
+                            <img
+                              alt={`${canvas.title} Preview`}
+                              className="absolute inset-0 w-full h-full object-cover opacity-50 pointer-events-none group-hover:scale-110 transition-transform duration-500"
+                              src={canvas.thumbnail || 'https://via.placeholder.com/400x200?text=No+Preview'}
+                            />
+                          </div>
+                          <div className="p-4">
+                            <div className="flex items-start justify-between mb-2">
+                              <h4 className="font-bold text-sm truncate">{canvas.title || 'Untitled Canvas'}</h4>
+                              <div className="relative">
+                                <button
+                                  className="text-slate-500 hover:text-primary"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDropdownToggle(canvas._id);
+                                  }}
+                                  type="button"
+                                >
+                                  <span className="material-icons text-lg">more_vert</span>
+                                </button>
+                                {openDropdownId === canvas._id && (
+                                  <div className="absolute right-0 mt-2 w-48 bg-[#1a242f] border border-[#2d3a4b] rounded-lg shadow-xl z-10">
+                                    <button
+                                      className="w-full px-4 py-2 text-left text-sm text-slate-300 hover:bg-[#2d3a4b] transition-colors flex items-center space-x-2"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleRenameCanvas(canvas._id, canvas.title);
+                                      }}
+                                      type="button"
+                                    >
+                                      <span className="material-icons text-base">edit</span>
+                                      <span>Rename</span>
+                                    </button>
+                                    <button
+                                      className="w-full px-4 py-2 text-left text-sm text-slate-300 hover:bg-[#2d3a4b] transition-colors flex items-center space-x-2"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleExportCanvas(canvas._id, canvas.title);
+                                      }}
+                                      type="button"
+                                    >
+                                      <span className="material-icons text-base">download</span>
+                                      <span>Export</span>
+                                    </button>
+                                    <button
+                                      className="w-full px-4 py-2 text-left text-sm text-red-400 hover:bg-[#2d3a4b] transition-colors flex items-center space-x-2"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        // Delete functionality can be added here if needed
+                                        console.log('Delete canvas:', canvas._id);
+                                      }}
+                                      type="button"
+                                    >
+                                      <span className="material-icons text-base">delete</span>
+                                      <span>Delete</span>
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex items-center text-xs text-slate-500 space-x-2">
+                              <span className="material-icons text-sm">schedule</span>
+                              <span>{new Date(canvas.updatedAt).toLocaleString()}</span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                      {savedCanvases.length === 0 && (
+                        <div className="col-span-4 text-center py-12">
+                          <p className="text-slate-500">No canvases yet. Create your first canvas!</p>
+                        </div>
+                      )}
                     </div>
                   )}
-                </div>
-              )}
 
-              {activeTab === 'upcoming' && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                  <div className="group bg-white dark:bg-surface-dark border border-slate-200 dark:border-border-dark rounded-xl p-5 hover:shadow-lg transition-all border-l-4 border-l-primary">
-                    <div className="flex justify-between items-start mb-4">
-                      <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center text-primary">
-                        <span className="material-icons">event_available</span>
-                      </div>
-                      <span className="px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 text-[10px] font-bold rounded uppercase">In 15 Mins</span>
-                    </div>
-                    <h4 className="font-bold text-base mb-1">Weekly Design Alignment</h4>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
-                      Reviewing final prototypes for the mobile app navigation overhaul.
-                    </p>
-                    <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-border-dark">
-                      <div className="flex -space-x-2">
-                        <img
-                          alt="Team member"
-                          className="w-7 h-7 rounded-full border-2 border-white dark:border-surface-dark"
-                          src="https://lh3.googleusercontent.com/aida-public/AB6AXuDqTfywyR1V-K_AIjWqiOpMkL5HqSbth_mGsQcF68NS0z93K1S6BUVP0lqSnWROCkio9XUfSI18giEkbkPLo_W23mJ-k0X_w7EkGW1Dew_eQHHSfMx0u2oiT5gHyh97czYjZXFtmWtQT6X_d6vDduce1MqiC3odtK22ShLDLaA6q4FsSZERi21w-kCoM-xTt9Q99dhAqT4ybTq_zUr_E4KiMaI5GvwJSfk2i0xNPBWytcC0AuTgUvcRChDtHaKevbzhcFlp0dPNyiU"
-                        />
-                        <img
-                          alt="Team member"
-                          className="w-7 h-7 rounded-full border-2 border-white dark:border-surface-dark"
-                          src="https://lh3.googleusercontent.com/aida-public/AB6AXuBP3Jffw2Ed86qLcQBO1a05mSUUVVKiWWIFMs5eaQUtbgZZ4WJ_YsRgPDXetsYBMgE5cwexXnXHnLy5tzdCTEB8Lm88P7PDk6cb1yiWobJMGU54wKA656FbzmD0HUDm-twu2t2QlQzMcGo83A8g14CN7wfS42kaCoMq3HghIJpfzsIxlw9F0-qfuyjFhl4rn7v7NuVj2swvt3ceKSi_dsi9dsHo3-V702VS9fDUJNATljFvadY7ZQRFxGEH2hKU4YrnGYmKET_jfD0"
-                        />
-                        <div className="w-7 h-7 rounded-full bg-slate-200 dark:bg-slate-700 border-2 border-white dark:border-surface-dark flex items-center justify-center text-[10px] font-bold">
-                          +3
+                  {activeTab === 'upcoming' && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                      <div className="group bg-white dark:bg-surface-dark border border-slate-200 dark:border-border-dark rounded-xl p-5 hover:shadow-lg transition-all border-l-4 border-l-primary">
+                        <div className="flex justify-between items-start mb-4">
+                          <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center text-primary">
+                            <span className="material-icons">event_available</span>
+                          </div>
+                          <span className="px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 text-[10px] font-bold rounded uppercase">In 15 Mins</span>
+                        </div>
+                        <h4 className="font-bold text-base mb-1">Weekly Design Alignment</h4>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
+                          Reviewing final prototypes for the mobile app navigation overhaul.
+                        </p>
+                        <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-border-dark">
+                          <div className="flex -space-x-2">
+                            <img
+                              alt="Team member"
+                              className="w-7 h-7 rounded-full border-2 border-white dark:border-surface-dark"
+                              src="https://lh3.googleusercontent.com/aida-public/AB6AXuDqTfywyR1V-K_AIjWqiOpMkL5HqSbth_mGsQcF68NS0z93K1S6BUVP0lqSnWROCkio9XUfSI18giEkbkPLo_W23mJ-k0X_w7EkGW1Dew_eQHHSfMx0u2oiT5gHyh97czYjZXFtmWtQT6X_d6vDduce1MqiC3odtK22ShLDLaA6q4FsSZERi21w-kCoM-xTt9Q99dhAqT4ybTq_zUr_E4KiMaI5GvwJSfk2i0xNPBWytcC0AuTgUvcRChDtHaKevbzhcFlp0dPNyiU"
+                            />
+                            <img
+                              alt="Team member"
+                              className="w-7 h-7 rounded-full border-2 border-white dark:border-surface-dark"
+                              src="https://lh3.googleusercontent.com/aida-public/AB6AXuBP3Jffw2Ed86qLcQBO1a05mSUUVVKiWWIFMs5eaQUtbgZZ4WJ_YsRgPDXetsYBMgE5cwexXnXHnLy5tzdCTEB8Lm88P7PDk6cb1yiWobJMGU54wKA656FbzmD0HUDm-twu2t2QlQzMcGo83A8g14CN7wfS42kaCoMq3HghIJpfzsIxlw9F0-qfuyjFhl4rn7v7NuVj2swvt3ceKSi_dsi9dsHo3-V702VS9fDUJNATljFvadY7ZQRFxGEH2hKU4YrnGYmKET_jfD0"
+                            />
+                            <div className="w-7 h-7 rounded-full bg-slate-200 dark:bg-slate-700 border-2 border-white dark:border-surface-dark flex items-center justify-center text-[10px] font-bold">
+                              +3
+                            </div>
+                          </div>
+                          <button className="text-primary text-xs font-bold hover:underline flex items-center" type="button">
+                            Join Meeting <span className="material-icons text-sm ml-1">arrow_forward</span>
+                          </button>
                         </div>
                       </div>
-                      <button className="text-primary text-xs font-bold hover:underline flex items-center" type="button">
-                        Join Meeting <span className="material-icons text-sm ml-1">arrow_forward</span>
-                      </button>
-                    </div>
-                  </div>
 
-                  <div className="group bg-white dark:bg-surface-dark border border-slate-200 dark:border-border-dark rounded-xl p-5 hover:shadow-lg transition-all border-l-4 border-l-deep-purple">
-                    <div className="flex justify-between items-start mb-4">
-                      <div className="w-10 h-10 bg-deep-purple/10 rounded-lg flex items-center justify-center text-deep-purple">
-                        <span className="material-icons">groups</span>
-                      </div>
-                      <span className="px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-[10px] font-bold rounded uppercase">Today, 2:00 PM</span>
-                    </div>
-                    <h4 className="font-bold text-base mb-1">Product Roadmap Q1</h4>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
-                      Stakeholder sync to finalize the feature priority list for early 2024.
-                    </p>
-                    <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-border-dark">
-                      <div className="flex -space-x-2">
-                        <img
-                          alt="Team member"
-                          className="w-7 h-7 rounded-full border-2 border-white dark:border-surface-dark"
-                          src="https://lh3.googleusercontent.com/aida-public/AB6AXuAkXpCRHQ-UPXaJsLlUZdtA6naCVhm0E8mn-XUR7zD0CADV8MeTxlg3Sql9v9OO0nscMWorf4ji5EI3pTGy1cVGzp_Wgsiry-KXMPTfgYObiKvsGsQT-RCjJkMFW1uBj-Nuh18F_QMrwQdzlR1Bl7tHY75q8SFQqD0SQ51kQ1UqTmvj_Dh8MS9rcL_eVXqf71_OGa0SgNL4FInMVAT5e5O6xC_4aAVzE0p7A6fiU9GmIy3kJuv0EZ_e3seFc1wufAg-HHOwdxWs9e8"
-                        />
-                        <img
-                          alt="Team member"
-                          className="w-7 h-7 rounded-full border-2 border-white dark:border-surface-dark"
-                          src="https://lh3.googleusercontent.com/aida-public/AB6AXuA1G-Hn3vTP4BF8Tw65GNWLXCvphxit-gjaQaTS4e4417fPSGMKmx5zWr3w71xhaFli15vvoNhXAQzFsZhbXrYJnyiMAASvjonWiMDpUrf74kM00j8LO0v8ZIeWjxaTbQuwyPqYZPfUeaOJ0wxlWWLxz3b8aKfJIiOrN14CKccdESbzqpgCNmOz0yLKqEPnT9TLpYA75qsT7GKR2uA3ES71XLf46HSiL3x1oGxqtIPUL_bm67_UVcIPd6dxq-bs8_hsxaiualJBX4s"
-                        />
-                        <div className="w-7 h-7 rounded-full bg-slate-200 dark:bg-slate-700 border-2 border-white dark:border-surface-dark flex items-center justify-center text-[10px] font-bold">
-                          +12
+                      <div className="group bg-white dark:bg-surface-dark border border-slate-200 dark:border-border-dark rounded-xl p-5 hover:shadow-lg transition-all border-l-4 border-l-deep-purple">
+                        <div className="flex justify-between items-start mb-4">
+                          <div className="w-10 h-10 bg-deep-purple/10 rounded-lg flex items-center justify-center text-deep-purple">
+                            <span className="material-icons">groups</span>
+                          </div>
+                          <span className="px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-[10px] font-bold rounded uppercase">Today, 2:00 PM</span>
+                        </div>
+                        <h4 className="font-bold text-base mb-1">Product Roadmap Q1</h4>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
+                          Stakeholder sync to finalize the feature priority list for early 2024.
+                        </p>
+                        <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-border-dark">
+                          <div className="flex -space-x-2">
+                            <img
+                              alt="Team member"
+                              className="w-7 h-7 rounded-full border-2 border-white dark:border-surface-dark"
+                              src="https://lh3.googleusercontent.com/aida-public/AB6AXuAkXpCRHQ-UPXaJsLlUZdtA6naCVhm0E8mn-XUR7zD0CADV8MeTxlg3Sql9v9OO0nscMWorf4ji5EI3pTGy1cVGzp_Wgsiry-KXMPTfgYObiKvsGsQT-RCjJkMFW1uBj-Nuh18F_QMrwQdzlR1Bl7tHY75q8SFQqD0SQ51kQ1UqTmvj_Dh8MS9rcL_eVXqf71_OGa0SgNL4FInMVAT5e5O6xC_4aAVzE0p7A6fiU9GmIy3kJuv0EZ_e3seFc1wufAg-HHOwdxWs9e8"
+                            />
+                            <img
+                              alt="Team member"
+                              className="w-7 h-7 rounded-full border-2 border-white dark:border-surface-dark"
+                              src="https://lh3.googleusercontent.com/aida-public/AB6AXuA1G-Hn3vTP4BF8Tw65GNWLXCvphxit-gjaQaTS4e4417fPSGMKmx5zWr3w71xhaFli15vvoNhXAQzFsZhbXrYJnyiMAASvjonWiMDpUrf74kM00j8LO0v8ZIeWjxaTbQuwyPqYZPfUeaOJ0wxlWWLxz3b8aKfJIiOrN14CKccdESbzqpgCNmOz0yLKqEPnT9TLpYA75qsT7GKR2uA3ES71XLf46HSiL3x1oGxqtIPUL_bm67_UVcIPd6dxq-bs8_hsxaiualJBX4s"
+                            />
+                            <div className="w-7 h-7 rounded-full bg-slate-200 dark:bg-slate-700 border-2 border-white dark:border-surface-dark flex items-center justify-center text-[10px] font-bold">
+                              +12
+                            </div>
+                          </div>
+                          <button className="text-slate-400 text-xs font-bold flex items-center cursor-not-allowed" type="button">
+                            View Details
+                          </button>
                         </div>
                       </div>
-                      <button className="text-slate-400 text-xs font-bold flex items-center cursor-not-allowed" type="button">
-                        View Details
-                      </button>
-                    </div>
-                  </div>
 
-                  <div className="group bg-white dark:bg-surface-dark border border-slate-200 dark:border-border-dark rounded-xl p-5 hover:shadow-lg transition-all border-l-4 border-l-teal-accent">
-                    <div className="flex justify-between items-start mb-4">
-                      <div className="w-10 h-10 bg-teal-accent/10 rounded-lg flex items-center justify-center text-teal-accent">
-                        <span className="material-icons">psychology</span>
-                      </div>
-                      <span className="px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-[10px] font-bold rounded uppercase">Tomorrow, 10:00 AM</span>
-                    </div>
-                    <h4 className="font-bold text-base mb-1">Brainstorming: Marketing Site</h4>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
-                      Creative session for the new landing page concept and messaging.
-                    </p>
-                    <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-border-dark">
-                      <div className="flex -space-x-2">
-                        <img
-                          alt="Team member"
-                          className="w-7 h-7 rounded-full border-2 border-white dark:border-surface-dark"
-                          src="https://lh3.googleusercontent.com/aida-public/AB6AXuDqTfywyR1V-K_AIjWqiOpMkL5HqSbth_mGsQcF68NS0z93K1S6BUVP0lqSnWROCkio9XUfSI18giEkbkPLo_W23mJ-k0X_w7EkGW1Dew_eQHHSfMx0u2oiT5gHyh97czYjZXFtmWtQT6X_d6vDduce1MqiC3odtK22ShLDLaA6q4FsSZERi21w-kCoM-xTt9Q99dhAqT4ybTq_zUr_E4KiMaI5GvwJSfk2i0xNPBWytcC0AuTgUvcRChDtHaKevbzhcFlp0dPNyiU"
-                        />
-                        <div className="w-7 h-7 rounded-full bg-slate-200 dark:bg-slate-700 border-2 border-white dark:border-surface-dark flex items-center justify-center text-[10px] font-bold">
-                          +2
+                      <div className="group bg-white dark:bg-surface-dark border border-slate-200 dark:border-border-dark rounded-xl p-5 hover:shadow-lg transition-all border-l-4 border-l-teal-accent">
+                        <div className="flex justify-between items-start mb-4">
+                          <div className="w-10 h-10 bg-teal-accent/10 rounded-lg flex items-center justify-center text-teal-accent">
+                            <span className="material-icons">psychology</span>
+                          </div>
+                          <span className="px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-[10px] font-bold rounded uppercase">Tomorrow, 10:00 AM</span>
+                        </div>
+                        <h4 className="font-bold text-base mb-1">Brainstorming: Marketing Site</h4>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
+                          Creative session for the new landing page concept and messaging.
+                        </p>
+                        <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-border-dark">
+                          <div className="flex -space-x-2">
+                            <img
+                              alt="Team member"
+                              className="w-7 h-7 rounded-full border-2 border-white dark:border-surface-dark"
+                              src="https://lh3.googleusercontent.com/aida-public/AB6AXuDqTfywyR1V-K_AIjWqiOpMkL5HqSbth_mGsQcF68NS0z93K1S6BUVP0lqSnWROCkio9XUfSI18giEkbkPLo_W23mJ-k0X_w7EkGW1Dew_eQHHSfMx0u2oiT5gHyh97czYjZXFtmWtQT6X_d6vDduce1MqiC3odtK22ShLDLaA6q4FsSZERi21w-kCoM-xTt9Q99dhAqT4ybTq_zUr_E4KiMaI5GvwJSfk2i0xNPBWytcC0AuTgUvcRChDtHaKevbzhcFlp0dPNyiU"
+                            />
+                            <div className="w-7 h-7 rounded-full bg-slate-200 dark:bg-slate-700 border-2 border-white dark:border-surface-dark flex items-center justify-center text-[10px] font-bold">
+                              +2
+                            </div>
+                          </div>
+                          <button className="text-slate-400 text-xs font-bold flex items-center cursor-not-allowed" type="button">
+                            View Details
+                          </button>
                         </div>
                       </div>
-                      <button className="text-slate-400 text-xs font-bold flex items-center cursor-not-allowed" type="button">
-                        View Details
-                      </button>
                     </div>
-                  </div>
-                </div>
-              )}
+                  )}
 
-              {activeTab === 'completed' && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                  <div className="group bg-white dark:bg-surface-dark border border-slate-200 dark:border-border-dark rounded-xl p-5 hover:shadow-lg transition-all">
-                    <div className="flex justify-between items-start mb-4">
-                      <div className="w-10 h-10 bg-slate-100 dark:bg-slate-800 rounded-lg flex items-center justify-center text-slate-500">
-                        <span className="material-icons">history</span>
-                      </div>
-                      <span className="px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-[10px] font-bold rounded uppercase">
-                        Oct 22 · 45m
-                      </span>
-                    </div>
-                    <h4 className="font-bold text-base mb-1">Backend Architecture Review</h4>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
-                      Detailed walkthrough of the microservices transition plan and database schema.
-                    </p>
-                    <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-border-dark">
-                      <div className="flex -space-x-2">
-                        <img
-                          alt="Team member"
-                          className="w-7 h-7 rounded-full border-2 border-white dark:border-surface-dark"
-                          src="https://lh3.googleusercontent.com/aida-public/AB6AXuDqTfywyR1V-K_AIjWqiOpMkL5HqSbth_mGsQcF68NS0z93K1S6BUVP0lqSnWROCkio9XUfSI18giEkbkPLo_W23mJ-k0X_w7EkGW1Dew_eQHHSfMx0u2oiT5gHyh97czYjZXFtmWtQT6X_d6vDduce1MqiC3odtK22ShLDLaA6q4FsSZERi21w-kCoM-xTt9Q99dhAqT4ybTq_zUr_E4KiMaI5GvwJSfk2i0xNPBWytcC0AuTgUvcRChDtHaKevbzhcFlp0dPNyiU"
-                        />
-                        <img
-                          alt="Team member"
-                          className="w-7 h-7 rounded-full border-2 border-white dark:border-surface-dark"
-                          src="https://lh3.googleusercontent.com/aida-public/AB6AXuBP3Jffw2Ed86qLcQBO1a05mSUUVVKiWWIFMs5eaQUtbgZZ4WJ_YsRgPDXetsYBMgE5cwexXnXHnLy5tzdCTEB8Lm88P7PDk6cb1yiWobJMGU54wKA656FbzmD0HUDm-twu2t2QlQzMcGo83A8g14CN7wfS42kaCoMq3HghIJpfzsIxlw9F0-qfuyjFhl4rn7v7NuVj2swvt3ceKSi_dsi9dsHo3-V702VS9fDUJNATljFvadY7ZQRFxGEH2hKU4YrnGYmKET_jfD0"
-                        />
-                        <div className="w-7 h-7 rounded-full bg-slate-200 dark:bg-slate-700 border-2 border-white dark:border-surface-dark flex items-center justify-center text-[10px] font-bold">
-                          +2
+                  {activeTab === 'completed' && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                      <div className="group bg-white dark:bg-surface-dark border border-slate-200 dark:border-border-dark rounded-xl p-5 hover:shadow-lg transition-all">
+                        <div className="flex justify-between items-start mb-4">
+                          <div className="w-10 h-10 bg-slate-100 dark:bg-slate-800 rounded-lg flex items-center justify-center text-slate-500">
+                            <span className="material-icons">history</span>
+                          </div>
+                          <span className="px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-[10px] font-bold rounded uppercase">
+                            Oct 22 · 45m
+                          </span>
+                        </div>
+                        <h4 className="font-bold text-base mb-1">Backend Architecture Review</h4>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
+                          Detailed walkthrough of the microservices transition plan and database schema.
+                        </p>
+                        <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-border-dark">
+                          <div className="flex -space-x-2">
+                            <img
+                              alt="Team member"
+                              className="w-7 h-7 rounded-full border-2 border-white dark:border-surface-dark"
+                              src="https://lh3.googleusercontent.com/aida-public/AB6AXuDqTfywyR1V-K_AIjWqiOpMkL5HqSbth_mGsQcF68NS0z93K1S6BUVP0lqSnWROCkio9XUfSI18giEkbkPLo_W23mJ-k0X_w7EkGW1Dew_eQHHSfMx0u2oiT5gHyh97czYjZXFtmWtQT6X_d6vDduce1MqiC3odtK22ShLDLaA6q4FsSZERi21w-kCoM-xTt9Q99dhAqT4ybTq_zUr_E4KiMaI5GvwJSfk2i0xNPBWytcC0AuTgUvcRChDtHaKevbzhcFlp0dPNyiU"
+                            />
+                            <img
+                              alt="Team member"
+                              className="w-7 h-7 rounded-full border-2 border-white dark:border-surface-dark"
+                              src="https://lh3.googleusercontent.com/aida-public/AB6AXuBP3Jffw2Ed86qLcQBO1a05mSUUVVKiWWIFMs5eaQUtbgZZ4WJ_YsRgPDXetsYBMgE5cwexXnXHnLy5tzdCTEB8Lm88P7PDk6cb1yiWobJMGU54wKA656FbzmD0HUDm-twu2t2QlQzMcGo83A8g14CN7wfS42kaCoMq3HghIJpfzsIxlw9F0-qfuyjFhl4rn7v7NuVj2swvt3ceKSi_dsi9dsHo3-V702VS9fDUJNATljFvadY7ZQRFxGEH2hKU4YrnGYmKET_jfD0"
+                            />
+                            <div className="w-7 h-7 rounded-full bg-slate-200 dark:bg-slate-700 border-2 border-white dark:border-surface-dark flex items-center justify-center text-[10px] font-bold">
+                              +2
+                            </div>
+                          </div>
+                          <button className="text-primary text-xs font-bold hover:underline flex items-center" type="button">
+                            View Recap <span className="material-icons text-sm ml-1">description</span>
+                          </button>
                         </div>
                       </div>
-                      <button className="text-primary text-xs font-bold hover:underline flex items-center" type="button">
-                        View Recap <span className="material-icons text-sm ml-1">description</span>
-                      </button>
-                    </div>
-                  </div>
 
-                  <div className="group bg-white dark:bg-surface-dark border border-slate-200 dark:border-border-dark rounded-xl p-5 hover:shadow-lg transition-all">
-                    <div className="flex justify-between items-start mb-4">
-                      <div className="w-10 h-10 bg-slate-100 dark:bg-slate-800 rounded-lg flex items-center justify-center text-slate-500">
-                        <span className="material-icons">campaign</span>
-                      </div>
-                      <span className="px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-[10px] font-bold rounded uppercase">
-                        Oct 21 · 60m
-                      </span>
-                    </div>
-                    <h4 className="font-bold text-base mb-1">Marketing Strategy Session</h4>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
-                      Aligning on the holiday campaign assets and cross-channel promotion timelines.
-                    </p>
-                    <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-border-dark">
-                      <div className="flex -space-x-2">
-                        <img
-                          alt="Team member"
-                          className="w-7 h-7 rounded-full border-2 border-white dark:border-surface-dark"
-                          src="https://lh3.googleusercontent.com/aida-public/AB6AXuAkXpCRHQ-UPXaJsLlUZdtA6naCVhm0E8mn-XUR7zD0CADV8MeTxlg3Sql9v9OO0nscMWorf4ji5EI3pTGy1cVGzp_Wgsiry-KXMPTfgYObiKvsGsQT-RCjJkMFW1uBj-Nuh18F_QMrwQdzlR1Bl7tHY75q8SFQqD0SQ51kQ1UqTmvj_Dh8MS9rcL_eVXqf71_OGa0SgNL4FInMVAT5e5O6xC_4aAVzE0p7A6fiU9GmIy3kJuv0EZ_e3seFc1wufAg-HHOwdxWs9e8"
-                        />
-                        <img
-                          alt="Team member"
-                          className="w-7 h-7 rounded-full border-2 border-white dark:border-surface-dark"
-                          src="https://lh3.googleusercontent.com/aida-public/AB6AXuA1G-Hn3vTP4BF8Tw65GNWLXCvphxit-gjaQaTS4e4417fPSGMKmx5zWr3w71xhaFli15vvoNhXAQzFsZhbXrYJnyiMAASvjonWiMDpUrf74kM00j8LO0v8ZIeWjxaTbQuwyPqYZPfUeaOJ0wxlWWLxz3b8aKfJIiOrN14CKccdESbzqpgCNmOz0yLKqEPnT9TLpYA75qsT7GKR2uA3ES71XLf46HSiL3x1oGxqtIPUL_bm67_UVcIPd6dxq-bs8_hsxaiualJBX4s"
-                        />
-                        <div className="w-7 h-7 rounded-full bg-slate-200 dark:bg-slate-700 border-2 border-white dark:border-surface-dark flex items-center justify-center text-[10px] font-bold">
-                          +5
+                      <div className="group bg-white dark:bg-surface-dark border border-slate-200 dark:border-border-dark rounded-xl p-5 hover:shadow-lg transition-all">
+                        <div className="flex justify-between items-start mb-4">
+                          <div className="w-10 h-10 bg-slate-100 dark:bg-slate-800 rounded-lg flex items-center justify-center text-slate-500">
+                            <span className="material-icons">campaign</span>
+                          </div>
+                          <span className="px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-[10px] font-bold rounded uppercase">
+                            Oct 21 · 60m
+                          </span>
+                        </div>
+                        <h4 className="font-bold text-base mb-1">Marketing Strategy Session</h4>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
+                          Aligning on the holiday campaign assets and cross-channel promotion timelines.
+                        </p>
+                        <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-border-dark">
+                          <div className="flex -space-x-2">
+                            <img
+                              alt="Team member"
+                              className="w-7 h-7 rounded-full border-2 border-white dark:border-surface-dark"
+                              src="https://lh3.googleusercontent.com/aida-public/AB6AXuAkXpCRHQ-UPXaJsLlUZdtA6naCVhm0E8mn-XUR7zD0CADV8MeTxlg3Sql9v9OO0nscMWorf4ji5EI3pTGy1cVGzp_Wgsiry-KXMPTfgYObiKvsGsQT-RCjJkMFW1uBj-Nuh18F_QMrwQdzlR1Bl7tHY75q8SFQqD0SQ51kQ1UqTmvj_Dh8MS9rcL_eVXqf71_OGa0SgNL4FInMVAT5e5O6xC_4aAVzE0p7A6fiU9GmIy3kJuv0EZ_e3seFc1wufAg-HHOwdxWs9e8"
+                            />
+                            <img
+                              alt="Team member"
+                              className="w-7 h-7 rounded-full border-2 border-white dark:border-surface-dark"
+                              src="https://lh3.googleusercontent.com/aida-public/AB6AXuA1G-Hn3vTP4BF8Tw65GNWLXCvphxit-gjaQaTS4e4417fPSGMKmx5zWr3w71xhaFli15vvoNhXAQzFsZhbXrYJnyiMAASvjonWiMDpUrf74kM00j8LO0v8ZIeWjxaTbQuwyPqYZPfUeaOJ0wxlWWLxz3b8aKfJIiOrN14CKccdESbzqpgCNmOz0yLKqEPnT9TLpYA75qsT7GKR2uA3ES71XLf46HSiL3x1oGxqtIPUL_bm67_UVcIPd6dxq-bs8_hsxaiualJBX4s"
+                            />
+                            <div className="w-7 h-7 rounded-full bg-slate-200 dark:bg-slate-700 border-2 border-white dark:border-surface-dark flex items-center justify-center text-[10px] font-bold">
+                              +5
+                            </div>
+                          </div>
+                          <button className="text-primary text-xs font-bold hover:underline flex items-center" type="button">
+                            View Summary <span className="material-icons text-sm ml-1">article</span>
+                          </button>
                         </div>
                       </div>
-                      <button className="text-primary text-xs font-bold hover:underline flex items-center" type="button">
-                        View Summary <span className="material-icons text-sm ml-1">article</span>
-                      </button>
-                    </div>
-                  </div>
 
-                  <div className="group bg-white dark:bg-surface-dark border border-slate-200 dark:border-border-dark rounded-xl p-5 hover:shadow-lg transition-all">
-                    <div className="flex justify-between items-start mb-4">
-                      <div className="w-10 h-10 bg-slate-100 dark:bg-slate-800 rounded-lg flex items-center justify-center text-slate-500">
-                        <span className="material-icons">event_note</span>
-                      </div>
-                      <span className="px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-[10px] font-bold rounded uppercase">
-                        Oct 20 · 90m
-                      </span>
-                    </div>
-                    <h4 className="font-bold text-base mb-1">Q3 Retrospective</h4>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
-                      Analyzing performance metrics, team feedback, and setting goals for the next quarter.
-                    </p>
-                    <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-border-dark">
-                      <div className="flex -space-x-2">
-                        <img
-                          alt="Team member"
-                          className="w-7 h-7 rounded-full border-2 border-white dark:border-surface-dark"
-                          src="https://lh3.googleusercontent.com/aida-public/AB6AXuDqTfywyR1V-K_AIjWqiOpMkL5HqSbth_mGsQcF68NS0z93K1S6BUVP0lqSnWROCkio9XUfSI18giEkbkPLo_W23mJ-k0X_w7EkGW1Dew_eQHHSfMx0u2oiT5gHyh97czYjZXFtmWtQT6X_d6vDduce1MqiC3odtK22ShLDLaA6q4FsSZERi21w-kCoM-xTt9Q99dhAqT4ybTq_zUr_E4KiMaI5GvwJSfk2i0xNPBWytcC0AuTgUvcRChDtHaKevbzhcFlp0dPNyiU"
-                        />
-                        <img
-                          alt="Team member"
-                          className="w-7 h-7 rounded-full border-2 border-white dark:border-surface-dark"
-                          src="https://lh3.googleusercontent.com/aida-public/AB6AXuDqTfywyR1V-K_AIjWqiOpMkL5HqSbth_mGsQcF68NS0z93K1S6BUVP0lqSnWROCkio9XUfSI18giEkbkPLo_W23mJ-k0X_w7EkGW1Dew_eQHHSfMx0u2oiT5gHyh97czYjZXFtmWtQT6X_d6vDduce1MqiC3odtK22ShLDLaA6q4FsSZERi21w-kCoM-xTt9Q99dhAqT4ybTq_zUr_E4KiMaI5GvwJSfk2i0xNPBWytcC0AuTgUvcRChDtHaKevbzhcFlp0dPNyiU"
-                        />
-                        <div className="w-7 h-7 rounded-full bg-slate-200 dark:bg-slate-700 border-2 border-white dark:border-surface-dark flex items-center justify-center text-[10px] font-bold">
-                          +8
+                      <div className="group bg-white dark:bg-surface-dark border border-slate-200 dark:border-border-dark rounded-xl p-5 hover:shadow-lg transition-all">
+                        <div className="flex justify-between items-start mb-4">
+                          <div className="w-10 h-10 bg-slate-100 dark:bg-slate-800 rounded-lg flex items-center justify-center text-slate-500">
+                            <span className="material-icons">event_note</span>
+                          </div>
+                          <span className="px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-[10px] font-bold rounded uppercase">
+                            Oct 20 · 90m
+                          </span>
+                        </div>
+                        <h4 className="font-bold text-base mb-1">Q3 Retrospective</h4>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
+                          Analyzing performance metrics, team feedback, and setting goals for the next quarter.
+                        </p>
+                        <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-border-dark">
+                          <div className="flex -space-x-2">
+                            <img
+                              alt="Team member"
+                              className="w-7 h-7 rounded-full border-2 border-white dark:border-surface-dark"
+                              src="https://lh3.googleusercontent.com/aida-public/AB6AXuDqTfywyR1V-K_AIjWqiOpMkL5HqSbth_mGsQcF68NS0z93K1S6BUVP0lqSnWROCkio9XUfSI18giEkbkPLo_W23mJ-k0X_w7EkGW1Dew_eQHHSfMx0u2oiT5gHyh97czYjZXFtmWtQT6X_d6vDduce1MqiC3odtK22ShLDLaA6q4FsSZERi21w-kCoM-xTt9Q99dhAqT4ybTq_zUr_E4KiMaI5GvwJSfk2i0xNPBWytcC0AuTgUvcRChDtHaKevbzhcFlp0dPNyiU"
+                            />
+                            <img
+                              alt="Team member"
+                              className="w-7 h-7 rounded-full border-2 border-white dark:border-surface-dark"
+                              src="https://lh3.googleusercontent.com/aida-public/AB6AXuDqTfywyR1V-K_AIjWqiOpMkL5HqSbth_mGsQcF68NS0z93K1S6BUVP0lqSnWROCkio9XUfSI18giEkbkPLo_W23mJ-k0X_w7EkGW1Dew_eQHHSfMx0u2oiT5gHyh97czYjZXFtmWtQT6X_d6vDduce1MqiC3odtK22ShLDLaA6q4FsSZERi21w-kCoM-xTt9Q99dhAqT4ybTq_zUr_E4KiMaI5GvwJSfk2i0xNPBWytcC0AuTgUvcRChDtHaKevbzhcFlp0dPNyiU"
+                            />
+                            <div className="w-7 h-7 rounded-full bg-slate-200 dark:bg-slate-700 border-2 border-white dark:border-surface-dark flex items-center justify-center text-[10px] font-bold">
+                              +8
+                            </div>
+                          </div>
+                          <button className="text-primary text-xs font-bold hover:underline flex items-center" type="button">
+                            View Recap <span className="material-icons text-sm ml-1">description</span>
+                          </button>
                         </div>
                       </div>
-                      <button className="text-primary text-xs font-bold hover:underline flex items-center" type="button">
-                        View Recap <span className="material-icons text-sm ml-1">description</span>
-                      </button>
                     </div>
-                  </div>
-                </div>
-              )}
+                  )}
 
-              <div className="mt-12">
-                <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-lg font-bold">Today's Schedule</h3>
-                  <button className="text-primary text-sm font-bold hover:underline">View Calendar</button>
-                </div>
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between p-4 bg-[#111827] border border-[#1f2a3b] rounded-xl group hover:border-primary transition-all">
-                    <div className="flex items-center space-x-4">
-                      <div className="w-12 h-12 bg-primary/10 rounded-lg flex flex-col items-center justify-center text-primary">
-                        <span className="text-[10px] font-bold leading-none uppercase">Oct</span>
-                        <span className="text-xl font-extrabold leading-none">24</span>
-                      </div>
-                      <div>
-                        <h4 className="font-bold text-sm text-start">Frontend Sync-up</h4>
-                        <p className="text-xs text-slate-500 text-start">10:00 AM — 11:00 AM • 4 participants</p>
-                      </div>
+                  <div className="mt-12">
+                    <div className="flex items-center justify-between mb-6">
+                      <h3 className="text-lg font-bold">Today's Schedule</h3>
+                      <button className="text-primary text-sm font-bold hover:underline">View Calendar</button>
                     </div>
-                    <div className="flex items-center space-x-3">
-                      <div className="flex -space-x-2 mr-4">
-                        <img
-                          alt="Team member profile picture small"
-                          className="w-7 h-7 rounded-full border-2 border-[#0f172a]"
-                          src="https://lh3.googleusercontent.com/aida-public/AB6AXuDqTfywyR1V-K_AIjWqiOpMkL5HqSbth_mGsQcF68NS0z93K1S6BUVP0lqSnWROCkio9XUfSI18giEkbkPLo_W23mJ-k0X_w7EkGW1Dew_eQHHSfMx0u2oiT5gHyh97czYjZXFtmWtQT6X_d6vDduce1MqiC3odtK22ShLDLaA6q4FsSZERi21w-kCoM-xTt9Q99dhAqT4ybTq_zUr_E4KiMaI5GvwJSfk2i0xNPBWytcC0AuTgUvcRChDtHaKevbzhcFlp0dPNyiU"
-                        />
-                        <img
-                          alt="Team member profile picture small"
-                          className="w-7 h-7 rounded-full border-2 border-[#0f172a]"
-                          src="https://lh3.googleusercontent.com/aida-public/AB6AXuBP3Jffw2Ed86qLcQBO1a05mSUUVVKiWWIFMs5eaQUtbgZZ4WJ_YsRgPDXetsYBMgE5cwexXnXHnLy5tzdCTEB8Lm88P7PDk6cb1yiWobJMGU54wKA656FbzmD0HUDm-twu2t2QlQzMcGo83A8g14CN7wfS42kaCoMq3HghIJpfzsIxlw9F0-qfuyjFhl4rn7v7NuVj2swvt3ceKSi_dsi9dsHo3-V702VS9fDUJNATljFvadY7ZQRFxGEH2hKU4YrnGYmKET_jfD0"
-                        />
-                        <div className="w-7 h-7 rounded-full bg-[#1f2a3b] border-2 border-[#0f172a] flex items-center justify-center text-[10px] font-bold">+2</div>
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between p-4 bg-[#111827] border border-[#1f2a3b] rounded-xl group hover:border-primary transition-all">
+                        <div className="flex items-center space-x-4">
+                          <div className="w-12 h-12 bg-primary/10 rounded-lg flex flex-col items-center justify-center text-primary">
+                            <span className="text-[10px] font-bold leading-none uppercase">Oct</span>
+                            <span className="text-xl font-extrabold leading-none">24</span>
+                          </div>
+                          <div>
+                            <h4 className="font-bold text-sm text-start">Frontend Sync-up</h4>
+                            <p className="text-xs text-slate-500 text-start">10:00 AM — 11:00 AM • 4 participants</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center space-x-3">
+                          <div className="flex -space-x-2 mr-4">
+                            <img
+                              alt="Team member profile picture small"
+                              className="w-7 h-7 rounded-full border-2 border-[#0f172a]"
+                              src="https://lh3.googleusercontent.com/aida-public/AB6AXuDqTfywyR1V-K_AIjWqiOpMkL5HqSbth_mGsQcF68NS0z93K1S6BUVP0lqSnWROCkio9XUfSI18giEkbkPLo_W23mJ-k0X_w7EkGW1Dew_eQHHSfMx0u2oiT5gHyh97czYjZXFtmWtQT6X_d6vDduce1MqiC3odtK22ShLDLaA6q4FsSZERi21w-kCoM-xTt9Q99dhAqT4ybTq_zUr_E4KiMaI5GvwJSfk2i0xNPBWytcC0AuTgUvcRChDtHaKevbzhcFlp0dPNyiU"
+                            />
+                            <img
+                              alt="Team member profile picture small"
+                              className="w-7 h-7 rounded-full border-2 border-[#0f172a]"
+                              src="https://lh3.googleusercontent.com/aida-public/AB6AXuBP3Jffw2Ed86qLcQBO1a05mSUUVVKiWWIFMs5eaQUtbgZZ4WJ_YsRgPDXetsYBMgE5cwexXnXHnLy5tzdCTEB8Lm88P7PDk6cb1yiWobJMGU54wKA656FbzmD0HUDm-twu2t2QlQzMcGo83A8g14CN7wfS42kaCoMq3HghIJpfzsIxlw9F0-qfuyjFhl4rn7v7NuVj2swvt3ceKSi_dsi9dsHo3-V702VS9fDUJNATljFvadY7ZQRFxGEH2hKU4YrnGYmKET_jfD0"
+                            />
+                            <div className="w-7 h-7 rounded-full bg-[#1f2a3b] border-2 border-[#0f172a] flex items-center justify-center text-[10px] font-bold">+2</div>
+                          </div>
+                          <button className="px-4 py-2 bg-primary text-white text-xs font-bold rounded-lg opacity-0 group-hover:opacity-100 transition-opacity">
+                            Join Now
+                          </button>
+                        </div>
                       </div>
-                      <button className="px-4 py-2 bg-primary text-white text-xs font-bold rounded-lg opacity-0 group-hover:opacity-100 transition-opacity">
-                        Join Now
-                      </button>
-                    </div>
-                  </div>
 
-                  <div className="flex items-center justify-between p-4 bg-[#111827] border border-[#1f2a3b] rounded-xl group hover:border-primary transition-all">
-                    <div className="flex items-center space-x-4">
-                      <div className="w-12 h-12 bg-[#0b1220] rounded-lg flex flex-col items-center justify-center text-slate-400">
-                        <span className="text-[10px] font-bold leading-none uppercase">Oct</span>
-                        <span className="text-xl font-extrabold leading-none">24</span>
+                      <div className="flex items-center justify-between p-4 bg-[#111827] border border-[#1f2a3b] rounded-xl group hover:border-primary transition-all">
+                        <div className="flex items-center space-x-4">
+                          <div className="w-12 h-12 bg-[#0b1220] rounded-lg flex flex-col items-center justify-center text-slate-400">
+                            <span className="text-[10px] font-bold leading-none uppercase">Oct</span>
+                            <span className="text-xl font-extrabold leading-none">24</span>
+                          </div>
+                          <div>
+                            <h4 className="font-bold text-sm text-start">Sprint Retrospective</h4>
+                            <p className="text-xs text-slate-500 text-start">03:30 PM — 04:30 PM • 8 participants</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center space-x-3">
+                          <div className="flex -space-x-2 mr-4">
+                            <img
+                              alt="Team member profile picture small"
+                              className="w-7 h-7 rounded-full border-2 border-[#0f172a]"
+                              src="https://lh3.googleusercontent.com/aida-public/AB6AXuAkXpCRHQ-UPXaJsLlUZdtA6naCVhm0E8mn-XUR7zD0CADV8MeTxlg3Sql9v9OO0nscMWorf4ji5EI3pTGy1cVGzp_Wgsiry-KXMPTfgYObiKvsGsQT-RCjJkMFW1uBj-Nuh18F_QMrwQdzlR1Bl7tHY75q8SFQqD0SQ51kQ1UqTmvj_Dh8MS9rcL_eVXqf71_OGa0SgNL4FInMVAT5e5O6xC_4aAVzE0p7A6fiU9GmIy3kJuv0EZ_e3seFc1wufAg-HHOwdxWs9e8"
+                            />
+                            <div className="w-7 h-7 rounded-full bg-[#1f2a3b] border-2 border-[#0f172a] flex items-center justify-center text-[10px] font-bold">+7</div>
+                          </div>
+                          <button className="px-4 py-2 border border-[#1f2a3b] text-slate-400 text-xs font-bold rounded-lg cursor-not-allowed">
+                            Later Today
+                          </button>
+                        </div>
                       </div>
-                      <div>
-                        <h4 className="font-bold text-sm text-start">Sprint Retrospective</h4>
-                        <p className="text-xs text-slate-500 text-start">03:30 PM — 04:30 PM • 8 participants</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center space-x-3">
-                      <div className="flex -space-x-2 mr-4">
-                        <img
-                          alt="Team member profile picture small"
-                          className="w-7 h-7 rounded-full border-2 border-[#0f172a]"
-                          src="https://lh3.googleusercontent.com/aida-public/AB6AXuAkXpCRHQ-UPXaJsLlUZdtA6naCVhm0E8mn-XUR7zD0CADV8MeTxlg3Sql9v9OO0nscMWorf4ji5EI3pTGy1cVGzp_Wgsiry-KXMPTfgYObiKvsGsQT-RCjJkMFW1uBj-Nuh18F_QMrwQdzlR1Bl7tHY75q8SFQqD0SQ51kQ1UqTmvj_Dh8MS9rcL_eVXqf71_OGa0SgNL4FInMVAT5e5O6xC_4aAVzE0p7A6fiU9GmIy3kJuv0EZ_e3seFc1wufAg-HHOwdxWs9e8"
-                        />
-                        <div className="w-7 h-7 rounded-full bg-[#1f2a3b] border-2 border-[#0f172a] flex items-center justify-center text-[10px] font-bold">+7</div>
-                      </div>
-                      <button className="px-4 py-2 border border-[#1f2a3b] text-slate-400 text-xs font-bold rounded-lg cursor-not-allowed">
-                        Later Today
-                      </button>
                     </div>
                   </div>
-                </div>
-              </div>
                 </section>
               </>
             ) : activeView === 'meetings' ? (
@@ -1436,33 +1614,30 @@ export default function Dashboard() {
 
                   <div className="flex items-center space-x-3 p-1 bg-[#1a242f] border border-[#2d3a4b] rounded-xl mb-8">
                     <button
-                      className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${
-                        settingsTab === 'profile'
-                          ? 'bg-primary text-white'
-                          : 'text-slate-400 hover:text-white hover:bg-[#101922]'
-                      }`}
+                      className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${settingsTab === 'profile'
+                        ? 'bg-primary text-white'
+                        : 'text-slate-400 hover:text-white hover:bg-[#101922]'
+                        }`}
                       onClick={() => setSettingsTab('profile')}
                       type="button"
                     >
                       Profile Details
                     </button>
                     <button
-                      className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${
-                        settingsTab === 'password'
-                          ? 'bg-primary text-white'
-                          : 'text-slate-400 hover:text-white hover:bg-[#101922]'
-                      }`}
+                      className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${settingsTab === 'password'
+                        ? 'bg-primary text-white'
+                        : 'text-slate-400 hover:text-white hover:bg-[#101922]'
+                        }`}
                       onClick={() => setSettingsTab('password')}
                       type="button"
                     >
                       Password
                     </button>
                     <button
-                      className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${
-                        settingsTab === 'account'
-                          ? 'bg-primary text-white'
-                          : 'text-slate-400 hover:text-white hover:bg-[#101922]'
-                      }`}
+                      className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${settingsTab === 'account'
+                        ? 'bg-primary text-white'
+                        : 'text-slate-400 hover:text-white hover:bg-[#101922]'
+                        }`}
                       onClick={() => setSettingsTab('account')}
                       type="button"
                     >
@@ -1606,44 +1781,40 @@ export default function Dashboard() {
                     <section className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
                       <div className="flex items-center space-x-1 p-1 bg-[#1a242f] border border-[#2d3a4b] rounded-xl">
                         <button
-                          className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${
-                            canvasFilter === 'all'
-                              ? 'bg-primary text-white'
-                              : 'text-slate-400 hover:text-white hover:bg-[#101922]'
-                          }`}
+                          className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${canvasFilter === 'all'
+                            ? 'bg-primary text-white'
+                            : 'text-slate-400 hover:text-white hover:bg-[#101922]'
+                            }`}
                           onClick={() => setCanvasFilter('all')}
                           type="button"
                         >
                           All
                         </button>
                         <button
-                          className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${
-                            canvasFilter === 'recent'
-                              ? 'bg-primary text-white'
-                              : 'text-slate-400 hover:text-white hover:bg-[#101922]'
-                          }`}
+                          className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${canvasFilter === 'recent'
+                            ? 'bg-primary text-white'
+                            : 'text-slate-400 hover:text-white hover:bg-[#101922]'
+                            }`}
                           onClick={() => setCanvasFilter('recent')}
                           type="button"
                         >
                           Recent
                         </button>
                         <button
-                          className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${
-                            canvasFilter === 'shared'
-                              ? 'bg-primary text-white'
-                              : 'text-slate-400 hover:text-white hover:bg-[#101922]'
-                          }`}
+                          className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${canvasFilter === 'shared'
+                            ? 'bg-primary text-white'
+                            : 'text-slate-400 hover:text-white hover:bg-[#101922]'
+                            }`}
                           onClick={() => setCanvasFilter('shared')}
                           type="button"
                         >
                           Shared
                         </button>
                         <button
-                          className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${
-                            canvasFilter === 'private'
-                              ? 'bg-primary text-white'
-                              : 'text-slate-400 hover:text-white hover:bg-[#101922]'
-                          }`}
+                          className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${canvasFilter === 'private'
+                            ? 'bg-primary text-white'
+                            : 'text-slate-400 hover:text-white hover:bg-[#101922]'
+                            }`}
                           onClick={() => setCanvasFilter('private')}
                           type="button"
                         >
@@ -1690,11 +1861,10 @@ export default function Dashboard() {
                             />
                             <div className="absolute top-3 right-3 z-10">
                               <span
-                                className={`px-2 py-1 bg-[#101922]/80 text-[10px] font-bold rounded border uppercase ${
-                                  canvas.tagColor === 'emerald'
-                                    ? 'text-emerald-400 border-emerald-400/30'
-                                    : 'text-primary border-primary/30'
-                                }`}
+                                className={`px-2 py-1 bg-[#101922]/80 text-[10px] font-bold rounded border uppercase ${canvas.tagColor === 'emerald'
+                                  ? 'text-emerald-400 border-emerald-400/30'
+                                  : 'text-primary border-primary/30'
+                                  }`}
                               >
                                 {canvas.tag}
                               </span>
@@ -1738,15 +1908,14 @@ export default function Dashboard() {
                             type="button"
                           >
                             <div
-                              className={`w-10 h-10 rounded-lg flex items-center justify-center mr-4 transition-colors ${
-                                folder.accent === 'blue'
-                                  ? 'bg-blue-500/10 text-blue-500 group-hover:bg-blue-500 group-hover:text-white'
-                                  : folder.accent === 'amber'
+                              className={`w-10 h-10 rounded-lg flex items-center justify-center mr-4 transition-colors ${folder.accent === 'blue'
+                                ? 'bg-blue-500/10 text-blue-500 group-hover:bg-blue-500 group-hover:text-white'
+                                : folder.accent === 'amber'
                                   ? 'bg-amber-500/10 text-amber-500 group-hover:bg-amber-500 group-hover:text-white'
                                   : folder.accent === 'emerald'
-                                  ? 'bg-emerald-500/10 text-emerald-500 group-hover:bg-emerald-500 group-hover:text-white'
-                                  : 'bg-purple-500/10 text-purple-500 group-hover:bg-purple-500 group-hover:text-white'
-                              }`}
+                                    ? 'bg-emerald-500/10 text-emerald-500 group-hover:bg-emerald-500 group-hover:text-white'
+                                    : 'bg-purple-500/10 text-purple-500 group-hover:bg-purple-500 group-hover:text-white'
+                                }`}
                             >
                               <span className="material-symbols-outlined">folder</span>
                             </div>
@@ -1766,44 +1935,40 @@ export default function Dashboard() {
                     <section className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
                       <div className="flex items-center space-x-1 p-1 bg-[#1a242f] border border-[#2d3a4b] rounded-xl">
                         <button
-                          className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${
-                            canvasFilter === 'all'
-                              ? 'bg-primary text-white'
-                              : 'text-slate-400 hover:text-white hover:bg-[#101922]'
-                          }`}
+                          className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${canvasFilter === 'all'
+                            ? 'bg-primary text-white'
+                            : 'text-slate-400 hover:text-white hover:bg-[#101922]'
+                            }`}
                           onClick={() => setCanvasFilter('all')}
                           type="button"
                         >
                           All
                         </button>
                         <button
-                          className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${
-                            canvasFilter === 'recent'
-                              ? 'bg-primary text-white'
-                              : 'text-slate-400 hover:text-white hover:bg-[#101922]'
-                          }`}
+                          className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${canvasFilter === 'recent'
+                            ? 'bg-primary text-white'
+                            : 'text-slate-400 hover:text-white hover:bg-[#101922]'
+                            }`}
                           onClick={() => setCanvasFilter('recent')}
                           type="button"
                         >
                           Recent
                         </button>
                         <button
-                          className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${
-                            canvasFilter === 'shared'
-                              ? 'bg-primary text-white'
-                              : 'text-slate-400 hover:text-white hover:bg-[#101922]'
-                          }`}
+                          className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${canvasFilter === 'shared'
+                            ? 'bg-primary text-white'
+                            : 'text-slate-400 hover:text-white hover:bg-[#101922]'
+                            }`}
                           onClick={() => setCanvasFilter('shared')}
                           type="button"
                         >
                           Shared
                         </button>
                         <button
-                          className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${
-                            canvasFilter === 'private'
-                              ? 'bg-primary text-white'
-                              : 'text-slate-400 hover:text-white hover:bg-[#101922]'
-                          }`}
+                          className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${canvasFilter === 'private'
+                            ? 'bg-primary text-white'
+                            : 'text-slate-400 hover:text-white hover:bg-[#101922]'
+                            }`}
                           onClick={() => setCanvasFilter('private')}
                           type="button"
                         >
@@ -1854,11 +2019,10 @@ export default function Dashboard() {
                             />
                             <div className="absolute top-3 right-3 z-10">
                               <span
-                                className={`px-2 py-1 bg-[#101922]/80 text-[10px] font-bold rounded border uppercase ${
-                                  canvas.tagColor === 'emerald'
-                                    ? 'text-emerald-400 border-emerald-400/30'
-                                    : 'text-primary border-primary/30'
-                                }`}
+                                className={`px-2 py-1 bg-[#101922]/80 text-[10px] font-bold rounded border uppercase ${canvas.tagColor === 'emerald'
+                                  ? 'text-emerald-400 border-emerald-400/30'
+                                  : 'text-primary border-primary/30'
+                                  }`}
                               >
                                 {canvas.tag}
                               </span>
@@ -1891,6 +2055,93 @@ export default function Dashboard() {
           </div>
         </main>
       </div>
+
+      {/* Rename Canvas Modal */}
+      {renameModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-[#1a242f] border border-[#2d3a4b] rounded-xl p-6 w-full max-w-md shadow-2xl">
+            <h3 className="text-xl font-bold mb-4">Rename Canvas</h3>
+            <input
+              className="w-full px-4 py-2 bg-[#0f172a] border border-[#2d3a4b] rounded-lg text-slate-200 focus:outline-none focus:ring-2 focus:ring-primary/50"
+              type="text"
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              placeholder="Enter canvas name"
+              autoFocus
+            />
+            <div className="flex justify-end space-x-3 mt-6">
+              <button
+                className="px-4 py-2 bg-[#0f172a] hover:bg-[#1a242f] text-slate-300 rounded-lg transition-colors"
+                onClick={() => {
+                  setRenameModalOpen(false);
+                  setRenameCanvasId(null);
+                  setRenameValue('');
+                }}
+                type="button"
+              >
+                Cancel
+              </button>
+              <button
+                className="px-4 py-2 bg-primary hover:brightness-110 text-white font-bold rounded-lg transition-all"
+                onClick={handleRenameSubmit}
+                type="button"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Import Canvas Modal */}
+      {importModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-[#1a242f] border border-[#2d3a4b] rounded-xl p-6 w-full max-w-md shadow-2xl">
+            <h3 className="text-xl font-bold mb-4">Import Canvas</h3>
+            <div className="mb-4">
+              <label className="block text-sm text-slate-400 mb-2">Select JSON file</label>
+              <input
+                type="file"
+                accept=".json,application/json"
+                onChange={handleImportFileSelect}
+                className="w-full px-4 py-2 bg-[#0f172a] border border-[#2d3a4b] rounded-lg text-slate-200 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:brightness-110"
+              />
+            </div>
+            {importPreview && (
+              <div className="mb-4 p-4 bg-[#0f172a] border border-[#2d3a4b] rounded-lg">
+                <p className="text-sm text-slate-400">Canvas to import:</p>
+                <p className="text-base font-bold text-white mt-1">{importPreview.title}</p>
+                {importPreview.exportedAt && (
+                  <p className="text-xs text-slate-500 mt-1">
+                    Exported: {new Date(importPreview.exportedAt).toLocaleString()}
+                  </p>
+                )}
+              </div>
+            )}
+            <div className="flex justify-end space-x-3">
+              <button
+                className="px-4 py-2 bg-[#0f172a] hover:bg-[#1a242f] text-slate-300 rounded-lg transition-colors"
+                onClick={() => {
+                  setImportModalOpen(false);
+                  setImportFile(null);
+                  setImportPreview(null);
+                }}
+                type="button"
+              >
+                Cancel
+              </button>
+              <button
+                className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={handleImportSubmit}
+                disabled={!importPreview}
+                type="button"
+              >
+                Import
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
