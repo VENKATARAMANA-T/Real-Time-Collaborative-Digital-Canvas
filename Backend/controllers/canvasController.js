@@ -14,7 +14,7 @@ exports.createCanvas = async (req, res) => {
 
     const canvas = new Canvas({
       title: safeTitle,
-      owner: req.user._id, 
+      owner: req.user._id,
       folder: folderId || null,
       data: data || {},
       thumbnail: thumbnail || ''
@@ -58,7 +58,7 @@ exports.getCanvasById = async (req, res) => {
     // Find canvas by ID AND ensure the owner is the current user
     const canvas = await Canvas.findOne({
       _id: req.params.id,
-      owner: req.user._id 
+      owner: req.user._id
     });
 
     if (!canvas) {
@@ -81,12 +81,12 @@ exports.updateCanvas = async (req, res) => {
     // Find and Update strictly by Owner
     const canvas = await Canvas.findOneAndUpdate(
       { _id: req.params.id, owner: req.user._id },
-      { 
-        $set: { 
+      {
+        $set: {
           data: data,           // The JSON drawing data 
           thumbnail: thumbnail, // Screenshot/Preview string
-          title: title 
-        } 
+          title: title
+        }
       },
       { new: true } // Return the updated document
     );
@@ -173,9 +173,9 @@ exports.getMeetingCanvasById = async (req, res) => {
       canvas: canvas._id,
       endTime: null,
       participants: {
-        $elemMatch: { 
-          user: req.user._id, 
-          leaveTime: null 
+        $elemMatch: {
+          user: req.user._id,
+          leaveTime: null
         }
       }
     });
@@ -215,8 +215,8 @@ exports.updateMeetingCanvas = async (req, res) => {
         canvas: canvas._id,
         endTime: null,
         participants: {
-          $elemMatch: { 
-            user: req.user._id, 
+          $elemMatch: {
+            user: req.user._id,
             leaveTime: null,
             permission: 'edit' // <--- MUST have edit permission
           }
@@ -250,4 +250,141 @@ exports.updateMeetingCanvas = async (req, res) => {
 
 
 
-// need to update thumbnail   
+// need to update thumbnail
+
+// @desc    Rename a canvas
+// @route   PATCH /api/canvases/:id/rename
+// @access  Private
+exports.renameCanvas = async (req, res) => {
+  try {
+    const { title } = req.body;
+
+    // Validate input
+    if (!title || title.trim().length === 0) {
+      return res.status(400).json({ message: 'Please provide a valid canvas title' });
+    }
+
+    // Find and update canvas strictly by owner
+    const canvas = await Canvas.findOneAndUpdate(
+      { _id: req.params.id, owner: req.user._id },
+      { $set: { title: title.trim() } },
+      { new: true }
+    );
+
+    if (!canvas) {
+      return res.status(404).json({ message: 'Canvas not found or access denied' });
+    }
+
+    // Log Activity
+    try {
+      await ActivityLog.create({
+        user: req.user._id,
+        action: 'RENAME_CANVAS',
+        ipAddress: req.ip || '127.0.0.1'
+      });
+    } catch (logError) {
+      console.error('Logging failed:', logError);
+    }
+
+    res.status(200).json(canvas);
+  } catch (error) {
+    res.status(500).json({ message: 'Server Error', error: error.message });
+  }
+};
+
+// @desc    Export a canvas as JSON
+// @route   GET /api/canvases/:id/export
+// @access  Private
+exports.exportCanvas = async (req, res) => {
+  try {
+    // Find canvas by ID and ensure the owner is the current user
+    const canvas = await Canvas.findOne({
+      _id: req.params.id,
+      owner: req.user._id
+    }).lean();
+
+    if (!canvas) {
+      return res.status(404).json({ message: 'Canvas not found or access denied' });
+    }
+
+    // Prepare export data
+    const exportData = {
+      title: canvas.title,
+      data: canvas.data,
+      thumbnail: canvas.thumbnail,
+      exportedAt: new Date().toISOString(),
+      version: '1.0'
+    };
+
+    // Log Activity
+    try {
+      await ActivityLog.create({
+        user: req.user._id,
+        action: 'EXPORT_CANVAS',
+        ipAddress: req.ip || '127.0.0.1'
+      });
+    } catch (logError) {
+      console.error('Logging failed:', logError);
+    }
+
+    // Set headers for file download
+    const filename = `${canvas.title.replace(/[^a-z0-9]/gi, '_')}_${Date.now()}.json`;
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.status(200).json(exportData);
+  } catch (error) {
+    res.status(500).json({ message: 'Server Error', error: error.message });
+  }
+};
+
+// @desc    Import a canvas from JSON file
+// @route   POST /api/canvases/import
+// @access  Private
+exports.importCanvas = async (req, res) => {
+  try {
+    // Check if file was uploaded
+    if (!req.file) {
+      return res.status(400).json({ message: 'Please upload a JSON file' });
+    }
+
+    // Parse JSON from buffer
+    let importData;
+    try {
+      const fileContent = req.file.buffer.toString('utf8');
+      importData = JSON.parse(fileContent);
+    } catch (parseError) {
+      return res.status(400).json({ message: 'Invalid JSON file format' });
+    }
+
+    // Validate imported data structure
+    if (!importData.data || typeof importData.data !== 'object') {
+      return res.status(400).json({ message: 'Invalid canvas data structure' });
+    }
+
+    // Create new canvas with imported data
+    const canvas = new Canvas({
+      title: importData.title || `Imported Canvas ${Date.now()}`,
+      owner: req.user._id,
+      folder: req.body.folderId || null,
+      data: importData.data,
+      thumbnail: importData.thumbnail || ''
+    });
+
+    const createdCanvas = await canvas.save();
+
+    // Log Activity
+    try {
+      await ActivityLog.create({
+        user: req.user._id,
+        action: 'IMPORT_CANVAS',
+        ipAddress: req.ip || '127.0.0.1'
+      });
+    } catch (logError) {
+      console.error('Logging failed:', logError);
+    }
+
+    res.status(201).json(createdCanvas);
+  } catch (error) {
+    res.status(500).json({ message: 'Server Error', error: error.message });
+  }
+};   
