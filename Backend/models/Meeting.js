@@ -34,7 +34,14 @@ const meetingSchema = new mongoose.Schema({
     default: true // Chat is ON by default
   },
 
-  // 👥 Participants Tracking
+  // � Meeting Status (pending, live, ended)
+  status: {
+    type: String,
+    enum: ['pending', 'live', 'ended'],
+    default: 'pending' // Waiting for host to start
+  },
+
+  // �👥 Participants Tracking
   participants: [{
     user: {
       type: mongoose.Schema.Types.ObjectId,

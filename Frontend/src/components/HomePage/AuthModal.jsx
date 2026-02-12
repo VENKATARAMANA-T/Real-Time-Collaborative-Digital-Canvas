@@ -20,9 +20,23 @@ export default function AuthModal({ isOpen, onClose, mode, onModeChange, isLoadi
   const [forgotEmail, setForgotEmail] = useState('');
   
   // UI state
-  const [formError, setFormError] = useState('');
-  const [formSuccess, setFormSuccess] = useState('');
+  const [flashByMode, setFlashByMode] = useState({
+    login: { error: '', success: '' },
+    register: { error: '', success: '' },
+    forgot: { error: '', success: '' },
+  });
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const setModeFlash = (targetMode, updates) => {
+    setFlashByMode((prev) => ({
+      ...prev,
+      [targetMode]: { ...prev[targetMode], ...updates },
+    }));
+  };
+
+  const clearModeFlash = (targetMode) => {
+    setModeFlash(targetMode, { error: '', success: '' });
+  };
 
   useEffect(() => {
     if (!isOpen) {
@@ -33,22 +47,24 @@ export default function AuthModal({ isOpen, onClose, mode, onModeChange, isLoadi
       setRegEmail('');
       setRegPassword('');
       setForgotEmail('');
-      setFormError('');
-      setFormSuccess('');
+      setFlashByMode({
+        login: { error: '', success: '' },
+        register: { error: '', success: '' },
+        forgot: { error: '', success: '' },
+      });
       clearError();
     }
   }, [isOpen, clearError]);
 
   useEffect(() => {
     if (error) {
-      setFormError(error);
+      setModeFlash('login', { error });
     }
   }, [error]);
 
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
-    setFormError('');
-    setFormSuccess('');
+    clearModeFlash('login');
     setIsSubmitting(true);
     
     const result = await login({ email: loginEmail, password: loginPassword });
@@ -56,21 +72,20 @@ export default function AuthModal({ isOpen, onClose, mode, onModeChange, isLoadi
     setIsSubmitting(false);
     
     if (result.success) {
-      setFormSuccess('Login successful! Redirecting to dashboard...');
+      setModeFlash('login', { success: 'Login successful! Redirecting to dashboard...' });
       // Redirect to dashboard after 1 second
       setTimeout(() => {
         onClose();
         navigate('/dashboard');
       }, 1000);
     } else {
-      setFormError(result.message || 'Login failed');
+      setModeFlash('login', { error: result.message || 'Login failed' });
     }
   };
 
   const handleRegisterSubmit = async (e) => {
     e.preventDefault();
-    setFormError('');
-    setFormSuccess('');
+    clearModeFlash('register');
     setIsSubmitting(true);
     
     const result = await register({ 
@@ -82,42 +97,40 @@ export default function AuthModal({ isOpen, onClose, mode, onModeChange, isLoadi
     setIsSubmitting(false);
     
     if (result.success) {
-      setFormSuccess(result.message || 'Registration successful! Please login.');
+      setModeFlash('register', { success: result.message || 'Registration successful! Please login.' });
       // Switch to login mode after 2 seconds
       setTimeout(() => {
-        setFormSuccess('');
+        clearModeFlash('register');
         onModeChange('login');
       }, 2000);
     } else {
-      setFormError(result.message || 'Registration failed');
+      setModeFlash('register', { error: result.message || 'Registration failed' });
     }
   };
 
   const handleForgotPasswordSubmit = async (e) => {
     e.preventDefault();
-    setFormError('');
-    setFormSuccess('');
+    clearModeFlash('forgot');
     setIsSubmitting(true);
     
     try {
       const response = await authAPI.forgotPassword(forgotEmail);
       setIsSubmitting(false);
-      setFormSuccess(response.message || 'Reset link sent to your email.');
+      setModeFlash('forgot', { success: response.message || 'Reset link sent to your email.' });
       
       // Switch back to login after 3 seconds
       setTimeout(() => {
-        setFormSuccess('');
+        clearModeFlash('forgot');
         onModeChange('login');
       }, 3000);
     } catch (error) {
       setIsSubmitting(false);
-      setFormError(error.response?.data?.message || 'Failed to send reset link');
+      setModeFlash('forgot', { error: error.response?.data?.message || 'Failed to send reset link' });
     }
   };
 
   const closeFlashMessage = () => {
-    setFormError('');
-    setFormSuccess('');
+    clearModeFlash(mode);
   };
 
   if (!isOpen) return null;
@@ -149,13 +162,13 @@ export default function AuthModal({ isOpen, onClose, mode, onModeChange, isLoadi
               </div>
 
               {/* Error and Success Messages */}
-              {formError && (
+              {flashByMode.login.error && (
                 <div className="mb-4 p-3 rounded-lg bg-red-500/20 border border-red-500/50 text-red-300 text-sm flex items-start justify-between animate-slideDown">
                   <div className="flex items-start flex-1">
                     <svg className="w-5 h-5 mr-2 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
                     </svg>
-                    <span>{formError}</span>
+                    <span>{flashByMode.login.error}</span>
                   </div>
                   <button 
                     onClick={closeFlashMessage}
@@ -167,13 +180,13 @@ export default function AuthModal({ isOpen, onClose, mode, onModeChange, isLoadi
                   </button>
                 </div>
               )}
-              {formSuccess && (
+              {flashByMode.login.success && (
                 <div className="mb-4 p-3 rounded-lg bg-green-500/20 border border-green-500/50 text-green-300 text-sm flex items-start justify-between animate-slideDown">
                   <div className="flex items-start flex-1">
                     <svg className="w-5 h-5 mr-2 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                     </svg>
-                    <span>{formSuccess}</span>
+                    <span>{flashByMode.login.success}</span>
                   </div>
                   <button 
                     onClick={closeFlashMessage}
@@ -265,13 +278,13 @@ export default function AuthModal({ isOpen, onClose, mode, onModeChange, isLoadi
               </div>
 
               {/* Error and Success Messages */}
-              {formError && (
+              {flashByMode.register.error && (
                 <div className="mb-4 p-3 rounded-lg bg-red-500/20 border border-red-500/50 text-red-300 text-sm flex items-start justify-between animate-slideDown">
                   <div className="flex items-start flex-1">
                     <svg className="w-5 h-5 mr-2 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
                     </svg>
-                    <span>{formError}</span>
+                    <span>{flashByMode.register.error}</span>
                   </div>
                   <button 
                     onClick={closeFlashMessage}
@@ -283,13 +296,13 @@ export default function AuthModal({ isOpen, onClose, mode, onModeChange, isLoadi
                   </button>
                 </div>
               )}
-              {formSuccess && (
+              {flashByMode.register.success && (
                 <div className="mb-4 p-3 rounded-lg bg-green-500/20 border border-green-500/50 text-green-300 text-sm flex items-start justify-between animate-slideDown">
                   <div className="flex items-start flex-1">
                     <svg className="w-5 h-5 mr-2 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                     </svg>
-                    <span>{formSuccess}</span>
+                    <span>{flashByMode.register.success}</span>
                   </div>
                   <button 
                     onClick={closeFlashMessage}
@@ -383,13 +396,13 @@ export default function AuthModal({ isOpen, onClose, mode, onModeChange, isLoadi
               </div>
 
               {/* Error and Success Messages */}
-              {formError && (
+              {flashByMode.forgot.error && (
                 <div className="mb-4 p-3 rounded-lg bg-red-500/20 border border-red-500/50 text-red-300 text-sm flex items-start justify-between animate-slideDown">
                   <div className="flex items-start flex-1">
                     <svg className="w-5 h-5 mr-2 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
                     </svg>
-                    <span>{formError}</span>
+                    <span>{flashByMode.forgot.error}</span>
                   </div>
                   <button 
                     onClick={closeFlashMessage}
@@ -401,13 +414,13 @@ export default function AuthModal({ isOpen, onClose, mode, onModeChange, isLoadi
                   </button>
                 </div>
               )}
-              {formSuccess && (
+              {flashByMode.forgot.success && (
                 <div className="mb-4 p-3 rounded-lg bg-green-500/20 border border-green-500/50 text-green-300 text-sm flex items-start justify-between animate-slideDown">
                   <div className="flex items-start flex-1">
                     <svg className="w-5 h-5 mr-2 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                     </svg>
-                    <span>{formSuccess}</span>
+                    <span>{flashByMode.forgot.success}</span>
                   </div>
                   <button 
                     onClick={closeFlashMessage}

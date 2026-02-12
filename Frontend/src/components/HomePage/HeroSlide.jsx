@@ -10,13 +10,13 @@ export default function HeroSlide({ onAuthOpen, onSlideChange }) {
   return (
     <div className="w-full h-full flex items-center relative">
       <div className="container mx-auto px-6 grid lg:grid-cols-2 gap-12 items-center w-full">
-        <div className="space-y-8 relative z-10">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-300 text-xs font-semibold uppercase tracking-wider animate-fade-up">
+        <div className="space-y-8 relative z-10 text-start">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-300 text-xs text-start font-semibold uppercase tracking-wider animate-fade-up">
             <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
             v2.0 Now Available
           </div>
 
-          <h1 className="text-5xl lg:text-7xl font-bold leading-tight animate-fade-up" style={{ animationDelay: '0.1s' }}>
+          <h1 className="text-5xl lg:text-7xl font-bold leading-tight animate-fade-up text-start" style={{ animationDelay: '0.1s' }}>
             Where Teams <br />
             <span className="gradient-text">Create Magic</span>
           </h1>
@@ -35,7 +35,7 @@ export default function HeroSlide({ onAuthOpen, onSlideChange }) {
             </button>
             <button
               onClick={() => onSlideChange(1)}
-              className="px-8 py-4 rounded-xl glass font-semibold text-lg hover:bg-white/10 transition-colors flex items-center gap-2"
+              className="px-8 py-4 rounded-xl border border-white/10 bg-[#0f172a]/60 font-semibold text-lg text-slate-100 hover:bg-[#0f172a]/80 transition-colors flex items-center gap-2"
             >
               <span aria-hidden="true">&#9654;</span> Watch Demo
             </button>

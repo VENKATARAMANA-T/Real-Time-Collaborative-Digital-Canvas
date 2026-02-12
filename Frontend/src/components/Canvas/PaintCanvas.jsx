@@ -249,7 +249,7 @@ const PaintCanvas = ({
   useEffect(() => {
     const tCtx = tempContextRef.current;
     if (!tCtx) return;
-    tCtx.clearRect(0, 0, 2304, 1296);
+    tCtx.clearRect(0, 0, canvasSize.width, canvasSize.height);
     elements.forEach(el => drawElement(tCtx, el, el.id === selectedId, el.id === editingId));
   }, [elements, selectedId, editingId, zoom, canvasSize]);
 

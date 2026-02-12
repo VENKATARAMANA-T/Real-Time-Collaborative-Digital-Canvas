@@ -51,6 +51,7 @@ const TextFormatting = ({ textFormat, updateTextProp, toggleTextProp, fontFamili
       <button
         onClick={() => toggleTextProp('background')}
         className={`flex flex-col items-center p-2 rounded-lg gap-1 ${textFormat.background ? 'bg-zinc-700 text-blue-400' : 'text-zinc-400 hover:bg-zinc-800'}`}
+        type="button"
       >
         <Square size={16} fill={textFormat.background ? "currentColor" : "none"} />
         <span className="text-[9px]">Fill</span>

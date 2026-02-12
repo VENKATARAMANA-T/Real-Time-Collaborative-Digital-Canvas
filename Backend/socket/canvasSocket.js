@@ -128,7 +128,7 @@ const canvasSocket = (io, socket) => {
 
         try {
             // 2. FIND THE MEETING TO GET THE CANVAS ID
-            const meeting = await Meeting.findOne({ meetingId: meetingId });
+            const meeting = await Meeting.findById(meetingId);
             
             if (!meeting) {
                 console.error("Meeting not found in DB!");

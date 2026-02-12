@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
-import { userAPI, canvasAPI } from '../services/api';
+import { userAPI, canvasAPI, meetingAPI } from '../services/api';
 
 export default function Dashboard() {
   const { user, updateUser, logout } = useAuth();
@@ -22,6 +22,25 @@ export default function Dashboard() {
   const [isPasswordSaving, setIsPasswordSaving] = useState(false);
   const [savedCanvases, setSavedCanvases] = useState([]);
   const [isLoadingCanvases, setIsLoadingCanvases] = useState(false);
+  const [showJoinMeeting, setShowJoinMeeting] = useState(false);
+  const [showCreateMeeting, setShowCreateMeeting] = useState(false);
+  const [createMeetingMode, setCreateMeetingMode] = useState('instant');
+  const [joinMeetingId, setJoinMeetingId] = useState('');
+  const [joinMeetingPassword, setJoinMeetingPassword] = useState('');
+  const [joinAudioEnabled, setJoinAudioEnabled] = useState(true);
+  const [joinVideoEnabled, setJoinVideoEnabled] = useState(true);
+  const [createAudioEnabled, setCreateAudioEnabled] = useState(true);
+  const [createVideoEnabled, setCreateVideoEnabled] = useState(true);
+  const [scheduleDate, setScheduleDate] = useState('');
+  const [scheduleTime, setScheduleTime] = useState('');
+  const [scheduleError, setScheduleError] = useState('');
+  const [meetingTransition, setMeetingTransition] = useState({ active: false, label: '' });
+  const [joinMeetingFlash, setJoinMeetingFlash] = useState(null);
+  const [createMeetingFlash, setCreateMeetingFlash] = useState(null);
+  const [instantMeetingDetails, setInstantMeetingDetails] = useState(null);
+  const [scheduledMeetingDetails, setScheduledMeetingDetails] = useState(null);
+  const [isInstantGenerating, setIsInstantGenerating] = useState(false);
+  const [isScheduledGenerating, setIsScheduledGenerating] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -258,22 +277,215 @@ export default function Dashboard() {
 
   const displayName = user?.username || user?.name || 'User';
   const avatarUrl = user?.profileImage || 'https://lh3.googleusercontent.com/aida-public/AB6AXuA1G-Hn3vTP4BF8Tw65GNWLXCvphxit-gjaQaTS4e4417fPSGMKmx5zWr3w71xhaFli15vvoNhXAQzFsZhbXrYJnyiMAASvjonWiMDpUrf74kM00j8LO0v8ZIeWjxaTbQuwyPqYZPfUeaOJ0wxlWWLxz3b8aKfJIiOrN14CKccdESbzqpgCNmOz0yLKqEPnT9TLpYA75qsT7GKR2uA3ES71XLf46HSiL3x1oGxqtIPUL_bm67_UVcIPd6dxq-bs8_hsxaiualJBX4s';
-  const accountCreatedLabel = user?.createdAt
-    ? new Date(user.createdAt).toLocaleDateString('en-US', {
+  const accountCreatedAt = user?.createdAt || user?.createAt;
+  const accountCreatedLabel = accountCreatedAt
+    ? new Date(accountCreatedAt).toLocaleDateString('en-US', {
         year: 'numeric',
         month: 'long',
         day: 'numeric',
       })
     : 'Unknown';
 
-  const showFlash = (type, message) => {
-    setFlash({ type, message });
+  const showFlash = (type, message, scope = 'general') => {
+    setFlash({ type, message, scope });
   };
+
+  const showMeetingFlash = (setter, message) => {
+    setter(message);
+    window.setTimeout(() => setter(null), 3000);
+  };
+
+  const handleOpenJoinMeeting = () => {
+    setJoinMeetingId('');
+    setJoinMeetingPassword('');
+    setJoinAudioEnabled(true);
+    setJoinVideoEnabled(true);
+    setJoinMeetingFlash(null);
+    setShowJoinMeeting(true);
+  };
+
+  const handleOpenCreateMeeting = async () => {
+    setCreateMeetingMode('instant');
+    setCreateAudioEnabled(true);
+    setCreateVideoEnabled(true);
+    setScheduleDate('');
+    setScheduleTime('');
+    setScheduleError('');
+    setInstantMeetingDetails(null);
+    setScheduledMeetingDetails(null);
+    setCreateMeetingFlash(null);
+    setShowCreateMeeting(true);
+
+    setIsInstantGenerating(true);
+    try {
+      // Generate credentials for instant meeting (no DB creation)
+      const data = await meetingAPI.generateCredentials();
+      setInstantMeetingDetails({
+        id: data.meetingId,
+        password: data.password,
+        shareLink: data.shareLink,
+        meetingDbId: null,
+        role: 'host',
+        permission: 'edit',
+        status: 'pending'
+      });
+    } catch (error) {
+      console.error('Failed to generate credentials:', error);
+      showMeetingFlash(setCreateMeetingFlash, 'Failed to generate meeting credentials');
+      setInstantMeetingDetails(null);
+    } finally {
+      setIsInstantGenerating(false);
+    }
+  };
+
+  const startMeetingTransition = (label, onComplete) => {
+    setMeetingTransition({ active: true, label });
+    window.setTimeout(() => {
+      setMeetingTransition({ active: false, label: '' });
+      onComplete();
+    }, 1100);
+  };
+
+  const navigateToMeeting = (meetingData, mediaState) => {
+    // Handle both object and string formats for meetingData
+    const meetingId = typeof meetingData === 'string' 
+      ? meetingData 
+      : (meetingData?.id || meetingData?.meetingId || '');
+    
+    const trimmedId = meetingId?.trim?.() || meetingId;
+    const path = trimmedId ? `/meeting/${trimmedId}` : '/meeting';
+    
+    // Build state with proper password handling
+    const state = {
+      ...mediaState,
+      meetingId: meetingId,
+      // Priority: meetingData object password > mediaState password
+      meetingPassword: (typeof meetingData === 'object' && meetingData?.password) 
+        ? meetingData.password 
+        : mediaState?.meetingPassword
+    };
+    
+    navigate(path, { state });
+  };
+
+  const handleJoinMeetingSubmit = async () => {
+    if (!joinMeetingId.trim() || !joinMeetingPassword.trim()) {
+      showMeetingFlash(setJoinMeetingFlash, 'Invalid meeting details');
+      return;
+    }
+
+    try {
+      const data = await meetingAPI.join(joinMeetingId.trim(), joinMeetingPassword.trim());
+      setShowJoinMeeting(false);
+      startMeetingTransition('Joining meeting...', () =>
+        navigateToMeeting(data.meetingId, {
+          audioEnabled: joinAudioEnabled,
+          videoEnabled: joinVideoEnabled,
+          meetingDbId: data.meetingDbId,
+          role: data.role,
+          permission: data.permission,
+          meetingPassword: joinMeetingPassword.trim()
+        })
+      );
+    } catch (error) {
+      showMeetingFlash(setJoinMeetingFlash, 'Invalid meeting details');
+    }
+  };
+
+  const validateSchedule = () => {
+    if (!scheduleDate || !scheduleTime) {
+      return 'Please select date and time.';
+    }
+    const selected = new Date(`${scheduleDate}T${scheduleTime}`);
+    if (Number.isNaN(selected.getTime())) {
+      return 'Please select a valid date and time.';
+    }
+    if (selected <= new Date()) {
+      return 'Please choose a future date and time.';
+    }
+    return '';
+  };
+
+  const handleGenerateScheduledMeeting = async () => {
+    const validationError = validateSchedule();
+    if (validationError) {
+      setScheduleError(validationError);
+      setScheduledMeetingDetails(null);
+      return;
+    }
+    setScheduleError('');
+    setIsScheduledGenerating(true);
+    try {
+      // Generate credentials for scheduled meeting (no DB creation yet)
+      const data = await meetingAPI.generateCredentials();
+      setScheduledMeetingDetails({
+        id: data.meetingId,
+        password: data.password,
+        shareLink: data.shareLink,
+        meetingDbId: null,
+        role: 'host',
+        permission: 'edit',
+        status: 'pending',
+        scheduledDate: scheduleDate,
+        scheduledTime: scheduleTime
+      });
+    } catch (error) {
+      showMeetingFlash(setCreateMeetingFlash, 'Failed to generate meeting details');
+    } finally {
+      setIsScheduledGenerating(false);
+    }
+  };
+
+  const handleInstantJoin = async () => {
+    setIsInstantGenerating(true);
+    
+    try {
+      // If credentials exist but not in DB, create the meeting
+      if (instantMeetingDetails && !instantMeetingDetails?.meetingDbId) {
+        const data = await meetingAPI.createInstant({
+          meetingId: instantMeetingDetails.id,
+          password: instantMeetingDetails.password
+        });
+        const meetingData = {
+          id: data.meetingId,
+          password: data.password,
+          shareLink: data.shareLink,
+          meetingDbId: data.meetingDbId,
+          role: data.role,
+          permission: data.permission,
+          status: data.status
+        };
+        setInstantMeetingDetails(meetingData);
+        
+        // Enter the meeting
+        setShowCreateMeeting(false);
+        startMeetingTransition('Entering meeting...', () =>
+          navigateToMeeting(meetingData, {
+            audioEnabled: createAudioEnabled,
+            videoEnabled: createVideoEnabled,
+            meetingDbId: meetingData.meetingDbId,
+            role: meetingData.role || 'host',
+            permission: meetingData.permission || 'edit',
+            meetingPassword: meetingData.password
+          })
+        );
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      showMeetingFlash(setCreateMeetingFlash, 'Failed to create meeting');
+      setIsInstantGenerating(false);
+    }
+  };
+
+  const shouldShowFlash =
+    !!flash &&
+    (flash.scope === 'general' ||
+      (activeView === 'settings' && flash.scope === `settings-${settingsTab}`));
 
   const handleProfileUpdate = async (event) => {
     event.preventDefault();
     if (!user?._id && !user?.id) {
-      showFlash('error', 'User not available. Please log in again.');
+      showFlash('error', 'User not available. Please log in again.', 'settings-profile');
       return;
     }
     try {
@@ -285,10 +497,10 @@ export default function Dashboard() {
       });
       const nextUser = { ...user, ...updated };
       updateUser(nextUser);
-      showFlash('success', 'Profile updated successfully.');
+      showFlash('success', 'Profile updated successfully.', 'settings-profile');
     } catch (error) {
       const message = error.response?.data?.message || 'Failed to update profile.';
-      showFlash('error', message);
+      showFlash('error', message, 'settings-profile');
     } finally {
       setIsProfileSaving(false);
     }
@@ -297,19 +509,19 @@ export default function Dashboard() {
   const handlePasswordUpdate = async (event) => {
     event.preventDefault();
     if (!user?._id && !user?.id) {
-      showFlash('error', 'User not available. Please log in again.');
+      showFlash('error', 'User not available. Please log in again.', 'settings-password');
       return;
     }
     if (!oldPassword || !newPassword || !confirmPassword) {
-      showFlash('error', 'Please fill in all password fields.');
+      showFlash('error', 'Please fill in all password fields.', 'settings-password');
       return;
     }
     if (newPassword !== confirmPassword) {
-      showFlash('error', 'New passwords do not match.');
+      showFlash('error', 'New passwords do not match.', 'settings-password');
       return;
     }
     if (newPassword.length < 6) {
-      showFlash('error', 'Password must be at least 6 characters.');
+      showFlash('error', 'Password must be at least 6 characters.', 'settings-password');
       return;
     }
     try {
@@ -319,13 +531,13 @@ export default function Dashboard() {
         oldPassword,
         newPassword,
       });
-      showFlash('success', response.message || 'Password updated successfully.');
+      showFlash('success', response.message || 'Password updated successfully.', 'settings-password');
       setOldPassword('');
       setNewPassword('');
       setConfirmPassword('');
     } catch (error) {
       const message = error.response?.data?.message || 'Failed to update password.';
-      showFlash('error', message);
+      showFlash('error', message, 'settings-password');
     } finally {
       setIsPasswordSaving(false);
     }
@@ -411,7 +623,7 @@ export default function Dashboard() {
             <button
               className={`w-full flex items-center px-4 py-3 text-sm font-semibold rounded-xl transition-all ${
                 activeView === 'canvases'
-                  ? 'bg-primary/10 text-primary'
+                  ? 'bg-[#1a2b4a] hover:text-white'
                   : 'text-slate-400 hover:bg-[#1a2b4a] hover:text-white'
               }`}
               onClick={() => setActiveView('canvases')}
@@ -423,7 +635,7 @@ export default function Dashboard() {
             <button
               className={`w-full flex items-center px-4 py-3 text-sm font-semibold rounded-xl transition-all ${
                 activeView === 'meetings'
-                  ? 'bg-primary text-white'
+                  ? 'bg-[#1a2b4a] hover:text-white'
                   : 'text-slate-400 hover:bg-[#1a2b4a] hover:text-white'
               }`}
               onClick={() => setActiveView('meetings')}
@@ -435,7 +647,7 @@ export default function Dashboard() {
             <button
               className={`w-full flex items-center px-4 py-3 text-sm font-semibold rounded-xl transition-all ${
                 activeView === 'notifications'
-                  ? 'bg-primary text-white'
+                  ? 'bg-[#1a2b4a] hover:text-white'
                   : 'text-slate-400 hover:bg-[#1a2b4a] hover:text-white'
               }`}
               onClick={() => setActiveView('notifications')}
@@ -447,7 +659,7 @@ export default function Dashboard() {
             <button
               className={`w-full flex items-center px-4 py-3 text-sm font-semibold rounded-xl transition-all ${
                 activeView === 'activity'
-                  ? 'bg-primary text-white'
+                  ? 'bg-[#1a2b4a] hover:text-white'
                   : 'text-slate-400 hover:bg-[#1a2b4a] hover:text-white'
               }`}
               onClick={() => setActiveView('activity')}
@@ -459,7 +671,7 @@ export default function Dashboard() {
             <button
               className={`w-full flex items-center px-4 py-3 text-sm font-semibold rounded-xl transition-all ${
                 activeView === 'settings'
-                  ? 'bg-primary text-white'
+                  ? 'bg-[#1a2b4a] hover:text-white'
                   : 'text-slate-400 hover:bg-[#1a2b4a] hover:text-white'
               }`}
               onClick={() => setActiveView('settings')}
@@ -588,7 +800,7 @@ export default function Dashboard() {
                 </div>
               </div>
             )}
-            {flash && (
+            {shouldShowFlash && (
               <div
                 className={`mb-6 flex items-center justify-between gap-4 rounded-xl border px-4 py-3 text-sm ${
                   flash.type === 'success'
@@ -609,7 +821,7 @@ export default function Dashboard() {
             {activeView === 'home' ? (
               <>
                 <section className="mb-10 text-start">
-                  <h1 className="text-2xl font-bold mb-2 ">Welcome back, {displayName}</h1>
+                  <h1 className="text-3xl font-bold mb-2 ">Welcome back, {displayName}</h1>
                   <p className="text-slate-400">Ready to visualize your next big idea?</p>
                 </section>
 
@@ -630,7 +842,11 @@ export default function Dashboard() {
                   <p className="text-white/70 text-sm">Start a blank project from scratch</p>
                 </div>
               </button>
-              <button className="group relative overflow-hidden p-6 bg-[#5450dd] rounded-xl text-left transition-all hover:scale-[1.02] hover:shadow-xl hover:shadow-indigo-500/30">
+              <button
+                className="group relative overflow-hidden p-6 bg-[#5450dd] rounded-xl text-left transition-all hover:scale-[1.02] hover:shadow-xl hover:shadow-indigo-500/30"
+                onClick={handleOpenCreateMeeting}
+                type="button"
+              >
                 <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
                   <span className="material-icons text-8xl text-white">video_call</span>
                 </div>
@@ -642,7 +858,11 @@ export default function Dashboard() {
                   <p className="text-white/70 text-sm">Instant collaboration with your team</p>
                 </div>
               </button>
-              <button className="group relative overflow-hidden p-6 bg-[#15938c] rounded-xl text-left transition-all hover:scale-[1.02] hover:shadow-xl hover:shadow-emerald-500/30">
+              <button
+                className="group relative overflow-hidden p-6 bg-[#15938c] rounded-xl text-left transition-all hover:scale-[1.02] hover:shadow-xl hover:shadow-emerald-500/30"
+                onClick={handleOpenJoinMeeting}
+                type="button"
+              >
                 <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
                   <span className="material-icons text-8xl text-white">login</span>
                 </div>
@@ -701,7 +921,7 @@ export default function Dashboard() {
                         <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-transparent"></div>
                         <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 backdrop-blur-sm">
                           <button
-                            className="px-4 py-2 bg-primary text-white text-xs font-bold rounded-lg shadow-lg"
+                            className="px-4 py-2 bg-primary  text-white text-xs font-bold rounded-lg shadow-lg"
                             onClick={() => navigate(`/paint/${canvas._id}`)}
                             type="button"
                           >
@@ -1017,7 +1237,7 @@ export default function Dashboard() {
                     <h3 className="text-sm font-bold uppercase tracking-widest text-slate-500">Today — October 24</h3>
                   </div>
                   <div className="space-y-6">
-                    <div className="relative group p-6 bg-[#1a242f] border-l-4 border-primary rounded-xl border border-[#2d3a4b] hover:shadow-2xl hover:shadow-primary/5 transition-all">
+                    <div className="relative group p-6 bg-[#1a242f] border-l-4 border-primary rounded-xl border border-[#2d3a4b] ">
                       <div className="absolute top-6 right-6 flex items-center bg-emerald-500/10 text-emerald-400 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider">
                         <span className="relative flex h-2 w-2 mr-2">
                           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
@@ -1027,7 +1247,7 @@ export default function Dashboard() {
                       </div>
                       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
                         <div className="flex-1">
-                          <h4 className="text-2xl font-extrabold mb-2">Q4 Strategic Product Roadmap</h4>
+                          <h4 className="text-xl font-bold mb-2 text-start">Q4 Strategic Product Roadmap</h4>
                           <div className="flex items-center text-slate-400 text-sm space-x-4">
                             <span className="flex items-center">
                               <span className="material-symbols-outlined text-sm mr-1">schedule</span> 10:00 AM - 11:30 AM
@@ -1076,7 +1296,7 @@ export default function Dashboard() {
                             <span className="text-[10px] font-bold text-primary uppercase tracking-widest mr-3">Coming Up Next</span>
                             <div className="h-px flex-1 bg-[#2d3a4b]"></div>
                           </div>
-                          <h4 className="text-xl font-bold mb-2">Frontend Engineering Sync</h4>
+                          <h4 className="text-xl font-bold mb-2 text-start">Frontend Engineering Sync</h4>
                           <div className="flex items-center text-slate-400 text-sm space-x-4">
                             <span className="flex items-center">
                               <span className="material-symbols-outlined text-sm mr-1">schedule</span> 02:00 PM - 03:00 PM
@@ -1190,7 +1410,7 @@ export default function Dashboard() {
                 <div className="max-w-4xl mx-auto">
                   <div className="flex items-center justify-between mb-8">
                     <div>
-                      <h1 className="text-2xl font-bold text-white mb-1">Recent Activity</h1>
+                      <h1 className="text-2xl font-bold text-white mb-1 text-start">Recent Activity</h1>
                       <p className="text-slate-500 text-sm">Stay updated with your team's collaboration</p>
                     </div>
                     <button className="text-xs font-semibold text-primary hover:underline transition-all" type="button">
@@ -1207,14 +1427,14 @@ export default function Dashboard() {
                           src="https://lh3.googleusercontent.com/aida-public/AB6AXuDqTfywyR1V-K_AIjWqiOpMkL5HqSbth_mGsQcF68NS0z93K1S6BUVP0lqSnWROCkio9XUfSI18giEkbkPLo_W23mJ-k0X_w7EkGW1Dew_eQHHSfMx0u2oiT5gHyh97czYjZXFtmWtQT6X_d6vDduce1MqiC3odtK22ShLDLaA6q4FsSZERi21w-kCoM-xTt9Q99dhAqT4ybTq_zUr_E4KiMaI5GvwJSfk2i0xNPBWytcC0AuTgUvcRChDtHaKevbzhcFlp0dPNyiU"
                         />
                       </div>
-                      <div className="flex-1 min-w-0">
+                      <div className="flex-1 min-w-0 text-start">
                         <p className="text-sm font-medium text-slate-200">
                           <span className="font-bold text-white">Sarah</span> joined the{' '}
                           <span className="text-primary font-semibold">Q4 Roadmap</span> canvas
                         </p>
                         <p className="text-xs text-slate-500 mt-1">2m ago</p>
                       </div>
-                      <div className="ml-4 flex-shrink-0">
+                      <div className="ml-4 flex-shrink-0 ">
                         <button className="px-4 py-2 bg-primary/10 text-primary text-xs font-bold rounded-lg hover:bg-primary hover:text-white transition-all" type="button">
                           View
                         </button>
@@ -1226,7 +1446,7 @@ export default function Dashboard() {
                       <div className="flex-shrink-0 w-12 h-12 bg-emerald-500/10 rounded-full flex items-center justify-center mr-4">
                         <span className="material-symbols-outlined text-emerald-400">calendar_today</span>
                       </div>
-                      <div className="flex-1 min-w-0">
+                      <div className="flex-1 min-w-0 text-start">
                         <p className="text-sm font-medium text-slate-200">
                           New meeting invite: <span className="font-bold text-white">Frontend Sync</span>
                         </p>
@@ -1249,7 +1469,7 @@ export default function Dashboard() {
                       <div className="flex-shrink-0 w-12 h-12 bg-amber-500/10 rounded-full flex items-center justify-center mr-4">
                         <span className="material-symbols-outlined text-amber-400">timer</span>
                       </div>
-                      <div className="flex-1 min-w-0">
+                      <div className="flex-1 min-w-0 text-start">
                         <p className="text-sm font-medium text-slate-200">
                           Reminder: <span className="font-bold text-white">Project Retrospective</span> starts in 10 mins
                         </p>
@@ -1270,7 +1490,7 @@ export default function Dashboard() {
                       <div className="flex-shrink-0 w-12 h-12 bg-purple-500/10 rounded-full flex items-center justify-center mr-4">
                         <span className="material-symbols-outlined text-purple-400">share</span>
                       </div>
-                      <div className="flex-1 min-w-0">
+                      <div className="flex-1 min-w-0 text-start">
                         <p className="text-sm font-medium text-slate-200">
                           Canvas <span className="font-bold text-white">"Brand Identity"</span> was shared with you
                         </p>
@@ -1298,7 +1518,7 @@ export default function Dashboard() {
                           src="https://lh3.googleusercontent.com/aida-public/AB6AXuBP3Jffw2Ed86qLcQBO1a05mSUUVVKiWWIFMs5eaQUtbgZZ4WJ_YsRgPDXetsYBMgE5cwexXnXHnLy5tzdCTEB8Lm88P7PDk6cb1yiWobJMGU54wKA656FbzmD0HUDm-twu2t2QlQzMcGo83A8g14CN7wfS42kaCoMq3HghIJpfzsIxlw9F0-qfuyjFhl4rn7v7NuVj2swvt3ceKSi_dsi9dsHo3-V702VS9fDUJNATljFvadY7ZQRFxGEH2hKU4YrnGYmKET_jfD0"
                         />
                       </div>
-                      <div className="flex-1 min-w-0">
+                      <div className="flex-1 min-w-0 text-start">
                         <p className="text-sm font-medium text-slate-400">
                           <span className="font-bold text-slate-300">Marcus</span> left a comment on your canvas
                         </p>
@@ -1318,7 +1538,7 @@ export default function Dashboard() {
                 <div className="max-w-4xl mx-auto">
                   <div className="flex items-center justify-between mb-8">
                     <div>
-                      <h3 className="text-lg font-bold">Recent Actions</h3>
+                      <h3 className="text-lg font-bold text-start">Recent Actions</h3>
                       <p className="text-sm text-slate-500">Chronological track of your platform interactions</p>
                     </div>
                     <button className="text-xs text-primary font-bold hover:underline" type="button">
@@ -1330,9 +1550,9 @@ export default function Dashboard() {
                       <div className="z-10 w-12 h-12 flex-shrink-0 bg-blue-500/10 border border-blue-500/20 rounded-xl flex items-center justify-center mr-6">
                         <span className="material-symbols-outlined text-blue-400">login</span>
                       </div>
-                      <div className="flex-1 pt-1">
-                        <div className="flex items-center justify-between mb-1">
-                          <h4 className="font-bold text-slate-100">Login</h4>
+                      <div className="flex-1 pt-1 text-start">
+                        <div className="flex items-center justify-between mb-2">
+                          <h4 className="font-bold text-slate-100 ">Login</h4>
                           <span className="text-xs text-slate-500">Today, 10:42 AM</span>
                         </div>
                         <p className="text-sm text-slate-400 mb-2">Session started from Chrome on macOS (IP: 192.168.1.45)</p>
@@ -1346,8 +1566,8 @@ export default function Dashboard() {
                       <div className="z-10 w-12 h-12 flex-shrink-0 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-center justify-center mr-6">
                         <span className="material-symbols-outlined text-emerald-400">add_to_photos</span>
                       </div>
-                      <div className="flex-1 pt-1">
-                        <div className="flex items-center justify-between mb-1">
+                      <div className="flex-1 pt-1 text-start">
+                        <div className="flex items-center justify-between mb-2">
                           <h4 className="font-bold text-slate-100">Created "Website Redesign" Canvas</h4>
                           <span className="text-xs text-slate-500">Today, 08:15 AM</span>
                         </div>
@@ -1362,8 +1582,8 @@ export default function Dashboard() {
                       <div className="z-10 w-12 h-12 flex-shrink-0 bg-purple-500/10 border border-purple-500/20 rounded-xl flex items-center justify-center mr-6">
                         <span className="material-symbols-outlined text-purple-400">video_chat</span>
                       </div>
-                      <div className="flex-1 pt-1">
-                        <div className="flex items-center justify-between mb-1">
+                      <div className="flex-1 pt-1 text-start">
+                        <div className="flex items-center justify-between mb-2">
                           <h4 className="font-bold text-slate-100">Joined "Weekly Sync" Meeting</h4>
                           <span className="text-xs text-slate-500">Yesterday, 02:00 PM</span>
                         </div>
@@ -1378,8 +1598,8 @@ export default function Dashboard() {
                       <div className="z-10 w-12 h-12 flex-shrink-0 bg-rose-500/10 border border-rose-500/20 rounded-xl flex items-center justify-center mr-6">
                         <span className="material-symbols-outlined text-rose-400">delete_forever</span>
                       </div>
-                      <div className="flex-1 pt-1">
-                        <div className="flex items-center justify-between mb-1">
+                      <div className="flex-1 pt-1 text-start">
+                        <div className="flex items-center justify-between mb-2">
                           <h4 className="font-bold text-slate-100">Deleted "Old Draft" Canvas</h4>
                           <span className="text-xs text-slate-500">Yesterday, 11:30 AM</span>
                         </div>
@@ -1394,8 +1614,8 @@ export default function Dashboard() {
                       <div className="z-10 w-12 h-12 flex-shrink-0 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-center justify-center mr-6">
                         <span className="material-symbols-outlined text-amber-400">account_circle</span>
                       </div>
-                      <div className="flex-1 pt-1">
-                        <div className="flex items-center justify-between mb-1">
+                      <div className="flex-1 pt-1 text-start">
+                        <div className="flex items-center justify-between mb-2">
                           <h4 className="font-bold text-slate-100">Updated Profile Picture</h4>
                           <span className="text-xs text-slate-500">Oct 22, 2023, 04:12 PM</span>
                         </div>
@@ -1410,8 +1630,8 @@ export default function Dashboard() {
                       <div className="z-10 w-12 h-12 flex-shrink-0 bg-slate-500/10 border border-slate-500/20 rounded-xl flex items-center justify-center mr-6">
                         <span className="material-symbols-outlined text-slate-400">logout</span>
                       </div>
-                      <div className="flex-1 pt-1">
-                        <div className="flex items-center justify-between mb-1">
+                      <div className="flex-1 pt-1 text-start">
+                        <div className="flex items-center justify-between mb-2">
                           <h4 className="font-bold text-slate-100">Log out</h4>
                           <span className="text-xs text-slate-500">Oct 21, 2023, 09:05 PM</span>
                         </div>
@@ -1429,7 +1649,7 @@ export default function Dashboard() {
                 <div className="max-w-3xl mx-auto">
                   <div className="flex items-center justify-between mb-8">
                     <div>
-                      <h3 className="text-lg font-bold">Account Settings</h3>
+                      <h3 className="text-lg font-bold text-start">Account Settings</h3>
                       <p className="text-sm text-slate-500">Manage your profile and security preferences</p>
                     </div>
                   </div>
@@ -1568,15 +1788,15 @@ export default function Dashboard() {
                       </div>
                       <div className="flex items-center justify-between p-4 bg-[#101922]/40 border border-[#2d3a4b] rounded-xl">
                         <div>
-                          <p className="text-xs text-slate-500">Account created</p>
+                          <p className="text-xs text-slate-500 text-start">Account created</p>
                           <p className="text-sm font-semibold text-slate-200">{accountCreatedLabel}</p>
                         </div>
                         <span className="text-xs text-slate-500">{user?.email || 'No email available'}</span>
                       </div>
                       <div className="mt-6 flex items-center justify-between p-4 bg-rose-500/5 border border-rose-500/20 rounded-xl">
                         <div>
-                          <p className="text-sm font-semibold text-rose-300">Delete account</p>
-                          <p className="text-xs text-rose-400">This action is permanent and cannot be undone.</p>
+                          <p className="text-sm font-semibold  text-rose-400 text-start mb-1">Delete account</p>
+                          <p className="text-xs text-rose-300 ">This action is permanent and cannot be undone.</p>
                         </div>
                         <button className="px-5 py-2 bg-rose-500 text-white text-xs font-bold rounded-lg hover:brightness-110 transition-all" type="button">
                           Delete
@@ -1891,6 +2111,331 @@ export default function Dashboard() {
           </div>
         </main>
       </div>
+
+      {showJoinMeeting && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-sm">
+          <div className="relative w-full max-w-lg rounded-2xl border border-white/10 bg-[#0f172a] p-8 shadow-2xl">
+            <button
+              onClick={() => setShowJoinMeeting(false)}
+              className="absolute right-4 top-4 text-white/50 hover:text-white"
+              type="button"
+            >
+              <span className="material-icons">close</span>
+            </button>
+            <div className="text-center mb-6">
+              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-300">
+                <span className="material-icons">login</span>
+              </div>
+              <h3 className="text-2xl font-bold">Join a Meeting</h3>
+              <p className="text-slate-400 text-sm">Enter your meeting credentials to continue.</p>
+            </div>
+
+            {joinMeetingFlash && (
+              <div className="mb-4 rounded-lg border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
+                {joinMeetingFlash}
+              </div>
+            )}
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Meeting ID</label>
+                <input
+                  type="text"
+                  value={joinMeetingId}
+                  onChange={(event) => setJoinMeetingId(event.target.value)}
+                  placeholder="MEET-XXXXXX"
+                  className="w-full px-4 py-3 rounded-lg premium-input text-white text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Meeting Password</label>
+                <input
+                  type="password"
+                  value={joinMeetingPassword}
+                  onChange={(event) => setJoinMeetingPassword(event.target.value)}
+                  placeholder="Enter meeting password"
+                  className="w-full px-4 py-3 rounded-lg premium-input text-white text-sm"
+                />
+              </div>
+
+                <div className="flex items-center justify-between rounded-xl border border-white/10 bg-white/5 p-4">
+                  <span className="text-sm text-slate-200">Device Settings</span>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => setJoinAudioEnabled((prev) => !prev)}
+                      className={`flex h-11 w-11 items-center justify-center rounded-full border transition-all ${
+                        joinAudioEnabled
+                          ? 'border-emerald-400/60 bg-emerald-800 text-white'
+                          : 'border-rose-400/60 bg-rose-500 text-white'
+                      }`}
+                      type="button"
+                      title={joinAudioEnabled ? 'Disable Audio' : 'Enable Audio'}
+                    >
+                      <span className="material-icons">{joinAudioEnabled ? 'mic' : 'mic_off'}</span>
+                    </button>
+                    <button
+                      onClick={() => setJoinVideoEnabled((prev) => !prev)}
+                      className={`flex h-11 w-11 items-center justify-center rounded-full border transition-all ${
+                        joinVideoEnabled
+                          ? 'border-emerald-400/60 bg-emerald-800 text-white'
+                          : 'border-rose-400/60 bg-rose-500 text-white'
+                      }`}
+                      type="button"
+                      title={joinVideoEnabled ? 'Disable Video' : 'Enable Video'}
+                    >
+                      <span className="material-icons">{joinVideoEnabled ? 'videocam' : 'videocam_off'}</span>
+                    </button>
+                  </div>
+                </div>
+
+              <button
+                onClick={handleJoinMeetingSubmit}
+                className="w-full rounded-lg bg-emerald-600 py-3 font-bold text-white transition-all hover:bg-emerald-500"
+                type="button"
+              >
+                Host Meeting
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showCreateMeeting && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-sm">
+          <div className="relative w-full max-w-2xl rounded-2xl border border-white/10 bg-[#0f172a] p-8 shadow-2xl">
+            <button
+              onClick={() => setShowCreateMeeting(false)}
+              className="absolute right-4 top-4 text-white/50 hover:text-white"
+              type="button"
+            >
+              <span className="material-icons">close</span>
+            </button>
+            <div className="text-center mb-6">
+              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-500/20 text-indigo-300">
+                <span className="material-icons">video_call</span>
+              </div>
+              <h3 className="text-2xl font-bold">Create a Meeting</h3>
+              <p className="text-slate-400 text-sm">Choose instant or schedule a meeting.</p>
+            </div>
+
+            {createMeetingFlash && (
+              <div className="mb-4 rounded-lg border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
+                {createMeetingFlash}
+              </div>
+            )}
+
+            <div className="mb-6 flex gap-3">
+              <button
+                onClick={() => setCreateMeetingMode('instant')}
+                className={`flex-1 rounded-lg border px-4 py-2 text-sm font-semibold transition-all ${
+                  createMeetingMode === 'instant'
+                    ? 'border-indigo-400 bg-indigo-500/20 text-white'
+                    : 'border-white/10 text-slate-300 hover:border-white/30'
+                }`}
+                type="button"
+              >
+                Instant Meeting
+              </button>
+              <button
+                onClick={() => setCreateMeetingMode('scheduled')}
+                className={`flex-1 rounded-lg border px-4 py-2 text-sm font-semibold transition-all ${
+                  createMeetingMode === 'scheduled'
+                    ? 'border-indigo-400 bg-indigo-500/20 text-white'
+                    : 'border-white/10 text-slate-300 hover:border-white/30'
+                }`}
+                type="button"
+              >
+                Schedule Meeting
+              </button>
+            </div>
+
+            {createMeetingMode === 'instant' && (
+              <div className="space-y-4">
+                {isInstantGenerating && (
+                  <div className="rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-slate-200 flex items-center gap-3">
+                    <div className="h-5 w-5 animate-spin rounded-full border-2 border-slate-400 border-t-indigo-500"></div>
+                    Generating meeting details...
+                  </div>
+                )}
+
+                {instantMeetingDetails && (
+                  <div className={`rounded-xl border p-4 text-sm space-y-2 ${
+                    instantMeetingDetails?.meetingDbId
+                      ? 'border-emerald-500/40 bg-emerald-500/10 text-slate-200'
+                      : 'border-blue-500/40 bg-blue-500/10 text-slate-200'
+                  }`}>
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className={`material-icons text-sm ${instantMeetingDetails?.meetingDbId ? 'text-emerald-400' : 'text-blue-400'}`}>
+                        {instantMeetingDetails?.meetingDbId ? 'check_circle' : 'info'}
+                      </span>
+                      <span className="font-semibold">
+                        {instantMeetingDetails?.meetingDbId ? 'Meeting Created Successfully' : 'Meeting Details Generated'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-400">Meeting ID</span>
+                      <span className="font-semibold">{instantMeetingDetails.id}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-400">Meeting Password</span>
+                      <span className="font-semibold">{instantMeetingDetails.password}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-400">Shareable Link</span>
+                      <span className="font-semibold text-xs break-all">
+                        {instantMeetingDetails.shareLink || (isInstantGenerating ? 'Generating...' : 'Not yet generated')}
+                      </span>
+                    </div>
+                    <p className={`text-xs mt-2 ${
+                      instantMeetingDetails?.meetingDbId 
+                        ? 'text-emerald-300' 
+                        : 'text-blue-300'
+                    }`}>
+                      {instantMeetingDetails?.meetingDbId 
+                        ? 'Other members can now join this meeting' 
+                        : 'Click "Host Meeting" below to create and enter the meeting'}
+                    </p>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between rounded-xl border border-white/10 bg-white/5 p-4">
+                  <span className="text-sm text-slate-200">Device Settings</span>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => setCreateAudioEnabled((prev) => !prev)}
+                      className={`flex h-11 w-11 items-center justify-center rounded-full border transition-all ${
+                        createAudioEnabled
+                          ? 'border-emerald-400/60 bg-emerald-800 text-white'
+                          : 'border-rose-400/60 bg-rose-500 text-white'
+                      }`}
+                      type="button"
+                      title={createAudioEnabled ? 'Disable Audio' : 'Enable Audio'}
+                    >
+                      <span className="material-icons">{createAudioEnabled ? 'mic' : 'mic_off'}</span>
+                    </button>
+                    <button
+                      onClick={() => setCreateVideoEnabled((prev) => !prev)}
+                      className={`flex h-11 w-11 items-center justify-center rounded-full border transition-all ${
+                        createVideoEnabled
+                          ? 'border-emerald-400/60 bg-emerald-800 text-white'
+                          : 'border-rose-400/60 bg-rose-500 text-white'
+                      }`}
+                      type="button"
+                      title={createVideoEnabled ? 'Disable Video' : 'Enable Video'}
+                    >
+                      <span className="material-icons">{createVideoEnabled ? 'videocam' : 'videocam_off'}</span>
+                    </button>
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleInstantJoin}
+                  className="w-full rounded-lg bg-indigo-600 py-3 font-bold text-white transition-all hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
+                  type="button"
+                  disabled={isInstantGenerating || !instantMeetingDetails}
+                >
+                  {isInstantGenerating ? 'Creating Meeting...' : instantMeetingDetails && !instantMeetingDetails.meetingDbId ? 'Host Meeting' : 'Host Meeting'}
+                </button>
+              </div>
+            )}
+
+            {createMeetingMode === 'scheduled' && (
+              <div className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Date</label>
+                    <input
+                      type="date"
+                      value={scheduleDate}
+                      onChange={(event) => setScheduleDate(event.target.value)}
+                      className="w-full px-4 py-3 rounded-lg premium-input text-white text-sm"
+                      style={{ colorScheme: 'dark' }}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Time</label>
+                    <input
+                      type="time"
+                      value={scheduleTime}
+                      onChange={(event) => setScheduleTime(event.target.value)}
+                      className="w-full px-4 py-3 rounded-lg premium-input text-white text-sm"
+                      style={{ colorScheme: 'dark' }}
+                    />
+                  </div>
+                </div>
+
+                {scheduleError && (
+                  <div className="rounded-lg border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
+                    {scheduleError}
+                  </div>
+                )}
+
+                {isScheduledGenerating && (
+                  <div className="rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-slate-200 flex items-center gap-3">
+                    <div className="h-5 w-5 animate-spin rounded-full border-2 border-slate-400 border-t-indigo-500"></div>
+                    Generating meeting details...
+                  </div>
+                )}
+
+                <button
+                  onClick={handleGenerateScheduledMeeting}
+                  className="w-full rounded-lg border border-indigo-400/40 bg-indigo-500/10 py-3 text-sm font-semibold text-indigo-200 transition-all hover:bg-indigo-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                  type="button"
+                  disabled={isScheduledGenerating}
+                >
+                  {isScheduledGenerating ? 'Generating...' : 'Generate Meeting Details'}
+                </button>
+
+                {scheduledMeetingDetails && (
+                  <div className={`rounded-xl border p-4 text-sm space-y-2 ${
+                    scheduledMeetingDetails?.meetingDbId
+                      ? 'border-emerald-500/40 bg-emerald-500/10 text-slate-200'
+                      : 'border-blue-500/40 bg-blue-500/10 text-slate-200'
+                  }`}>
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-400">Meeting ID</span>
+                      <span className="font-semibold">{scheduledMeetingDetails.id}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-400">Meeting Password</span>
+                      <span className="font-semibold">{scheduledMeetingDetails.password}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-400">Shareable Link</span>
+                      <span className="font-semibold text-xs break-all">{scheduledMeetingDetails.shareLink}</span>
+                    </div>
+                    {scheduledMeetingDetails.scheduledDate && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-400">Scheduled Date & Time</span>
+                        <span className="font-semibold">{scheduledMeetingDetails.scheduledDate} {scheduledMeetingDetails.scheduledTime}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {scheduledMeetingDetails && (
+                  <button
+                    onClick={() => setShowCreateMeeting(false)}
+                    className="w-full rounded-lg bg-indigo-600 py-3 font-bold text-white transition-all hover:bg-indigo-500"
+                    type="button"
+                  >
+                    Done
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {meetingTransition.active && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-sm">
+          <div className="flex flex-col items-center gap-3 rounded-2xl border border-white/10 bg-[#0f172a] px-6 py-5 shadow-2xl">
+            <div className="h-10 w-10 animate-spin rounded-full border-2 border-slate-600 border-t-primary"></div>
+            <p className="text-sm font-semibold text-slate-100">{meetingTransition.label}</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

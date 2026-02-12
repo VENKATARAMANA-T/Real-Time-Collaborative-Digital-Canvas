@@ -1,19 +1,19 @@
 const express = require('express');
 const router = express.Router();
-const { protect } = require('../middleware/authMiddleware');
-// Chat controller would be imported here when implemented
-// const chatController = require('../controllers/chatController');
+const { authMiddleware } = require('../middleware/authMiddleware');
+const {
+	getChatHistory,
+	toggleGlobalChat,
+	toggleUserChat
+} = require('../controllers/chatController');
 
-// Placeholder routes for chat functionality
-// These will be implemented when chat features are added
+router.use(authMiddleware);
 
-// Get all chats for a user
-// router.get('/', protect, chatController.getChats);
+// Get chat history for a meeting
+router.get('/:meetingId', getChatHistory);
 
-// Get messages for a specific chat
-// router.get('/:chatId/messages', protect, chatController.getMessages);
-
-// Send a message
-// router.post('/:chatId/messages', protect, chatController.sendMessage);
+// Host controls
+router.put('/:meetingId/toggle-global', toggleGlobalChat);
+router.put('/:meetingId/toggle-user', toggleUserChat);
 
 module.exports = router;

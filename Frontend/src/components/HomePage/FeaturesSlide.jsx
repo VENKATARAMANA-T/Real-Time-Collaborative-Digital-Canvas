@@ -14,9 +14,9 @@ export default function FeaturesSlide() {
         </div>
 
         <div className="grid md:grid-cols-3 gap-8">
-          <div className="glass-card p-8 rounded-2xl hover:bg-white/5 transition-colors group cursor-pointer">
+          <div className="glass-card p-8 rounded-2xl  hover:bg-white/5 transition-colors group cursor-pointer">
             <div
-              className="w-14 h-14 rounded-xl bg-purple-500/20 flex items-center justify-center text-3xl mb-6 group-hover:scale-110 transition-transform"
+              className="w-14 h-14 rounded-xl bg-purple-500/20 flex items-center justify-center  text-3xl mb-6 group-hover:scale-110 transition-transform"
               aria-hidden="true"
             >
               &#9889;

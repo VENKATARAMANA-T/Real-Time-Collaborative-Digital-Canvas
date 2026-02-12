@@ -42,6 +42,7 @@ const TopMenu = ({
       <button
         onClick={onBack}
         className="px-3 py-1 rounded-md bg-white/10 hover:bg-white/20 text-white border border-white/10"
+        type="button"
       >
         Back to Dashboard
       </button>
@@ -56,6 +57,7 @@ const TopMenu = ({
             setIsViewMenuOpen(false);
           }}
           className={`px-3 py-1 rounded-md transition-colors ${isFileMenuOpen ? 'bg-zinc-800 text-white' : 'hover:bg-zinc-800 text-zinc-300'}`}
+          type="button"
         >
           File
         </button>
@@ -69,6 +71,7 @@ const TopMenu = ({
             setIsViewMenuOpen(false);
           }}
           className={`px-3 py-1 rounded-md transition-colors ${isEditMenuOpen ? 'bg-zinc-800 text-white' : 'hover:bg-zinc-800 text-zinc-300'}`}
+          type="button"
         >
           Edit
         </button>
@@ -82,6 +85,7 @@ const TopMenu = ({
             setIsEditMenuOpen(false);
           }}
           className={`px-3 py-1 rounded-md transition-colors ${isViewMenuOpen ? 'bg-zinc-800 text-white' : 'hover:bg-zinc-800 text-zinc-300'}`}
+          type="button"
         >
           View
         </button>

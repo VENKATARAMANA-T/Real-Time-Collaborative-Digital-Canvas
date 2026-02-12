@@ -39,7 +39,8 @@ const updateUserProfile = async (req, res) => {
     res.status(200).json({
       _id: updatedUser._id,
       username: updatedUser.username,
-      email: updatedUser.email
+      email: updatedUser.email,
+      createdAt: updatedUser.createdAt
     });
 
   } catch (error) {
