@@ -249,5 +249,127 @@ exports.updateMeetingCanvas = async (req, res) => {
 };
 
 
+// =============================================================================
+// 3. RENAME, EXPORT, AND IMPORT OPERATIONS
+// =============================================================================
 
-// need to update thumbnail   
+// @desc    Rename a canvas
+// @route   PATCH /api/canvases/:id/rename
+// @access  Private (Owner only)
+exports.renameCanvas = async (req, res) => {
+  try {
+    const { title } = req.body;
+
+    // Validate title
+    if (!title || title.trim().length === 0) {
+      return res.status(400).json({ message: 'Canvas title is required' });
+    }
+
+    // Find and update canvas (owner check included)
+    const canvas = await Canvas.findOneAndUpdate(
+      { _id: req.params.id, owner: req.user._id },
+      { $set: { title: title.trim() } },
+      { new: true }
+    );
+
+    if (!canvas) {
+      return res.status(404).json({ message: 'Canvas not found or access denied' });
+    }
+
+    // Log Activity
+    try {
+      await ActivityLog.create({
+        user: req.user._id,
+        action: 'RENAME_CANVAS',
+        ipAddress: req.ip || '127.0.0.1'
+      });
+    } catch (logError) {
+      console.error('Logging failed:', logError);
+    }
+
+    res.status(200).json(canvas);
+  } catch (error) {
+    res.status(500).json({ message: 'Server Error', error: error.message });
+  }
+};
+
+// @desc    Export a canvas as JSON
+// @route   GET /api/canvases/:id/export
+// @access  Private (Owner only)
+exports.exportCanvas = async (req, res) => {
+  try {
+    // Find canvas by ID and ensure owner is current user
+    const canvas = await Canvas.findOne({
+      _id: req.params.id,
+      owner: req.user._id
+    });
+
+    if (!canvas) {
+      return res.status(404).json({ message: 'Canvas not found or access denied' });
+    }
+
+    // Prepare export data
+    const exportData = {
+      title: canvas.title,
+      data: canvas.data,
+      thumbnail: canvas.thumbnail,
+      exportedAt: new Date().toISOString(),
+      originalId: canvas._id
+    };
+
+    // Log Activity
+    try {
+      await ActivityLog.create({
+        user: req.user._id,
+        action: 'EXPORT_CANVAS',
+        ipAddress: req.ip || '127.0.0.1'
+      });
+    } catch (logError) {
+      console.error('Logging failed:', logError);
+    }
+
+    res.status(200).json(exportData);
+  } catch (error) {
+    res.status(500).json({ message: 'Server Error', error: error.message });
+  }
+};
+
+// @desc    Import a canvas from JSON
+// @route   POST /api/canvases/import
+// @access  Private
+exports.importCanvas = async (req, res) => {
+  try {
+    const { title, data, thumbnail } = req.body;
+
+    // Validate required fields
+    if (!title || !data) {
+      return res.status(400).json({ message: 'Title and data are required for import' });
+    }
+
+    // Create new canvas with imported data
+    const importedCanvas = new Canvas({
+      title: `${title} (Imported)`,
+      owner: req.user._id,
+      folder: null,
+      data: data,
+      thumbnail: thumbnail || ''
+    });
+
+    const createdCanvas = await importedCanvas.save();
+
+    // Log Activity
+    try {
+      await ActivityLog.create({
+        user: req.user._id,
+        action: 'IMPORT_CANVAS',
+        ipAddress: req.ip || '127.0.0.1'
+      });
+    } catch (logError) {
+      console.error('Logging failed:', logError);
+    }
+
+    res.status(201).json(createdCanvas);
+  } catch (error) {
+    res.status(500).json({ message: 'Server Error', error: error.message });
+  }
+};

@@ -7,7 +7,10 @@ const {
   updateCanvas,
   deleteCanvas,
   getMeetingCanvasById,
-  updateMeetingCanvas
+  updateMeetingCanvas,
+  renameCanvas,
+  exportCanvas,
+  importCanvas
 } = require('../controllers/canvasController.js');
 const { authMiddleware } = require('../middleware/authMiddleware.js');
 
@@ -27,6 +30,14 @@ router.route('/:id')
   .put(updateCanvas)    // PUT: Save drawing
   .delete(deleteCanvas);// DELETE: Remove canvas
 
+// Rename, Export, Import routes
+router.post('/import', importCanvas);              // POST: Import canvas from JSON
+
+router.route('/:id/rename')
+  .patch(renameCanvas);  // PATCH: Rename canvas
+
+router.route('/:id/export')
+  .get(exportCanvas);    // GET: Export canvas as JSON
 
 
 module.exports = router;

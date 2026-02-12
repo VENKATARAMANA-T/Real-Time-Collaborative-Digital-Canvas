@@ -141,10 +141,26 @@ export const canvasAPI = {
     return response.data;
   },
 
+
   delete: async (id) => {
     const response = await api.delete(`/canvases/${id}`);
     return response.data;
   },
+
+  rename: async (id, newTitle) => {
+    const response = await api.patch(`/canvases/${id}/rename`, { title: newTitle });
+    return response.data;
+  },
+
+  exportCanvas: async (id) => {
+    const response = await api.get(`/canvases/${id}/export`);
+    return response.data;
+  },
+
+  importCanvas: async (canvasData) => {
+    const response = await api.post('/canvases/import', canvasData);
+    return response.data;
+  }
 };
 
 // User API endpoints (placeholder for future use)
