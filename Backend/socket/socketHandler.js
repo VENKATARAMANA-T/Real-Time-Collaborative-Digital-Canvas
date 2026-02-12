@@ -9,8 +9,8 @@ module.exports = (io) => {
     // =================================================================
     
     socket.on('join_meeting', (data) => {
-      // Expecting: { meetingId, userId, username }
-      const { meetingId, userId, username } = data;
+      // Expecting: { meetingId, userId, username, silent }
+      const { meetingId, userId, username, silent } = data || {};
       
       socket.join(meetingId);
 
@@ -23,14 +23,27 @@ module.exports = (io) => {
       };
 
       console.log(`${username} joined meeting room: ${meetingId}`);
+      
+      // Broadcast to all users in the meeting that a new user joined
+      if (!silent) {
+        socket.to(meetingId).emit('user_joined', { userId, username });
+      }
     });
 
 
 
 
-    socket.on('leave_meeting', (meetingId) => {
+    socket.on('leave_meeting', (payload) => {
+      const { username } = socket.userData || {};
+      const meetingId = typeof payload === 'string' ? payload : payload?.meetingId;
+      const silent = typeof payload === 'object' ? payload?.silent : false;
+      if (!meetingId) return;
       socket.leave(meetingId);
-      console.log(`Socket ${socket.id} left room: ${meetingId}`);
+      // Broadcast to all users in the meeting that a user left
+      if (!silent) {
+        io.to(meetingId).emit('user_left', { username });
+      }
+      console.log(`${username || 'Unknown'} left room: ${meetingId}`);
     });
 
     // =================================================================
@@ -45,6 +58,17 @@ module.exports = (io) => {
     // 3. HOST CONTROLS (Notifications / Real-time Updates)
     // =================================================================
 
+    // Listen for Host Ending Meeting
+    socket.on('end_meeting', (data) => {
+        // data: { meetingId, meetingDbId }
+        // Broadcast to everyone in the room that meeting is ended
+        io.to(data.meetingId).emit('meeting_ended', { 
+          meetingId: data.meetingId,
+          message: 'Host has ended the meeting'
+        });
+        console.log(`Meeting ended: ${data.meetingId}`);
+    });
+
     // Listen for Host Toggling Global Chat
     socket.on('update_chat_status', (data) => {
         // data: { meetingId, isChatEnabled }
@@ -57,6 +81,31 @@ module.exports = (io) => {
         // data: { meetingId, userId, canChat }
         // Broadcast so the specific user (and others) know the status changed
         io.to(data.meetingId).emit('user_permission_updated', data);
+    });
+
+    // Listen for Host Updating Edit Permission
+    socket.on('edit_permission_updated', (data) => {
+      // data: { meetingId, userId, permission }
+      io.to(data.meetingId).emit('edit_permission_updated', data);
+    });
+
+    // Listen for Host Locking Canvas
+    socket.on('canvas_locked', (data) => {
+      // data: { meetingId, username }
+      io.to(data.meetingId).emit('canvas_locked', data);
+    });
+
+    // Live cursor movement (canvas only)
+    socket.on('cursor_move', (data) => {
+      // data: { meetingId, userId, username, x, y }
+      if (!data?.meetingId || !data?.userId) return;
+      socket.to(data.meetingId).emit('cursor_move', data);
+    });
+
+    socket.on('cursor_leave', (data) => {
+      // data: { meetingId, userId }
+      if (!data?.meetingId || !data?.userId) return;
+      socket.to(data.meetingId).emit('cursor_leave', data);
     });
 
     // =================================================================

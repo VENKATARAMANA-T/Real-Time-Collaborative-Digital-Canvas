@@ -5,6 +5,7 @@ const MenuItem = ({ icon: Icon, label, shortcut, onClick, hasSubmenu, danger, di
   <button
     onClick={onClick}
     disabled={disabled}
+    type="button"
     className={`w-full flex items-center gap-3 px-4 py-2 text-left hover:bg-zinc-800 transition-colors
       ${danger ? 'text-red-400 hover:text-red-300' : 'text-zinc-200'}
       ${disabled ? 'opacity-50 cursor-not-allowed' : ''}

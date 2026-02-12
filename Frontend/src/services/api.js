@@ -176,4 +176,76 @@ export const userAPI = {
   },
 };
 
+export const meetingAPI = {
+  create: async (payload = {}) => {
+    const response = await api.post('/meetings', payload);
+    return response.data;
+  },
+
+  generateCredentials: async () => {
+    const response = await api.post('/meetings/generate-credentials');
+    return response.data;
+  },
+
+  createInstant: async (payload = {}) => {
+    const response = await api.post('/meetings/instant', payload);
+    return response.data;
+  },
+
+  start: async (meetingDbId) => {
+    const response = await api.put(`/meetings/${meetingDbId}/start`);
+    return response.data;
+  },
+
+  end: async (meetingDbId) => {
+    const response = await api.put(`/meetings/${meetingDbId}/end`);
+    return response.data;
+  },
+
+  join: async (meetingId, password) => {
+    const response = await api.post('/meetings/join', { meetingId, password });
+    return response.data;
+  },
+
+  joinByLink: async (token) => {
+    const response = await api.post(`/meetings/join-link/${token}`);
+    return response.data;
+  },
+
+  getDetails: async (meetingDbId) => {
+    const response = await api.get(`/meetings/${meetingDbId}`);
+    return response.data;
+  },
+
+  leave: async (meetingDbId) => {
+    const response = await api.put(`/meetings/${meetingDbId}/leave`);
+    return response.data;
+  },
+
+  updatePermission: async (meetingDbId, userId, permission) => {
+    const response = await api.put(`/meetings/${meetingDbId}/permissions`, {
+      userId,
+      permission
+    });
+    return response.data;
+  }
+};
+
+export const chatAPI = {
+  getHistory: async (meetingDbId) => {
+    const response = await api.get(`/chat/${meetingDbId}`);
+    return response.data;
+  },
+
+  toggleGlobal: async (meetingDbId, isEnabled) => {
+    const response = await api.put(`/chat/${meetingDbId}/toggle-global`, { isEnabled });
+    return response.data;
+  },
+
+  toggleUser: async (meetingDbId, userId, canChat) => {
+    const response = await api.put(`/chat/${meetingDbId}/toggle-user`, { userId, canChat });
+    return response.data;
+  }
+};
+
 export default api;

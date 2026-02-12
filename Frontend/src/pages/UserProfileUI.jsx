@@ -25,7 +25,10 @@ export default function UserProfileUI() {
   const [confirmPassword, setConfirmPassword] = useState('');
   
   // Flash message state
-  const [flashMessage, setFlashMessage] = useState({ show: false, type: '', message: '' });
+  const [flashByTab, setFlashByTab] = useState({
+    profile: { show: false, type: '', message: '' },
+    security: { show: false, type: '', message: '' },
+  });
 
   // Load user data on mount
   useEffect(() => {
@@ -37,15 +40,24 @@ export default function UserProfileUI() {
   }, [user]);
 
   // Flash message handler
-  const showFlash = (type, message) => {
-    setFlashMessage({ show: true, type, message });
+  const showFlash = (tab, type, message) => {
+    setFlashByTab((prev) => ({
+      ...prev,
+      [tab]: { show: true, type, message },
+    }));
     setTimeout(() => {
-      setFlashMessage({ show: false, type: '', message: '' });
+      setFlashByTab((prev) => ({
+        ...prev,
+        [tab]: { show: false, type: '', message: '' },
+      }));
     }, 5000);
   };
 
   const closeFlash = () => {
-    setFlashMessage({ show: false, type: '', message: '' });
+    setFlashByTab((prev) => ({
+      ...prev,
+      [activeTab]: { show: false, type: '', message: '' },
+    }));
   };
 
   // Handle profile update
@@ -63,13 +75,13 @@ export default function UserProfileUI() {
       const updatedUser = { ...user, ...updatedData };
       localStorage.setItem('user', JSON.stringify(updatedUser));
 
-      showFlash('success', 'Profile updated successfully!');
+      showFlash('profile', 'success', 'Profile updated successfully!');
       
       // Update context if needed
       window.location.reload(); // Reload to update auth context
     } catch (error) {
       const errorMsg = error.response?.data?.message || 'Failed to update profile';
-      showFlash('error', errorMsg);
+      showFlash('profile', 'error', errorMsg);
     } finally {
       setIsSaving(false);
     }
@@ -80,12 +92,12 @@ export default function UserProfileUI() {
     e.preventDefault();
     
     if (newPassword !== confirmPassword) {
-      showFlash('error', 'New passwords do not match');
+      showFlash('security', 'error', 'New passwords do not match');
       return;
     }
 
     if (newPassword.length < 6) {
-      showFlash('error', 'Password must be at least 6 characters');
+      showFlash('security', 'error', 'Password must be at least 6 characters');
       return;
     }
 
@@ -97,7 +109,7 @@ export default function UserProfileUI() {
         newPassword,
       });
 
-      showFlash('success', 'Password updated successfully!');
+      showFlash('security', 'success', 'Password updated successfully!');
       
       // Clear form
       setOldPassword('');
@@ -105,7 +117,7 @@ export default function UserProfileUI() {
       setConfirmPassword('');
     } catch (error) {
       const errorMsg = error.response?.data?.message || 'Failed to update password';
-      showFlash('error', errorMsg);
+      showFlash('security', 'error', errorMsg);
     } finally {
       setIsSaving(false);
     }
@@ -127,15 +139,15 @@ export default function UserProfileUI() {
     <div className="bg-[#0f172a] text-white min-h-screen overflow-x-hidden selection:bg-purple-500/30 font-sans relative">
       
       {/* --- FLASH MESSAGE --- */}
-      {flashMessage.show && (
+      {flashByTab[activeTab]?.show && (
         <div className="fixed top-24 right-8 z-50 animate-slideDown">
           <div className={`p-4 rounded-lg border flex items-start gap-3 min-w-[300px] shadow-2xl ${
-            flashMessage.type === 'success' 
+            flashByTab[activeTab]?.type === 'success' 
               ? 'bg-green-500/20 border-green-500/50 text-green-300' 
               : 'bg-red-500/20 border-red-500/50 text-red-300'
           }`}>
             <div className="flex items-start flex-1 gap-3">
-              {flashMessage.type === 'success' ? (
+              {flashByTab[activeTab]?.type === 'success' ? (
                 <svg className="w-5 h-5 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                 </svg>
@@ -144,7 +156,7 @@ export default function UserProfileUI() {
                   <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
                 </svg>
               )}
-              <span className="text-sm">{flashMessage.message}</span>
+              <span className="text-sm">{flashByTab[activeTab]?.message}</span>
             </div>
             <button onClick={closeFlash} className="hover:opacity-70 transition-opacity">
               <X className="w-4 h-4" />

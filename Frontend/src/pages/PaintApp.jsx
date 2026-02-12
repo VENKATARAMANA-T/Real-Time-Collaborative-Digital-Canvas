@@ -190,7 +190,7 @@ const PaintApp = () => {
       if (tempCanvasRef.current) {
         exportCtx.drawImage(tempCanvasRef.current, 0, 0);
       }
-      const pixelData = exportCanvas.toDataURL('image/png');
+      const pixelData = exportCanvas.toDataURL('image/webp', 0.7);
 
       // Generate username text badge as thumbnail
       const username = user?.username || 'User';
@@ -205,7 +205,7 @@ const PaintApp = () => {
       badgeCtx.textAlign = 'center';
       badgeCtx.textBaseline = 'middle';
       badgeCtx.fillText(username, 200, 100);
-      const thumbnail = badgeCanvas.toDataURL('image/png');
+      const thumbnail = badgeCanvas.toDataURL('image/webp', 0.6);
 
       const payload = {
         title: title || 'Untitled Canvas',

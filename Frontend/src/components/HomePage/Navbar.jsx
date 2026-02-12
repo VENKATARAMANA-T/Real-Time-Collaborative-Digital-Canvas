@@ -2,7 +2,7 @@ import React from 'react';
 
 export default function Navbar({ onSlideChange, onAuthOpen }) {
   return (
-    <nav className="fixed top-0 w-full z-50 glass h-[80px] flex items-center border-b-0 shadow-lg shadow-purple-900/10">
+    <nav className="fixed top-0 w-full z-50 h-[80px] flex items-center border-b border-white/5 bg-[#0f172a]/85 backdrop-blur-xl shadow-lg shadow-purple-900/10">
       <div className="container mx-auto px-6 flex justify-between items-center">
         <div className="flex items-center gap-3 cursor-pointer group" onClick={() => onSlideChange(0)}>
           <div className="w-10 h-10 relative">
@@ -42,7 +42,7 @@ export default function Navbar({ onSlideChange, onAuthOpen }) {
               </defs>
             </svg>
           </div>
-          <span className="text-xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400 group-hover:from-purple-400 group-hover:to-cyan-400 transition-all duration-300">
+          <span className="text-xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-100 group-hover:from-purple-400 group-hover:to-cyan-400 transition-all duration-300">
             CollabCanvas
           </span>
         </div>
