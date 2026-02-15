@@ -13,7 +13,8 @@ module.exports = (io) => {
       const { meetingId, userId, username, silent } = data || {};
       
       socket.join(meetingId);
-
+      socket.join(userId); // THIS IS THE KEY LINE
+      
       // Store User Context in the Socket instance
       // This allows us to know "Who is sending this?" without the frontend sending ID every time
       socket.userData = { 
@@ -34,14 +35,14 @@ module.exports = (io) => {
 
 
     socket.on('leave_meeting', (payload) => {
-      const { username } = socket.userData || {};
+      const { username, userId } = socket.userData || {};
       const meetingId = typeof payload === 'string' ? payload : payload?.meetingId;
       const silent = typeof payload === 'object' ? payload?.silent : false;
       if (!meetingId) return;
       socket.leave(meetingId);
       // Broadcast to all users in the meeting that a user left
       if (!silent) {
-        io.to(meetingId).emit('user_left', { username });
+        io.to(meetingId).emit('user_left', { username, userId });
       }
       console.log(`${username || 'Unknown'} left room: ${meetingId}`);
     });
@@ -89,6 +90,75 @@ module.exports = (io) => {
       io.to(data.meetingId).emit('edit_permission_updated', data);
     });
 
+    // Listen for user media status updates
+    socket.on('media_status_updated', (data) => {
+      // data: { meetingId, userId, mic, video, username }
+      if (!data?.meetingId || !data?.userId) return;
+      io.to(data.meetingId).emit('media_status_updated', data);
+    });
+
+    // // WebRTC Signaling: Offer - Broadcast to all in meeting (simplifies routing)
+    // socket.on('webrtc_offer', (data) => {
+    //   // data: { meetingId, from, to, offer }
+    //   if (!data?.meetingId || !data?.from || !data?.offer) return;
+    //   console.log(`📤 Forwarding WebRTC offer from ${data.from} to ${data.to || 'all'}`);
+    //   io.to(data.meetingId).emit('webrtc_offer', {
+    //     from: data.from,
+    //     to: data.to,
+    //     offer: data.offer
+    //   });
+    // });
+
+    // // WebRTC Signaling: Answer - Broadcast to all in meeting
+    // socket.on('webrtc_answer', (data) => {
+    //   // data: { meetingId, from, to, answer }
+    //   if (!data?.meetingId || !data?.from || !data?.answer) return;
+    //   console.log(`📥 Forwarding WebRTC answer from ${data.from} to ${data.to || 'all'}`);
+    //   io.to(data.meetingId).emit('webrtc_answer', {
+    //     from: data.from,
+    //     to: data.to,
+    //     answer: data.answer
+    //   });
+    // });
+
+    // // WebRTC Signaling: ICE Candidate - Broadcast to all in meeting
+    // socket.on('webrtc_ice_candidate', (data) => {
+    //   // data: { meetingId, from, to, candidate }
+    //   if (!data?.meetingId || !data?.from || !data?.candidate) return;
+    //   io.to(data.meetingId).emit('webrtc_ice_candidate', {
+    //     from: data.from,
+    //     to: data.to,
+    //     candidate: data.candidate
+    //   });
+    // });
+
+ 
+
+// Update WebRTC Signaling to be Targeted
+socket.on('webrtc_offer', (data) => {
+  if (!data?.to || !data?.offer) return;
+  // Send ONLY to the 'to' user's private room
+  io.to(data.to).emit('webrtc_offer', {
+    from: data.from,
+    offer: data.offer
+  });
+});
+
+socket.on('webrtc_answer', (data) => {
+  if (!data?.to || !data?.answer) return;
+  io.to(data.to).emit('webrtc_answer', {
+    from: data.from,
+    answer: data.answer
+  });
+});
+
+socket.on('webrtc_ice_candidate', (data) => {
+  if (!data?.to || !data?.candidate) return;
+  io.to(data.to).emit('webrtc_ice_candidate', {
+    from: data.from,
+    candidate: data.candidate
+  });
+});
     // Listen for Host Locking Canvas
     socket.on('canvas_locked', (data) => {
       // data: { meetingId, username }

@@ -11,7 +11,14 @@ import UserNotification from '../components/Meeting/UserNotification';
 import Cursors from '../components/Collaboration/Cursors.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useSocket } from '../hooks/useSocket.js';
+import { useAudioStream } from '../hooks/useAudioStream.js';
 import { meetingAPI } from '../services/api.js';
+
+const getMediaStateFromStorage = (meetingDbId, userId, key, defaultValue) => {
+  if (!meetingDbId || !userId) return defaultValue;
+  const saved = sessionStorage.getItem(`meeting:${meetingDbId}:${userId}:${key}`);
+  return saved !== null ? JSON.parse(saved) : defaultValue;
+};
 
 function Meeting() {
   const location = useLocation();
@@ -25,9 +32,8 @@ function Meeting() {
   const [isEnding, setIsEnding] = useState(false);
   const [meetingStatus, setMeetingStatus] = useState(location.state?.status || 'pending');
   const [participants, setParticipants] = useState([]);
-  const initialMicOn = location.state?.audioEnabled ?? true;
-  const initialVideoOn = location.state?.videoEnabled ?? true;
   const [meetingDbId, setMeetingDbId] = useState(location.state?.meetingDbId || sessionStorage.getItem('meetingDbId'));
+  const userId = user?._id || user?.id;
   const [meetingId, setMeetingId] = useState(location.state?.meetingId || sessionStorage.getItem('meetingId') || '');
   const [meetingPassword, setMeetingPassword] = useState(
     location.state?.meetingPassword ? location.state.meetingPassword : (sessionStorage.getItem('meetingPassword') || '')
@@ -36,15 +42,36 @@ function Meeting() {
   const [meetingPermission, setMeetingPermission] = useState(
     location.state?.permission || sessionStorage.getItem('meetingPermission') || 'view'
   );
-  const userId = user?._id || user?.id;
-  const joinStorageKey = meetingDbId && userId ? `meetingJoined:${meetingDbId}:${userId}` : null;
+  
+  
+  const [localMedia, setLocalMedia] = useState(() => {
+    const dbId = location.state?.meetingDbId || sessionStorage.getItem('meetingDbId');
+    const uId = user?._id || user?.id;
+    return {
+      mic: getMediaStateFromStorage(dbId, uId, 'mic', location.state?.audioEnabled ?? true),
+      video: getMediaStateFromStorage(dbId, uId, 'video', location.state?.videoEnabled ?? true)
+    };
+  });
+  
+  const [micPrompted, setMicPrompted] = useState(false);
+  const [mediaStatusMap, setMediaStatusMap] = useState({});
   const refreshStorageKey = meetingDbId && userId ? `meetingRefresh:${meetingDbId}:${userId}` : null;
-  const silentJoin = Boolean(
-    (joinStorageKey && sessionStorage.getItem(joinStorageKey) === '1') ||
-      (refreshStorageKey && sessionStorage.getItem(refreshStorageKey) === '1')
-  );
+  const silentJoin = Boolean(refreshStorageKey && sessionStorage.getItem(refreshStorageKey) === '1');
   const meetingStartRef = useRef(Date.now());
   const [durationLabel, setDurationLabel] = useState('00:00:00');
+
+useEffect(() => {
+  if (!userId || !meetingDbId) return;
+  
+  const currentMic = JSON.stringify(localMedia.mic);
+  const savedMic = sessionStorage.getItem(`meeting:${meetingDbId}:${userId}:mic`);
+  
+  // Only update if value changed to prevent render storms
+  if (currentMic !== savedMic) {
+    sessionStorage.setItem(`meeting:${meetingDbId}:${userId}:mic`, currentMic);
+    sessionStorage.setItem(`meeting:${meetingDbId}:${userId}:video`, JSON.stringify(localMedia.video));
+  }
+}, [userId, meetingDbId, localMedia.mic, localMedia.video]);
 
   useEffect(() => {
     if (location.state?.meetingDbId) {
@@ -69,13 +96,6 @@ function Meeting() {
   }, [location.state?.meetingDbId, location.state?.meetingId, location.state?.meetingPassword, location.state?.role, location.state?.permission]);
 
   useEffect(() => {
-    if (!joinStorageKey) return;
-    if (!sessionStorage.getItem(joinStorageKey)) {
-      sessionStorage.setItem(joinStorageKey, '1');
-    }
-  }, [joinStorageKey]);
-
-  useEffect(() => {
     if (!refreshStorageKey) return;
     const handleBeforeUnload = () => {
       sessionStorage.setItem(refreshStorageKey, '1');
@@ -91,6 +111,49 @@ function Meeting() {
       sessionStorage.removeItem(refreshStorageKey);
     }
   }, [refreshStorageKey]);
+
+ useEffect(() => {
+    if (!userId || !meetingDbId) return;
+    
+    const savedMic = sessionStorage.getItem(`meeting:${meetingDbId}:${userId}:mic`);
+    const currentMicStr = JSON.stringify(localMedia.mic);
+    
+    // Only update if it actually changed to stop the render loop
+    if (savedMic !== currentMicStr) {
+      sessionStorage.setItem(`meeting:${meetingDbId}:${userId}:mic`, currentMicStr);
+      sessionStorage.setItem(`meeting:${meetingDbId}:${userId}:video`, JSON.stringify(localMedia.video));
+    }
+  }, [userId, meetingDbId, localMedia.mic, localMedia.video]);
+
+  // Update media status map
+  // useEffect(() => {
+  //   if (!userId) return;
+  //   setMediaStatusMap((prev) => ({
+  //     ...prev,
+  //     [userId]: { mic: localMedia.mic, video: localMedia.video }
+  //   }));
+  // }, [userId, localMedia.mic, localMedia.video]);
+  // Sync mediaStatusMap with both Local state and Remote participants
+  useEffect(() => {
+    setMediaStatusMap((prev) => {
+      const newMap = { ...prev };
+      
+      // 1. Sync local user status
+      if (userId) {
+        newMap[userId] = { mic: localMedia.mic, video: localMedia.video };
+      }
+
+      // 2. Sync remote participants (prevent UI flickering for new joins)
+      participants.forEach(p => {
+        const id = p._id || p.id;
+        if (!newMap[id]) {
+          newMap[id] = { mic: true, video: true }; // Assume enabled until updated via socket
+        }
+      });
+
+      return newMap;
+    });
+  }, [userId, localMedia.mic, localMedia.video, participants]);
 
   // Fetch meeting details to ensure we have meetingId
   useEffect(() => {
@@ -132,12 +195,14 @@ function Meeting() {
         const activeParticipants = response.meeting.participants.filter(
           (participant) => participant.isActive !== false
         );
+        console.log(`📊 Fetched ${activeParticipants.length} participants from API, current userId=${userId}:`, 
+          activeParticipants.map(p => ({ id: p._id || p.id, name: p.username })));
         setParticipants(activeParticipants);
       }
     } catch (error) {
       console.error('Error fetching participants:', error);
     }
-  }, [meetingDbId]);
+  }, [meetingDbId, userId]);
 
   useEffect(() => {
     fetchParticipants();
@@ -244,25 +309,7 @@ function Meeting() {
     setRedoStack([]); // Clear redo stack on new action
   }, [elements]);
 
-  const handleUndo = useCallback(() => {
-    if (history.length === 0) return;
-    const previousState = history[history.length - 1];
-    setRedoStack((prev) => [elements, ...prev]);
-    setElements(previousState);
-    setHistory((prev) => prev.slice(0, -1));
-  }, [elements, history]);
-
-  const handleRedo = useCallback(() => {
-    if (redoStack.length === 0) return;
-    const nextState = redoStack[0];
-    setHistory((prev) => [...prev, elements]);
-    setElements(nextState);
-    setRedoStack((prev) => prev.slice(1));
-  }, [elements, redoStack]);
-
-  const handleElementsChange = (newElements) => {
-    setElements(newElements);
-  };
+  
 
   // --- Tool Logic ---
 
@@ -351,6 +398,9 @@ function Meeting() {
 
   const [cursorMap, setCursorMap] = useState({});
   const cursorThrottleRef = useRef(0);
+  const canvasSyncTimerRef = useRef(null);
+  const lastCanvasSyncRef = useRef(0);
+  const pendingCanvasSyncRef = useRef(null);
 
   const getCursorColor = useCallback((id) => {
     if (!id) return '#38bdf8';
@@ -366,9 +416,10 @@ function Meeting() {
     if (isLeaving || isEnding) return;
     setIsLeaving(true);
     try {
-      if (joinStorageKey) {
-        sessionStorage.removeItem(joinStorageKey);
-      }
+      // Cleanup audio streams
+      cleanupAllPeerConnections();
+      stopLocalStream();
+      
       // Emit leave_meeting socket event first
       if (socket && meetingDbId) {
         socket.emit('leave_meeting', { meetingId: meetingDbId, silent: false });
@@ -396,9 +447,10 @@ function Meeting() {
     
     setIsEnding(true);
     try {
-      if (joinStorageKey) {
-        sessionStorage.removeItem(joinStorageKey);
-      }
+      // Cleanup audio streams
+      cleanupAllPeerConnections();
+      stopLocalStream();
+      
       // Emit end_meeting socket event to all members
       if (socket && meetingDbId) {
         socket.emit('end_meeting', { meetingId: meetingDbId, meetingDbId });
@@ -439,6 +491,111 @@ function Meeting() {
     refreshKey: refreshStorageKey
   });
 
+  const {
+    localVideoStream,
+    audioError,
+    videoError,
+    stopLocalStream,
+    initializeVideoStream,
+    stopVideoStream,
+    setMicStatus,
+    cleanupAllPeerConnections,
+    handleParticipantLeft,
+    initializeAudioConnections,
+    remoteVideoStreams
+  } = useAudioStream({
+    micEnabled: localMedia.mic,
+    videoEnabled: localMedia.video,
+    meetingId: meetingDbId,
+    userId,
+    socket,
+    participants
+  });
+
+  const emitLocalMediaStatus = useCallback(() => {
+    if (!socket || !meetingDbId || !userId) return;
+    socket.emit('media_status_updated', {
+      meetingId: meetingDbId,
+      userId,
+      mic: localMedia.mic,
+      video: localMedia.video,
+      username: user?.username || user?.name || 'User'
+    });
+  }, [socket, meetingDbId, userId, localMedia.mic, localMedia.video, user]);
+
+  const handleToggleMic = useCallback(async () => {
+    // Simply toggle the mic state - useAudioStream will handle mic initialization/stopping
+    setLocalMedia((prev) => {
+      const next = { ...prev, mic: !prev.mic };
+      if (userId) {
+        setMediaStatusMap((map) => ({ ...map, [userId]: next }));
+      }
+      if (socket && meetingDbId && userId) {
+        socket.emit('media_status_updated', {
+          meetingId: meetingDbId,
+          userId,
+          mic: next.mic,
+          video: next.video,
+          username: user?.username || user?.name || 'User'
+        });
+      }
+      // Notify audio hook of the change
+      setMicStatus(next.mic);
+      return next;
+    });
+  }, [socket, meetingDbId, userId, user, setMicStatus]);
+
+  const handleToggleVideo = useCallback(async () => {
+    if (!userId) return;
+
+    if (!localMedia.video) {
+      const stream = await initializeVideoStream();
+      if (!stream) {
+        const next = { ...localMedia, video: false };
+        setLocalMedia(next);
+        setMediaStatusMap((map) => ({ ...map, [userId]: next }));
+        if (socket && meetingDbId) {
+          socket.emit('media_status_updated', {
+            meetingId: meetingDbId,
+            userId,
+            mic: next.mic,
+            video: next.video,
+            username: user?.username || user?.name || 'User'
+          });
+        }
+        return;
+      }
+
+      const next = { ...localMedia, video: true };
+      setLocalMedia(next);
+      setMediaStatusMap((map) => ({ ...map, [userId]: next }));
+      if (socket && meetingDbId) {
+        socket.emit('media_status_updated', {
+          meetingId: meetingDbId,
+          userId,
+          mic: next.mic,
+          video: next.video,
+          username: user?.username || user?.name || 'User'
+        });
+      }
+      return;
+    }
+
+    const next = { ...localMedia, video: false };
+    setLocalMedia(next);
+    setMediaStatusMap((map) => ({ ...map, [userId]: next }));
+    if (socket && meetingDbId) {
+      socket.emit('media_status_updated', {
+        meetingId: meetingDbId,
+        userId,
+        mic: next.mic,
+        video: next.video,
+        username: user?.username || user?.name || 'User'
+      });
+    }
+    stopVideoStream();
+  }, [initializeVideoStream, localMedia, meetingDbId, socket, stopVideoStream, user, userId]);
+
   // Listen for real-time user join/leave notifications
   useEffect(() => {
     if (!socket) {
@@ -448,17 +605,39 @@ function Meeting() {
 
     console.log('✅ Socket connected, setting up listeners');
 
-    const handleUserJoined = (data) => {
-      const username = data?.username || 'User';
-      console.log(`🟢 User joined event received: ${username}`);
-      setNotification({
-        message: `${username} has joined meeting`,
-        type: 'join'
-      });
-      setNotificationKey(prev => prev + 1); // Force re-render with new key
-      fetchParticipants();
-    };
+    // const handleUserJoined = (data) => {
+    //   const username = data?.username || 'User';
+    //   console.log(`🟢 User joined event received: ${username}`);
+    //   setNotification({
+    //     message: `${username} has joined meeting`,
+    //     type: 'join'
+    //   });
+    //   setNotificationKey(prev => prev + 1); // Force re-render with new key
+    //   fetchParticipants();
+    //   emitLocalMediaStatus();
+    // };
+// Inside the socket useEffect, update the handleUserJoined function:
+const handleUserJoined = (data) => {
+  const username = data?.username || 'User';
+  console.log(`🟢 User joined: ${username}`);
+  
+  // Existing logic
+  setNotification({ message: `${username} has joined meeting`, type: 'join' });
+  setNotificationKey(prev => prev + 1);
+  fetchParticipants();
 
+  // ADD THIS: Specifically tell the NEW user your current media status
+  if (socket && data.userId) {
+    socket.emit('media_status_updated', {
+      meetingId: meetingDbId,
+      to: data.userId, // Targeted to the joiner
+      userId,
+      mic: localMedia.mic,
+      video: localMedia.video,
+      username: user?.username || user?.name || 'User'
+    });
+  }
+};
     const handleUserLeft = (data) => {
       const username = data?.username || 'User';
       console.log(`🔴 User left event received: ${username}`);
@@ -474,6 +653,13 @@ function Meeting() {
           delete next[data.userId];
           return next;
         });
+        setMediaStatusMap((prev) => {
+          const next = { ...prev };
+          delete next[data.userId];
+          return next;
+        });
+        // Clean up audio connection with departed user
+        handleParticipantLeft(data.userId);
       }
     };
 
@@ -532,6 +718,27 @@ function Meeting() {
       setNotificationKey((prev) => prev + 1);
     };
 
+    const handleCanvasStateUpdated = (data) => {
+      if (!data?.elements) return;
+      setElements(data.elements);
+    };
+
+    const handleCanvasStateSnapshot = (data) => {
+      if (!data?.elements) return;
+      setElements(data.elements);
+    };
+
+    const handleMediaStatusUpdated = (data) => {
+      if (!data?.userId) return;
+      setMediaStatusMap((prev) => ({
+        ...prev,
+        [data.userId]: {
+          mic: data.mic ?? true,
+          video: data.video ?? true
+        }
+      }));
+    };
+
     const handleCursorMove = (data) => {
       if (!data?.userId || !data?.username) return;
       if (data.userId === userId) return;
@@ -562,6 +769,9 @@ function Meeting() {
     socket.on('meeting_ended', handleMeetingEnded);
     socket.on('edit_permission_updated', handleEditPermissionUpdated);
     socket.on('canvas_locked', handleCanvasLocked);
+    socket.on('canvas_state_updated', handleCanvasStateUpdated);
+    socket.on('canvas_state_snapshot', handleCanvasStateSnapshot);
+    socket.on('media_status_updated', handleMediaStatusUpdated);
     socket.on('cursor_move', handleCursorMove);
     socket.on('cursor_leave', handleCursorLeave);
 
@@ -574,13 +784,136 @@ function Meeting() {
       socket.off('meeting_ended', handleMeetingEnded);
       socket.off('edit_permission_updated', handleEditPermissionUpdated);
       socket.off('canvas_locked', handleCanvasLocked);
+      socket.off('canvas_state_updated', handleCanvasStateUpdated);
+      socket.off('canvas_state_snapshot', handleCanvasStateSnapshot);
+      socket.off('media_status_updated', handleMediaStatusUpdated);
       socket.off('cursor_move', handleCursorMove);
       socket.off('cursor_leave', handleCursorLeave);
     };
-  }, [socket, navigate, user, isEnding, fetchParticipants, getCursorColor, userId]);
+  }, [socket]);
 
-  const localMedia = { mic: initialMicOn, video: initialVideoOn };
+  useEffect(() => {
+    if (!socket) return;
+    emitLocalMediaStatus();
+  }, [socket, emitLocalMediaStatus]);
+
+  useEffect(() => {
+    if (!socket || !meetingDbId) return;
+    socket.emit('request_canvas_state', { meetingId: meetingDbId });
+    return () => {
+      if (canvasSyncTimerRef.current) {
+        window.clearTimeout(canvasSyncTimerRef.current);
+      }
+    };
+  }, [socket, meetingDbId]);
+
+  // Initialize audio stream on socket connection and create peer connections
+  useEffect(() => {
+    if (!socket || !meetingDbId) return;
+
+    return () => {
+      cleanupAllPeerConnections();
+      stopLocalStream();
+    };
+  }, [socket, meetingDbId, stopLocalStream, cleanupAllPeerConnections]);
+
+  // Auto-initialize audio connections when participants update
+  // useEffect(() => {
+  //   if (!socket || !meetingDbId) {
+  //     console.log(`⏭️ Skipping peer init: socket=${!!socket}, meetingDbId=${!!meetingDbId}`);
+  //     return;
+  //   }
+
+  //   console.log(`🔍 Current userId: ${userId}, Participants:`, participants.map(p => ({_id: p._id, username: p.username})));
+    
+  //   const otherParticipants = participants.filter(p => {
+  //     const participantId = p._id || p.id;
+  //     const isOthers = participantId !== userId;
+  //     const isActive = p.isActive !== false;
+  //     console.log(`  - Checking ${p.username} (id=${participantId}): isOthers=${isOthers}, isActive=${isActive}`);
+  //     return isOthers && isActive;
+  //   });
+    
+  //   if (otherParticipants.length === 0) {
+  //     console.log(`⏭️ No other participants in meeting (total=${participants.length}, userId=${userId})`);
+  //     return;
+  //   }
+
+  //   console.log(`🔄 Participants updated (${otherParticipants.length} others), initializing peer connections`);
+  //   initializeAudioConnections();
+  // }, [participants, socket, meetingDbId, userId, initializeAudioConnections]);
+
+  // Optimized peer initialization with a settling delay
+  useEffect(() => {
+    if (!socket || !meetingDbId || participants.length === 0) return;
+
+    const others = participants.filter(p => {
+      const pId = p._id || p.id;
+      return pId !== userId && p.isActive !== false;
+    });
+    
+    if (others.length > 0) {
+      // Delay allows signaling handlers to stabilize after a user joins/refreshes
+      const timer = setTimeout(() => {
+        console.log(`🚀 Initializing audio connections for ${others.length} peers`);
+        initializeAudioConnections();
+      }, 300);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [participants, socket, meetingDbId, userId, initializeAudioConnections]);
+
   const canEdit = meetingPermission === 'edit' || meetingRole === 'host';
+
+  const emitCanvasState = useCallback((nextElements) => {
+    if (!socket || !meetingDbId || !canEdit) return;
+    pendingCanvasSyncRef.current = nextElements;
+
+    if (canvasSyncTimerRef.current) return;
+
+    const now = Date.now();
+    const elapsed = now - lastCanvasSyncRef.current;
+    const delay = elapsed >= 60 ? 0 : 60 - elapsed;
+
+    canvasSyncTimerRef.current = window.setTimeout(() => {
+      const payload = pendingCanvasSyncRef.current;
+      pendingCanvasSyncRef.current = null;
+      canvasSyncTimerRef.current = null;
+      lastCanvasSyncRef.current = Date.now();
+      if (payload) {
+        socket.emit('canvas_state_updated', {
+          meetingId: meetingDbId,
+          elements: payload
+        });
+      }
+    }, delay);
+  }, [socket, meetingDbId, canEdit]);
+
+  const handleElementsChange = useCallback((newElements) => {
+    setElements(newElements);
+    emitCanvasState(newElements);
+  }, [emitCanvasState]);
+
+  const applyElementsState = useCallback((nextElements) => {
+    setElements(nextElements);
+    emitCanvasState(nextElements);
+  }, [emitCanvasState]);
+
+  const handleUndo = useCallback(() => {
+    if (history.length === 0) return;
+    const previousState = history[history.length - 1];
+    setRedoStack((prev) => [elements, ...prev]);
+    applyElementsState(previousState);
+    setHistory((prev) => prev.slice(0, -1));
+  }, [elements, history, applyElementsState]);
+
+  const handleRedo = useCallback(() => {
+    if (redoStack.length === 0) return;
+    const nextState = redoStack[0];
+    setHistory((prev) => [...prev, elements]);
+    applyElementsState(nextState);
+    setRedoStack((prev) => prev.slice(1));
+  }, [elements, redoStack, applyElementsState]);
 
   const handleCursorMove = useCallback((coords) => {
     if (!socket || !meetingDbId || !canEdit) return;
@@ -680,11 +1013,94 @@ function Meeting() {
     }
   };
 
-  const headerParticipants = participants.length
-    ? participants
-    : user
-      ? [{ _id: user._id || user.id, username: user.username || user.name, isActive: true, role: meetingRole }]
-      : [];
+  const handleEnableCollaboration = async () => {
+    if (meetingRole !== 'host' || !meetingDbId) return;
+    const targets = participants.filter((participant) => participant.role !== 'host');
+
+    try {
+      await Promise.all(
+        targets.map((participant) =>
+          meetingAPI.updatePermission(meetingDbId, participant._id, 'edit')
+        )
+      );
+
+      setParticipants((prev) =>
+        prev.map((participant) =>
+          participant.role === 'host'
+            ? participant
+            : { ...participant, permission: 'edit' }
+        )
+      );
+
+      if (socket) {
+        targets.forEach((participant) => {
+          socket.emit('edit_permission_updated', {
+            meetingId: meetingDbId,
+            userId: participant._id,
+            permission: 'edit'
+          });
+        });
+      }
+
+      setNotification({
+        message: 'Collaborative mode enabled for everyone',
+        type: 'info'
+      });
+      setNotificationKey((prev) => prev + 1);
+    } catch (error) {
+      console.error('Error enabling collaboration:', error);
+      setNotification({
+        message: 'Failed to enable collaborative mode',
+        type: 'leave'
+      });
+      setNotificationKey((prev) => prev + 1);
+    }
+  };
+
+  const headerParticipants = participants.length > 0
+    ? participants.filter(p => p.isActive !== false)
+    : [];
+
+  // Show audio error if microphone access fails
+  useEffect(() => {
+    if (audioError) {
+      setNotification({
+        message: audioError,
+        type: 'leave'
+      });
+      setNotificationKey((prev) => prev + 1);
+    }
+  }, [audioError]);
+
+  useEffect(() => {
+    if (videoError) {
+      setNotification({
+        message: videoError,
+        type: 'leave'
+      });
+      setNotificationKey((prev) => prev + 1);
+    }
+  }, [videoError]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      cleanupAllPeerConnections();
+      stopLocalStream();
+    };
+  }, [cleanupAllPeerConnections, stopLocalStream]);
+
+  // Guard: Don't render if user is not available
+  if (!user || !userId) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-[#0a0a0c] text-slate-300">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p>Loading user session...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-[#0a0a0c] text-slate-300 font-sans selection:bg-primary/30 selection:text-white">
@@ -752,6 +1168,9 @@ function Meeting() {
           currentRole={meetingRole}
           canEdit={canEdit}
           localMedia={localMedia}
+          mediaStatusMap={mediaStatusMap}
+          localVideoStream={localVideoStream}
+          remoteVideoStreams={remoteVideoStreams}
           onToggleEditPermission={handleToggleEditPermission}
         />
       </main>
@@ -763,6 +1182,11 @@ function Meeting() {
         meetingRole={meetingRole}
         durationLabel={durationLabel}
         onLockCanvas={handleLockCanvas}
+        onEnableCollaboration={handleEnableCollaboration}
+        micOn={localMedia.mic}
+        videoOn={localMedia.video}
+        onToggleMic={handleToggleMic}
+        onToggleVideo={handleToggleVideo}
       />
       {isLeaving && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-sm">

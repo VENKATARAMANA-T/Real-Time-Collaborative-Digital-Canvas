@@ -7,10 +7,13 @@ function Footer({
   isEnding = false,
   meetingRole = 'participant',
   durationLabel = '00:00:00',
-  onLockCanvas
+  onLockCanvas,
+  onEnableCollaboration,
+  micOn = true,
+  videoOn = true,
+  onToggleMic,
+  onToggleVideo
 }) {
-  const [isMicOn, setIsMicOn] = useState(true);
-  const [isVideoOn, setIsVideoOn] = useState(true);
   const [showHostMenu, setShowHostMenu] = useState(false);
 
   const isHost = meetingRole === 'host';
@@ -40,28 +43,28 @@ function Footer({
       <div className="flex items-center gap-4 glass px-4 py-2 rounded-2xl shadow-xl">
         <div className="flex items-center gap-1.5">
           <button
-            onClick={() => setIsMicOn(!isMicOn)}
+            onClick={onToggleMic}
             className={`w-11 h-11 flex items-center justify-center rounded-xl transition-all ${
-              isMicOn
+              micOn
                 ? 'text-white hover:bg-white/10'
                 : 'bg-red-500/10 text-red-500 border border-red-500/20 hover:bg-red-500/20'
             }`}
           >
             <span className="material-symbols-outlined text-[22px]">
-              {isMicOn ? 'mic' : 'mic_off'}
+              {micOn ? 'mic' : 'mic_off'}
             </span>
           </button>
 
           <button
-            onClick={() => setIsVideoOn(!isVideoOn)}
+            onClick={onToggleVideo}
             className={`w-11 h-11 flex items-center justify-center rounded-xl transition-all ${
-              isVideoOn
+              videoOn
                 ? 'bg-primary text-white shadow-lg shadow-primary/25 hover:bg-blue-600'
                 : 'bg-red-500/10 text-red-500 border border-red-500/20 hover:bg-red-500/20'
             }`}
           >
-            <span className={`material-symbols-outlined text-[22px] ${isVideoOn ? 'filled' : ''}`}>
-              {isVideoOn ? 'videocam' : 'videocam_off'}
+            <span className={`material-symbols-outlined text-[22px] ${videoOn ? 'filled' : ''}`}>
+              {videoOn ? 'videocam' : 'videocam_off'}
             </span>
           </button>
 
@@ -99,6 +102,19 @@ function Footer({
                 >
                   <span className="material-symbols-outlined text-base text-amber-300">lock</span>
                   Lock Canvas
+                </button>
+                <button
+                  type="button"
+                  className="w-full px-4 py-3 text-left text-sm font-semibold text-slate-200 hover:bg-white/5 flex items-center gap-3"
+                  onClick={() => {
+                    setShowHostMenu(false);
+                    if (onEnableCollaboration) {
+                      onEnableCollaboration();
+                    }
+                  }}
+                >
+                  <span className="material-symbols-outlined text-base text-emerald-300">group</span>
+                  Collaborative Mode
                 </button>
               </div>
             )}
