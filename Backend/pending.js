@@ -7,6 +7,7 @@ audio chat
 video chat
 
 
+-- Refresh time problems
 
 
 */

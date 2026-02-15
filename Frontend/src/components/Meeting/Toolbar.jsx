@@ -1,4 +1,5 @@
 function Toolbar({ activeTool, setActiveTool, onUndo, onRedo, canUndo, canRedo, canEdit = true }) {
+  
   const tools = [
     { id: 'selector', icon: 'arrow_selector_tool', title: 'Selector' },
     { id: 'brush', icon: 'brush', title: 'Brush' },

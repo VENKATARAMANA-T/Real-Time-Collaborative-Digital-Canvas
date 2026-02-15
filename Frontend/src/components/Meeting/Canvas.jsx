@@ -461,7 +461,15 @@ function Canvas({
 
     // Composite Helper Canvas (Ink) onto Main Canvas
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.drawImage(helperCanvasRef.current, 0, 0, canvasRef.current.width, canvasRef.current.height);
+    
+    // Only draw if helper canvas has valid dimensions
+    if (helperCanvasRef.current && 
+        helperCanvasRef.current.width > 0 && 
+        helperCanvasRef.current.height > 0 &&
+        canvasRef.current.width > 0 &&
+        canvasRef.current.height > 0) {
+      ctx.drawImage(helperCanvasRef.current, 0, 0, canvasRef.current.width, canvasRef.current.height);
+    }
 
     // Restore transform for Selection UI
     ctx.setTransform(transformScale, 0, 0, transformScale, transformX, transformY);

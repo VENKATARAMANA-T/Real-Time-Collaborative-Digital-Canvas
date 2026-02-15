@@ -10,6 +10,10 @@ const liveCanvasHistory = {};
 // Structure: { "meetingId": [op3, op2...] }
 const redoStack = {};
 
+// 3. Latest Canvas State (Full elements array)
+// Structure: { "meetingId": [elements...] }
+const liveCanvasState = {};
+
 const canvasSocket = (io, socket) => {
 
     // =================================================================
@@ -113,6 +117,24 @@ const canvasSocket = (io, socket) => {
     });
 
     // =================================================================
+    // 5B. FULL STATE SYNC (Realtime)
+    // =================================================================
+    socket.on('canvas_state_updated', (data) => {
+        const { meetingId, elements } = data || {};
+        if (!meetingId || !Array.isArray(elements)) return;
+        liveCanvasState[meetingId] = elements;
+        socket.to(meetingId).emit('canvas_state_updated', { elements });
+    });
+
+    socket.on('request_canvas_state', (data) => {
+        const meetingId = typeof data === 'string' ? data : data?.meetingId;
+        if (!meetingId) return;
+        socket.emit('canvas_state_snapshot', {
+            elements: liveCanvasState[meetingId] || []
+        });
+    });
+
+    // =================================================================
     // 6. END MEETING (SAVE TO DB)
     // =================================================================
     socket.on('meeting_ended', async () => {
@@ -159,6 +181,7 @@ const canvasSocket = (io, socket) => {
             // 7. CLEANUP RAM
             delete liveCanvasHistory[meetingId];
             delete redoStack[meetingId];
+            delete liveCanvasState[meetingId];
 
             // 8. NOTIFY CLIENTS
             io.to(meetingId).emit('meeting_ended_client');

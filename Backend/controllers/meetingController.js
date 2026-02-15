@@ -398,7 +398,7 @@ exports.getMeetingDetails = async (req, res) => {
       return res.status(403).json({ message: 'You do not have access to this meeting' });
     }
 
-    // Format response with host first, then participants
+    // Format response with host first, then other participants (exclude host from participants list)
     const formattedParticipants = [
       {
         _id: meeting.host._id,
@@ -406,15 +406,17 @@ exports.getMeetingDetails = async (req, res) => {
         role: 'host',
         isActive: true
       },
-      ...meeting.participants.map(p => ({
-        _id: p.user._id,
-        username: p.user.username || p.user.name,
-        role: 'participant',
-        permission: p.permission,
-        joinTime: p.joinTime,
-        leaveTime: p.leaveTime,
-        isActive: !p.leaveTime
-      }))
+      ...meeting.participants
+        .filter(p => p.user._id.toString() !== meeting.host._id.toString()) // Exclude host
+        .map(p => ({
+          _id: p.user._id,
+          username: p.user.username || p.user.name,
+          role: 'participant',
+          permission: p.permission,
+          joinTime: p.joinTime,
+          leaveTime: p.leaveTime,
+          isActive: !p.leaveTime
+        }))
     ];
 
     res.status(200).json({

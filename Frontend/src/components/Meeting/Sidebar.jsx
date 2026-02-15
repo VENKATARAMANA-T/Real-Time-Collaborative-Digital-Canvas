@@ -5,9 +5,11 @@ const getInitials = (name) => {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 };
 
-function MemberCard({ name, role = 'member', status, mic, video, brush, onBrushClick, brushDisabled }) {
+function MemberCard({ name, role = 'member', status, mic, video, videoStream, mirror = false, brush, onBrushClick, brushDisabled }) {
   const isHost = role === 'host';
   const initials = getInitials(name);
+  const videoRef = useRef(null);
+  const showVideo = Boolean(video && videoStream);
 
   // Theme colors
   const activeBg = isHost ? 'bg-gold' : 'bg-primary';
@@ -27,40 +29,64 @@ function MemberCard({ name, role = 'member', status, mic, video, brush, onBrushC
     }`;
   };
 
+  useEffect(() => {
+    if (!videoRef.current) return;
+
+    if (showVideo) {
+      if (videoRef.current.srcObject !== videoStream) {
+        videoRef.current.srcObject = videoStream;
+      }
+      videoRef.current.play().catch(() => {});
+    } else if (videoRef.current.srcObject) {
+      videoRef.current.srcObject = null;
+    }
+  }, [showVideo, videoStream]);
+
   return (
     <div
       className={`relative aspect-video w-full rounded-2xl overflow-hidden border transition-all group flex flex-col items-center justify-center gap-3 shadow-lg ${
         isHost ? 'bg-gold/5 border-gold/40 shadow-gold/5' : 'bg-white/5 border-white/5 hover:border-white/20 hover:bg-white/[0.07]'
       }`}
     >
-      {isHost && (
+      {showVideo && (
+        <>
+          <video
+            ref={videoRef}
+            muted
+            autoPlay
+            playsInline
+            className={`absolute inset-0 h-full w-full object-cover ${mirror ? 'scale-x-[-1]' : ''}`}
+          />
+          <div className="absolute inset-0 bg-black/30"></div>
+        </>
+      )}
+
+      {isHost && !showVideo && (
         <div className="absolute top-3 left-3 px-2 py-0.5 bg-gold text-black rounded text-[8px] font-black uppercase tracking-widest z-10 shadow-sm">
           Host
         </div>
       )}
 
       {/* Avatar (Initials Only) */}
-      <div
-        className={`w-16 h-16 rounded-full border-4 overflow-hidden shadow-2xl flex items-center justify-center relative z-10 ${
-          isHost ? 'border-gold/30 bg-gold/10' : 'border-white/10 bg-white/5'
-        }`}
-      >
-        <div className={`text-xl font-bold ${isHost ? 'text-gold' : 'text-purple-400'}`}>{initials}</div>
-
-        {!video && (
-          <div className="absolute inset-0 flex items-center justify-center bg-background-dark/50 backdrop-blur-[2px]">
-            <span className="material-symbols-outlined text-white/70 text-2xl">videocam_off</span>
-          </div>
-        )}
-      </div>
+      {!showVideo && (
+        <div
+          className={`w-16 h-16 rounded-full border-4 overflow-hidden shadow-2xl flex items-center justify-center relative z-10 ${
+            isHost ? 'border-gold/30 bg-gold/10' : 'border-white/10 bg-white/5'
+          }`}
+        >
+          <div className={`text-xl font-bold ${isHost ? 'text-gold' : 'text-purple-400'}`}>{initials}</div>
+        </div>
+      )}
 
       {/* Info */}
-      <div className="text-center z-10">
-        <span className="text-sm font-bold text-white tracking-wide block drop-shadow-md">{name}</span>
-        <span className={`text-[9px] font-medium uppercase tracking-tight ${isHost ? 'text-gold/80' : 'text-slate-500'}`}>
-          {status}
-        </span>
-      </div>
+      {!showVideo && (
+        <div className="text-center z-10">
+          <span className="text-sm font-bold text-white tracking-wide block drop-shadow-md">{name}</span>
+          <span className={`text-[9px] font-medium uppercase tracking-tight ${isHost ? 'text-gold/80' : 'text-slate-500'}`}>
+            {status}
+          </span>
+        </div>
+      )}
 
       {/* Brush (Left) */}
       <div className="absolute bottom-3 left-3 z-20" title={brush ? 'Drawing Enabled' : 'Drawing Disabled'}>
@@ -88,7 +114,7 @@ function MemberCard({ name, role = 'member', status, mic, video, brush, onBrushC
 }
 
 import ChatBox from '../Collaboration/ChatBox';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { meetingAPI } from '../../services/api';
 
 function Sidebar({
@@ -102,9 +128,13 @@ function Sidebar({
   currentRole,
   canEdit,
   localMedia,
+  mediaStatusMap,
+  localVideoStream,
+  remoteVideoStreams,
   onToggleEditPermission
 }) {
   const displayName = currentUser?.username || currentUser?.name || 'You';
+  const currentUserId = currentUser?._id || currentUser?.id;
   const memberStatus = currentRole === 'host' ? 'Hosting' : 'Participant';
   const [participants, setParticipants] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -244,28 +274,48 @@ function Sidebar({
                   <>
                     {/* Host First */}
                     {participants.filter(p => p.role === 'host').map(participant => (
+                      (() => {
+                        const media = mediaStatusMap?.[participant._id]
+                          || (participant._id === currentUserId ? localMedia : null);
+                        const micOn = media?.mic ?? true;
+                        const videoOn = media?.video ?? true;
+
+                        return (
                       <MemberCard
                         key={participant._id}
                         name={participant.username}
                         role={participant.role}
                         status={participant.role === 'host' ? 'Hosting' : 'Participant'}
-                        mic={participant._id === currentUser?._id ? localMedia?.mic ?? true : true}
-                        video={participant._id === currentUser?._id ? localMedia?.video ?? true : true}
+                        mic={micOn}
+                        video={videoOn}
+                        videoStream={participant._id === currentUserId ? localVideoStream : remoteVideoStreams?.[participant._id]}
+                        mirror={participant._id === currentUserId}
                         brush={true}
                         onBrushClick={undefined}
                         brushDisabled={true}
                       />
+                        );
+                      })()
                     ))}
 
                     {/* Other Members */}
                     {participants.filter(p => p.role !== 'host').map(participant => (
+                      (() => {
+                        const media = mediaStatusMap?.[participant._id]
+                          || (participant._id === currentUserId ? localMedia : null);
+                        const micOn = media?.mic ?? true;
+                        const videoOn = media?.video ?? true;
+
+                        return (
                       <MemberCard
                         key={participant._id}
                         name={participant.username}
                         role={participant.role}
                         status={participant.role === 'host' ? 'Hosting' : 'Participant'}
-                        mic={participant._id === currentUser?._id ? localMedia?.mic ?? true : true}
-                        video={participant._id === currentUser?._id ? localMedia?.video ?? true : true}
+                        mic={micOn}
+                        video={videoOn}
+                        videoStream={participant._id === currentUserId ? localVideoStream : remoteVideoStreams?.[participant._id]}
+                        mirror={participant._id === currentUserId}
                         brush={participant.permission === 'edit'}
                         onBrushClick={() =>
                           handleBrushToggle(
@@ -275,6 +325,8 @@ function Sidebar({
                         }
                         brushDisabled={currentRole !== 'host'}
                       />
+                        );
+                      })()
                     ))}
                   </>
                 )}
