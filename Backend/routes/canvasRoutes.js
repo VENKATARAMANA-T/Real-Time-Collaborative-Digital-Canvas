@@ -6,6 +6,7 @@ const {
   getCanvasById,
   updateCanvas,
   deleteCanvas,
+  duplicateCanvas,
   getMeetingCanvasById,
   updateMeetingCanvas,
   renameCanvas,
@@ -34,6 +35,8 @@ router.route('/:id')
   .put(updateCanvas)    // PUT: Save drawing
   .delete(deleteCanvas);// DELETE: Remove canvas
 
+router.route('/:id/duplicate')
+  .post(duplicateCanvas); // POST: Duplicate a canvas
 // Rename canvas
 router.patch('/:id/rename', renameCanvas);
 

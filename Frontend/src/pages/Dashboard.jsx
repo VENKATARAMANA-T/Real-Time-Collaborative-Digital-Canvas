@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
-import { userAPI, canvasAPI, meetingAPI } from '../services/api';
+import { userAPI, canvasAPI, meetingAPI, folderAPI } from '../services/api';
 
 export default function Dashboard() {
   const { user, updateUser, logout } = useAuth();
@@ -41,6 +41,21 @@ export default function Dashboard() {
   const [scheduledMeetingDetails, setScheduledMeetingDetails] = useState(null);
   const [isInstantGenerating, setIsInstantGenerating] = useState(false);
   const [isScheduledGenerating, setIsScheduledGenerating] = useState(false);
+  const [currentMenuCanvasId, setCurrentMenuCanvasId] = useState(null);
+  const [showRenameModal, setShowRenameModal] = useState(false);
+  const [renameCanvasId, setRenameCanvasId] = useState(null);
+  const [newCanvasName, setNewCanvasName] = useState('');
+  const [isOperating, setIsOperating] = useState(false);
+  const [folders, setFolders] = useState([]);
+  const [folderCanvases, setFolderCanvases] = useState([]);
+  const [isLoadingFolders, setIsLoadingFolders] = useState(false);
+  const [showCreateFolderModal, setShowCreateFolderModal] = useState(false);
+  const [newFolderName, setNewFolderName] = useState('');
+  const [defaultFolderId, setDefaultFolderId] = useState(null);
+  const [currentMenuFolderId, setCurrentMenuFolderId] = useState(null);
+  const [showRenameFolderModal, setShowRenameFolderModal] = useState(false);
+  const [renameFolderId, setRenameFolderId] = useState(null);
+  const [isOperatingFolder, setIsOperatingFolder] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -72,192 +87,115 @@ export default function Dashboard() {
     return () => window.removeEventListener('focus', handleFocus);
   }, [user]);
 
-  const folders = [
-    {
-      id: 'q4-projects',
-      name: 'Q4 Projects',
-      count: 12,
-      accent: 'blue',
-      description: 'Strategic planning and roadmaps for the final quarter.',
-    },
-    {
-      id: 'client-work',
-      name: 'Client Work',
-      count: 8,
-      accent: 'amber',
-      description: 'Partner deliverables, timelines, and approvals.',
-    },
-    {
-      id: 'personal-sketches',
-      name: 'Personal Sketches',
-      count: 24,
-      accent: 'emerald',
-      description: 'Early ideas, rough drafts, and experiments.',
-    },
-    {
-      id: 'research-lab',
-      name: 'Research Lab',
-      count: 6,
-      accent: 'purple',
-      description: 'Discovery notes, user tests, and insights.',
-    },
-  ];
+  useEffect(() => {
+    const fetchFolders = async () => {
+      if (!user) return;
+      setIsLoadingFolders(true);
+      try {
+        let allFolders = await folderAPI.getAll();
+        
+        // Check if "Personal Sketches" folder exists
+        let personalFolder = allFolders.find(f => f.name === 'Personal Sketches');
+        
+        // If not, create it
+        if (!personalFolder) {
+          personalFolder = await folderAPI.create({ name: 'Personal Sketches' });
+          allFolders = await folderAPI.getAll();
+        }
+        
+        setFolders(allFolders || []);
+        setDefaultFolderId(personalFolder._id);
+      } catch (error) {
+        console.error('Failed to fetch folders:', error);
+      } finally {
+        setIsLoadingFolders(false);
+      }
+    };
+    fetchFolders();
+  }, [user]);
 
-  const folderCanvases = {
-    'q4-projects': [
-      {
-        id: 'q4-roadmap',
-        title: 'Q4 Product Roadmap',
-        edited: 'Edited 2h ago',
-        folder: 'Q4 Projects',
-        tag: 'Shared',
-        tagColor: 'primary',
-        border: 'border-b-primary/60',
-        preview:
-          'https://lh3.googleusercontent.com/aida-public/AB6AXuADVMWa09Lb-wiD6O-WhFcjqyxpwzLsJtyC4cq3pvE6RVuLuH9zyJmYK9xsMhKKxbkiFGTDf8Row0IANr79WGr8477MqYXGRBS33oG6jSOawBMTpYb8Lwy6xjXfcvMuwHOY5cIyL9_FnJNbwbkKWFtQKfwiu4yBDMSEHgWLEkS7qYdd5yGwLhZ327-ZT1abBwbBlQmRRqizocYXwUIjsdeF2ebjtRieM_r9tG2llspyOoMI0K3At-jUNwNAvbAEdtei7i0lnvtq7_U',
-      },
-      {
-        id: 'q4-marketing',
-        title: 'Q4 Marketing Strategy',
-        edited: 'Edited Yesterday',
-        folder: 'Q4 Projects',
-        tag: 'Private',
-        tagColor: 'emerald',
-        border: 'border-b-emerald-400/60',
-        preview:
-          'https://lh3.googleusercontent.com/aida-public/AB6AXuBsOnjC1yeDr3SF1UT2ZbVJILQ6AUyMRO7zO6McDldnd-dE8oUsIx78urvYg-M-LAcYs-cwS0xU8iR06nU7A93a255olYfX82pEDmHo5kAJiH5VZak5M_pdHUYclVFzcIp7hOc50FPIJ2oDPUIkey5WjjICizoLiHu2VXdJYCzGfIHABu7S3C3asfjQJjB0imGzdg14T9S63Qw01FUjKa9IvhWzmnH9oeO2X-0Yjiq8YYJW9RjIeyG7jRz3_7qDCIjxtNfp6nY6GvM',
-      },
-      {
-        id: 'q4-budget',
-        title: 'Q4 Budget Plan',
-        edited: 'Edited 3 days ago',
-        folder: 'Q4 Projects',
-        tag: 'Shared',
-        tagColor: 'primary',
-        border: 'border-b-purple-400/60',
-        preview:
-          'https://lh3.googleusercontent.com/aida-public/AB6AXuAb-Z5EqbE6ee1mjMe_0sjEZHvyb241L5-EljC6P3CgMi585PBJSath_lV4l64hjKhqIBw30hrBN-g5DOT7X2GFwSbK5ZKCLXvybMRvkbubO8ULQZtin0eqf-OSjil46taqlO3WKkbJupniIAhquZxhZSYTYv0GxtAQJkooc9dZd_b5BU1IrTwf31u0mecCnISdJBQK00jAY3rysVP0qUvT5P6-g3beIMi0IGVGrGt88XqJTCcX3JlYi-8IPbbsW2LUUx07cc0ZhTk',
-      },
-    ],
-    'client-work': [
-      {
-        id: 'client-brief',
-        title: 'Client Briefing Notes',
-        edited: 'Edited 4h ago',
-        folder: 'Client Work',
-        tag: 'Shared',
-        tagColor: 'primary',
-        border: 'border-b-primary/60',
-        preview:
-          'https://lh3.googleusercontent.com/aida-public/AB6AXuDqTfywyR1V-K_AIjWqiOpMkL5HqSbth_mGsQcF68NS0z93K1S6BUVP0lqSnWROCkio9XUfSI18giEkbkPLo_W23mJ-k0X_w7EkGW1Dew_eQHHSfMx0u2oiT5gHyh97czYjZXFtmWtQT6X_d6vDduce1MqiC3odtK22ShLDLaA6q4FsSZERi21w-kCoM-xTt9Q99dhAqT4ybTq_zUr_E4KiMaI5GvwJSfk2i0xNPBWytcC0AuTgUvcRChDtHaKevbzhcFlp0dPNyiU',
-      },
-      {
-        id: 'client-journey',
-        title: 'User Journey Mapping',
-        edited: 'Edited Yesterday',
-        folder: 'Client Work',
-        tag: 'Private',
-        tagColor: 'emerald',
-        border: 'border-b-emerald-400/60',
-        preview:
-          'https://lh3.googleusercontent.com/aida-public/AB6AXuBsOnjC1yeDr3SF1UT2ZbVJILQ6AUyMRO7zO6McDldnd-dE8oUsIx78urvYg-M-LAcYs-cwS0xU8iR06nU7A93a255olYfX82pEDmHo5kAJiH5VZak5M_pdHUYclVFzcIp7hOc50FPIJ2oDPUIkey5WjjICizoLiHu2VXdJYCzGfIHABu7S3C3asfjQJjB0imGzdg14T9S63Qw01FUjKa9IvhWzmnH9oeO2X-0Yjiq8YYJW9RjIeyG7jRz3_7qDCIjxtNfp6nY6GvM',
-      },
-      {
-        id: 'client-creative',
-        title: 'Campaign Creative',
-        edited: 'Edited 2 days ago',
-        folder: 'Client Work',
-        tag: 'Shared',
-        tagColor: 'primary',
-        border: 'border-b-purple-400/60',
-        preview:
-          'https://lh3.googleusercontent.com/aida-public/AB6AXuAb-Z5EqbE6ee1mjMe_0sjEZHvyb241L5-EljC6P3CgMi585PBJSath_lV4l64hjKhqIBw30hrBN-g5DOT7X2GFwSbK5ZKCLXvybMRvkbubO8ULQZtin0eqf-OSjil46taqlO3WKkbJupniIAhquZxhZSYTYv0GxtAQJkooc9dZd_b5BU1IrTwf31u0mecCnISdJBQK00jAY3rysVP0qUvT5P6-g3beIMi0IGVGrGt88XqJTCcX3JlYi-8IPbbsW2LUUx07cc0ZhTk',
-      },
-    ],
-    'personal-sketches': [
-      {
-        id: 'personal-ideas',
-        title: 'Website Redesign Ideas',
-        edited: 'Edited 3 days ago',
-        folder: 'Personal Sketches',
-        tag: 'Private',
-        tagColor: 'emerald',
-        border: 'border-b-emerald-400/60',
-        preview:
-          'https://lh3.googleusercontent.com/aida-public/AB6AXuAb-Z5EqbE6ee1mjMe_0sjEZHvyb241L5-EljC6P3CgMi585PBJSath_lV4l64hjKhqIBw30hrBN-g5DOT7X2GFwSbK5ZKCLXvybMRvkbubO8ULQZtin0eqf-OSjil46taqlO3WKkbJupniIAhquZxhZSYTYv0GxtAQJkooc9dZd_b5BU1IrTwf31u0mecCnISdJBQK00jAY3rysVP0qUvT5P6-g3beIMi0IGVGrGt88XqJTCcX3JlYi-8IPbbsW2LUUx07cc0ZhTk',
-      },
-      {
-        id: 'personal-mood',
-        title: 'Moodboard Experiments',
-        edited: 'Edited 5 days ago',
-        folder: 'Personal Sketches',
-        tag: 'Shared',
-        tagColor: 'primary',
-        border: 'border-b-primary/60',
-        preview:
-          'https://lh3.googleusercontent.com/aida-public/AB6AXuDqTfywyR1V-K_AIjWqiOpMkL5HqSbth_mGsQcF68NS0z93K1S6BUVP0lqSnWROCkio9XUfSI18giEkbkPLo_W23mJ-k0X_w7EkGW1Dew_eQHHSfMx0u2oiT5gHyh97czYjZXFtmWtQT6X_d6vDduce1MqiC3odtK22ShLDLaA6q4FsSZERi21w-kCoM-xTt9Q99dhAqT4ybTq_zUr_E4KiMaI5GvwJSfk2i0xNPBWytcC0AuTgUvcRChDtHaKevbzhcFlp0dPNyiU',
-      },
-      {
-        id: 'personal-notes',
-        title: 'Sketchbook Notes',
-        edited: 'Edited 1 week ago',
-        folder: 'Personal Sketches',
-        tag: 'Private',
-        tagColor: 'emerald',
-        border: 'border-b-purple-400/60',
-        preview:
-          'https://lh3.googleusercontent.com/aida-public/AB6AXuBsOnjC1yeDr3SF1UT2ZbVJILQ6AUyMRO7zO6McDldnd-dE8oUsIx78urvYg-M-LAcYs-cwS0xU8iR06nU7A93a255olYfX82pEDmHo5kAJiH5VZak5M_pdHUYclVFzcIp7hOc50FPIJ2oDPUIkey5WjjICizoLiHu2VXdJYCzGfIHABu7S3C3asfjQJjB0imGzdg14T9S63Qw01FUjKa9IvhWzmnH9oeO2X-0Yjiq8YYJW9RjIeyG7jRz3_7qDCIjxtNfp6nY6GvM',
-      },
-    ],
-    'research-lab': [
-      {
-        id: 'research-synthesis',
-        title: 'Research Synthesis',
-        edited: 'Edited 6h ago',
-        folder: 'Research Lab',
-        tag: 'Shared',
-        tagColor: 'primary',
-        border: 'border-b-primary/60',
-        preview:
-          'https://lh3.googleusercontent.com/aida-public/AB6AXuDqTfywyR1V-K_AIjWqiOpMkL5HqSbth_mGsQcF68NS0z93K1S6BUVP0lqSnWROCkio9XUfSI18giEkbkPLo_W23mJ-k0X_w7EkGW1Dew_eQHHSfMx0u2oiT5gHyh97czYjZXFtmWtQT6X_d6vDduce1MqiC3odtK22ShLDLaA6q4FsSZERi21w-kCoM-xTt9Q99dhAqT4ybTq_zUr_E4KiMaI5GvwJSfk2i0xNPBWytcC0AuTgUvcRChDtHaKevbzhcFlp0dPNyiU',
-      },
-      {
-        id: 'research-flows',
-        title: 'Interview Flows',
-        edited: 'Edited 2 days ago',
-        folder: 'Research Lab',
-        tag: 'Private',
-        tagColor: 'emerald',
-        border: 'border-b-emerald-400/60',
-        preview:
-          'https://lh3.googleusercontent.com/aida-public/AB6AXuADVMWa09Lb-wiD6O-WhFcjqyxpwzLsJtyC4cq3pvE6RVuLuH9zyJmYK9xsMhKKxbkiFGTDf8Row0IANr79WGr8477MqYXGRBS33oG6jSOawBMTpYb8Lwy6xjXfcvMuwHOY5cIyL9_FnJNbwbkKWFtQKfwiu4yBDMSEHgWLEkS7qYdd5yGwLhZ327-ZT1abBwbBlQmRRqizocYXwUIjsdeF2ebjtRieM_r9tG2llspyOoMI0K3At-jUNwNAvbAEdtei7i0lnvtq7_U',
-      },
-      {
-        id: 'research-metrics',
-        title: 'Insight Metrics',
-        edited: 'Edited 1 week ago',
-        folder: 'Research Lab',
-        tag: 'Shared',
-        tagColor: 'primary',
-        border: 'border-b-purple-400/60',
-        preview:
-          'https://lh3.googleusercontent.com/aida-public/AB6AXuAb-Z5EqbE6ee1mjMe_0sjEZHvyb241L5-EljC6P3CgMi585PBJSath_lV4l64hjKhqIBw30hrBN-g5DOT7X2GFwSbK5ZKCLXvybMRvkbubO8ULQZtin0eqf-OSjil46taqlO3WKkbJupniIAhquZxhZSYTYv0GxtAQJkooc9dZd_b5BU1IrTwf31u0mecCnISdJBQK00jAY3rysVP0qUvT5P6-g3beIMi0IGVGrGt88XqJTCcX3JlYi-8IPbbsW2LUUx07cc0ZhTk',
-      },
-    ],
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      // Check if click is outside any menu (canvas or folder)
+      const canvasMenus = document.querySelectorAll('[data-canvas-menu]');
+      const canvasButtons = document.querySelectorAll('[data-canvas-menu-button]');
+      const folderMenus = document.querySelectorAll('[data-folder-menu]');
+      const folderButtons = document.querySelectorAll('[data-folder-menu-button]');
+      
+      let clickedOutsideCanvas = true;
+      let clickedOutsideFolder = true;
+      
+      canvasMenus.forEach(menu => {
+        if (menu.contains(e.target)) clickedOutsideCanvas = false;
+      });
+      canvasButtons.forEach(btn => {
+        if (btn.contains(e.target)) clickedOutsideCanvas = false;
+      });
+      
+      folderMenus.forEach(menu => {
+        if (menu.contains(e.target)) clickedOutsideFolder = false;
+      });
+      folderButtons.forEach(btn => {
+        if (btn.contains(e.target)) clickedOutsideFolder = false;
+      });
+      
+      if (clickedOutsideCanvas) {
+        setCurrentMenuCanvasId(null);
+      }
+      if (clickedOutsideFolder) {
+        setCurrentMenuFolderId(null);
+      }
+    };
+    
+    if (currentMenuCanvasId || currentMenuFolderId) {
+      document.addEventListener('click', handleClickOutside);
+      return () => document.removeEventListener('click', handleClickOutside);
+    }
+  }, [currentMenuCanvasId, currentMenuFolderId]);
+
+  const isRealCanvas = (canvas) => {
+    // Real canvases from database have ObjectId format (24 hex chars)
+    return /^[0-9a-f]{24}$/i.test(canvas.id);
   };
 
-  const allCanvases = [...savedCanvases.map(cv => ({
+  // Fetch canvases for active folder
+  useEffect(() => {
+    const fetchFolderCanvases = async () => {
+      if (!activeFolderId) {
+        setFolderCanvases([]);
+        return;
+      }
+      try {
+        const canvases = await folderAPI.getCanvases(activeFolderId);
+        setFolderCanvases(canvases || []);
+      } catch (error) {
+        console.error('Failed to fetch folder canvases:', error);
+      }
+    };
+    fetchFolderCanvases();
+  }, [activeFolderId]);
+
+  const allCanvases = savedCanvases.map(cv => ({
     id: cv._id,
     title: cv.title || 'Untitled Canvas',
     edited: new Date(cv.updatedAt).toLocaleString(),
-    folder: 'Personal Sketches',
+    folder: cv.folder ? folders.find(f => f._id === cv.folder)?.name || 'Personal Sketches' : 'Personal Sketches',
     tag: 'Private',
     tagColor: 'emerald',
     border: 'border-b-emerald-400/60',
     preview: cv.thumbnail || 'https://via.placeholder.com/400x200?text=No+Preview'
-  })), ...Object.values(folderCanvases).flat()];
-  const activeFolder = folders.find((folder) => folder.id === activeFolderId) || null;
-  const activeFolderCanvases = activeFolderId ? folderCanvases[activeFolderId] : [];
+  }));
+  const activeFolder = folders.find((folder) => folder._id === activeFolderId) || null;
+  const activeFolderCanvases = folderCanvases.map(cv => ({
+    id: cv._id,
+    title: cv.title || 'Untitled Canvas',
+    edited: new Date(cv.updatedAt).toLocaleString(),
+    folder: activeFolder?.name || '',
+    tag: 'Private',
+    tagColor: 'emerald',
+    border: 'border-b-emerald-400/60',
+    preview: cv.thumbnail || 'https://via.placeholder.com/400x200?text=No+Preview'
+  }));
 
   const filterCanvases = (canvases) => {
     if (canvasFilter === 'shared') {
@@ -567,9 +505,12 @@ export default function Dashboard() {
       badgeCtx.fillText(username, 200, 100);
       const thumbnail = badgeCanvas.toDataURL('image/png');
 
+      // Use activeFolderId if in folder view, otherwise use defaultFolderId
+      const folderId = activeFolderId || defaultFolderId;
+
       const newCanvas = await canvasAPI.create({
         title: `Untitled Canvas ${Date.now()}`,
-        folderId: null,
+        folderId: folderId,
         data: {
           elements: [],
           canvasSize: { width: 1920, height: 1080 },
@@ -584,6 +525,150 @@ export default function Dashboard() {
     } catch (error) {
       console.error('Failed to create canvas:', error);
       showFlash('error', 'Failed to create canvas');
+    }
+  };
+
+  const handleCreateFolder = async () => {
+    if (!newFolderName.trim()) {
+      showFlash('error', 'Folder name cannot be empty');
+      return;
+    }
+
+    try {
+      const folder = await folderAPI.create({ name: newFolderName.trim() });
+      setFolders([...folders, folder]);
+      setShowCreateFolderModal(false);
+      setNewFolderName('');
+      showFlash('success', 'Folder created successfully');
+    } catch (error) {
+      console.error('Failed to create folder:', error);
+      showFlash('error', error.response?.data?.message || 'Failed to create folder');
+    }
+  };
+
+  const handleRenameFolder = async (folderId, newName) => {
+    if (!newName.trim()) {
+      showFlash('error', 'Folder name cannot be empty');
+      return;
+    }
+
+    try {
+      setIsOperatingFolder(true);
+      await folderAPI.update(folderId, { name: newName.trim() });
+      
+      // Refresh folders list
+      const updatedFolders = await folderAPI.getAll();
+      setFolders(updatedFolders || []);
+      
+      setShowRenameFolderModal(false);
+      setRenameFolderId(null);
+      setNewFolderName('');
+      setCurrentMenuFolderId(null);
+      showFlash('success', 'Folder renamed successfully');
+    } catch (error) {
+      console.error('Failed to rename folder:', error);
+      showFlash('error', error.response?.data?.message || 'Failed to rename folder');
+    } finally {
+      setIsOperatingFolder(false);
+    }
+  };
+
+  const handleDeleteFolder = async (folderId) => {
+    // Prevent deleting the default "Personal Sketches" folder
+    if (folderId === defaultFolderId) {
+      showFlash('error', 'Cannot delete the default folder');
+      return;
+    }
+
+    try {
+      setIsOperatingFolder(true);
+      await folderAPI.delete(folderId);
+      
+      // Refresh folders list
+      const updatedFolders = await folderAPI.getAll();
+      setFolders(updatedFolders || []);
+      
+      // Refresh canvases list since canvases in the folder are also deleted
+      const canvases = await canvasAPI.getAll();
+      setSavedCanvases(canvases || []);
+      
+      // If we're viewing the deleted folder, go back to main view
+      if (activeFolderId === folderId) {
+        setActiveFolderId(null);
+      }
+      
+      setCurrentMenuFolderId(null);
+      showFlash('success', 'Folder and its contents deleted successfully');
+    } catch (error) {
+      console.error('Failed to delete folder:', error);
+      showFlash('error', error.response?.data?.message || 'Failed to delete folder');
+    } finally {
+      setIsOperatingFolder(false);
+    }
+  };
+
+  const handleRenameCanvas = async (canvasId, newName) => {
+    if (!newName.trim()) {
+      showFlash('error', 'Canvas name cannot be empty');
+      return;
+    }
+
+    try {
+      setIsOperating(true);
+      await canvasAPI.update(canvasId, { title: newName.trim() });
+      
+      // Refresh the canvases list
+      const canvases = await canvasAPI.getAll();
+      setSavedCanvases(canvases || []);
+      
+      setShowRenameModal(false);
+      setRenameCanvasId(null);
+      setNewCanvasName('');
+      setCurrentMenuCanvasId(null);
+      showFlash('success', 'Canvas renamed successfully');
+    } catch (error) {
+      console.error('Failed to rename canvas:', error);
+      showFlash('error', 'Failed to rename canvas');
+    } finally {
+      setIsOperating(false);
+    }
+  };
+
+  const handleDeleteCanvas = async (canvasId) => {
+    try {
+      setIsOperating(true);
+      await canvasAPI.delete(canvasId);
+      
+      // Refresh the canvases list
+      const canvases = await canvasAPI.getAll();
+      setSavedCanvases(canvases || []);
+      
+      setCurrentMenuCanvasId(null);
+      showFlash('success', 'Canvas deleted successfully');
+    } catch (error) {
+      console.error('Failed to delete canvas:', error);
+      showFlash('error', 'Failed to delete canvas');
+    } finally {
+      setIsOperating(false);
+    }
+  };
+
+  const handleDuplicateCanvas = async (canvasId) => {
+    try {
+      setIsOperating(true);
+      await canvasAPI.duplicate(canvasId);
+      
+      // Refresh the canvases list
+      const canvases = await canvasAPI.getAll();
+      setSavedCanvases(canvases || []);
+      
+      setCurrentMenuCanvasId(null);
+      showFlash('success', 'Canvas duplicated successfully');
+    } catch (error) {
+      console.error('Failed to duplicate canvas:', error);
+      showFlash('error', 'Failed to duplicate canvas');
+    } finally {
+      setIsOperating(false);
     }
   };
 
@@ -937,9 +1022,61 @@ export default function Dashboard() {
                       <div className="p-4">
                         <div className="flex items-start justify-between mb-2">
                           <h4 className="font-bold text-sm truncate">{canvas.title || 'Untitled Canvas'}</h4>
-                          <button className="text-slate-500 hover:text-primary">
-                            <span className="material-icons text-lg">more_vert</span>
-                          </button>
+                          <div className="relative">
+                            <button 
+                              className="text-slate-500 hover:text-primary transition-colors"
+                              data-canvas-menu-button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setCurrentMenuCanvasId(currentMenuCanvasId === canvas._id ? null : canvas._id);
+                              }}
+                            >
+                              <span className="material-icons text-lg">more_vert</span>
+                            </button>
+                            {currentMenuCanvasId === canvas._id && (
+                              <div 
+                                className="absolute right-0 top-full mt-2 bg-[#101922] border border-[#2d3a4b] rounded-lg shadow-xl z-50 min-w-[180px] overflow-hidden"
+                                data-canvas-menu
+                              >
+                                <button
+                                  className="w-full text-left px-4 py-3 text-sm text-slate-300 hover:bg-[#1a242f] hover:text-primary flex items-center space-x-3 transition-colors"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setRenameCanvasId(canvas._id);
+                                    setNewCanvasName(canvas.title);
+                                    setShowRenameModal(true);
+                                    setCurrentMenuCanvasId(null);
+                                  }}
+                                >
+                                  <span className="material-icons text-sm">edit</span>
+                                  <span className="font-medium">Rename</span>
+                                </button>
+                                <button
+                                  className="w-full text-left px-4 py-3 text-sm text-slate-300 hover:bg-[#1a242f] hover:text-primary flex items-center space-x-3 transition-colors"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDuplicateCanvas(canvas._id);
+                                  }}
+                                  disabled={isOperating}
+                                >
+                                  <span className="material-icons text-sm">content_copy</span>
+                                  <span className="font-medium">Duplicate</span>
+                                </button>
+                                <div className="border-t border-[#2d3a4b]"></div>
+                                <button
+                                  className="w-full text-left px-4 py-3 text-sm text-rose-400 hover:bg-[#1a242f] hover:text-rose-300 flex items-center space-x-3 transition-colors"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteCanvas(canvas._id);
+                                  }}
+                                  disabled={isOperating}
+                                >
+                                  <span className="material-icons text-sm">delete</span>
+                                  <span className="font-medium">Delete</span>
+                                </button>
+                              </div>
+                            )}
+                          </div>
                         </div>
                         <div className="flex items-center text-xs text-slate-500 space-x-2">
                           <span className="material-icons text-sm">schedule</span>
@@ -1894,9 +2031,9 @@ export default function Dashboard() {
                       {filteredFolderCanvases.map((canvas) => (
                         <div
                           key={canvas.id}
-                          className={`group h-64 flex flex-col bg-[#1a242f] border border-[#2d3a4b] rounded-xl overflow-hidden hover:shadow-2xl transition-all border-b-4 ${canvas.border}`}
+                          className={`group h-64 flex flex-col bg-[#1a242f] border border-[#2d3a4b] rounded-xl hover:shadow-2xl transition-all border-b-4 relative ${canvas.border}`}
                         >
-                          <div className="flex-1 bg-[#101922] relative overflow-hidden">
+                          <div className="flex-1 bg-[#101922] relative overflow-hidden rounded-t-xl">
                             <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent"></div>
                             <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-[#101922]/60 backdrop-blur-sm z-20">
                               <button className="px-4 py-2 bg-primary text-white text-xs font-bold rounded-lg shadow-lg" type="button">
@@ -1923,9 +2060,64 @@ export default function Dashboard() {
                           <div className="p-4 bg-[#1a242f]">
                             <div className="flex items-start justify-between mb-1">
                               <h4 className="font-bold text-sm truncate text-white">{canvas.title}</h4>
-                              <button className="text-slate-500 hover:text-primary" type="button">
-                                <span className="material-icons text-lg">more_vert</span>
-                              </button>
+                              {isRealCanvas(canvas) && (
+                                <div className="relative">
+                                  <button 
+                                    className="text-slate-500 hover:text-primary transition-colors" 
+                                    type="button"
+                                    data-canvas-menu-button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setCurrentMenuCanvasId(currentMenuCanvasId === canvas.id ? null : canvas.id);
+                                    }}
+                                  >
+                                    <span className="material-icons text-lg">more_vert</span>
+                                  </button>
+                                  {currentMenuCanvasId === canvas.id && (
+                                    <div 
+                                      className="absolute right-0 top-full mt-2 bg-[#101922] border border-[#2d3a4b] rounded-lg shadow-xl z-50 min-w-[180px] overflow-hidden"
+                                      data-canvas-menu
+                                    >
+                                      <button
+                                        className="w-full text-left px-4 py-3 text-sm text-slate-300 hover:bg-[#1a242f] hover:text-primary flex items-center space-x-3 transition-colors"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setRenameCanvasId(canvas.id);
+                                          setNewCanvasName(canvas.title);
+                                          setShowRenameModal(true);
+                                          setCurrentMenuCanvasId(null);
+                                        }}
+                                      >
+                                        <span className="material-icons text-sm">edit</span>
+                                        <span className="font-medium">Rename</span>
+                                      </button>
+                                      <button
+                                        className="w-full text-left px-4 py-3 text-sm text-slate-300 hover:bg-[#1a242f] hover:text-primary flex items-center space-x-3 transition-colors"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleDuplicateCanvas(canvas.id);
+                                        }}
+                                        disabled={isOperating}
+                                      >
+                                        <span className="material-icons text-sm">content_copy</span>
+                                        <span className="font-medium">Duplicate</span>
+                                      </button>
+                                      <div className="border-t border-[#2d3a4b]"></div>
+                                      <button
+                                        className="w-full text-left px-4 py-3 text-sm text-rose-400 hover:bg-[#1a242f] hover:text-rose-300 flex items-center space-x-3 transition-colors"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleDeleteCanvas(canvas.id);
+                                        }}
+                                        disabled={isOperating}
+                                      >
+                                        <span className="material-icons text-sm">delete</span>
+                                        <span className="font-medium">Delete</span>
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
                             </div>
                             <div className="flex items-center text-[11px] text-slate-500 space-x-2">
                               <span className="material-icons text-sm">schedule</span>
@@ -1950,33 +2142,93 @@ export default function Dashboard() {
                         <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500">My Folders</h3>
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                        {folders.map((folder) => (
-                          <button
-                            key={folder.id}
-                            className="group flex items-center p-4 bg-[#1a242f] border border-[#2d3a4b] rounded-xl hover:border-primary cursor-pointer transition-all text-left"
-                            onClick={() => setActiveFolderId(folder.id)}
-                            type="button"
-                          >
+                        {folders.map((folder, index) => {
+                          const folderCanvasCount = savedCanvases.filter(c => c.folder === folder._id).length;
+                          const colors = ['blue', 'amber', 'emerald', 'purple'];
+                          const color = colors[index % colors.length];
+                          
+                          return (
                             <div
-                              className={`w-10 h-10 rounded-lg flex items-center justify-center mr-4 transition-colors ${
-                                folder.accent === 'blue'
-                                  ? 'bg-blue-500/10 text-blue-500 group-hover:bg-blue-500 group-hover:text-white'
-                                  : folder.accent === 'amber'
-                                  ? 'bg-amber-500/10 text-amber-500 group-hover:bg-amber-500 group-hover:text-white'
-                                  : folder.accent === 'emerald'
-                                  ? 'bg-emerald-500/10 text-emerald-500 group-hover:bg-emerald-500 group-hover:text-white'
-                                  : 'bg-purple-500/10 text-purple-500 group-hover:bg-purple-500 group-hover:text-white'
-                              }`}
+                              key={folder._id}
+                              className="group relative flex items-center p-4 bg-[#1a242f] border border-[#2d3a4b] rounded-xl hover:border-primary cursor-pointer transition-all text-left"
                             >
-                              <span className="material-symbols-outlined">folder</span>
+                              <div
+                                className="flex items-center flex-1"
+                                onClick={() => setActiveFolderId(folder._id)}
+                              >
+                                <div
+                                  className={`w-10 h-10 rounded-lg flex items-center justify-center mr-4 transition-colors ${
+                                    color === 'blue'
+                                      ? 'bg-blue-500/10 text-blue-500 group-hover:bg-blue-500 group-hover:text-white'
+                                      : color === 'amber'
+                                      ? 'bg-amber-500/10 text-amber-500 group-hover:bg-amber-500 group-hover:text-white'
+                                      : color === 'emerald'
+                                      ? 'bg-emerald-500/10 text-emerald-500 group-hover:bg-emerald-500 group-hover:text-white'
+                                      : 'bg-purple-500/10 text-purple-500 group-hover:bg-purple-500 group-hover:text-white'
+                                  }`}
+                                >
+                                  <span className="material-symbols-outlined">folder</span>
+                                </div>
+                                <div>
+                                  <p className="font-bold text-sm text-white">{folder.name}</p>
+                                  <p className="text-[10px] text-slate-500">{folderCanvasCount} canvases</p>
+                                </div>
+                              </div>
+                              <div className="relative">
+                                <button
+                                  className="text-slate-500 hover:text-primary transition-colors p-1"
+                                  data-folder-menu-button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setCurrentMenuFolderId(currentMenuFolderId === folder._id ? null : folder._id);
+                                  }}
+                                  type="button"
+                                >
+                                  <span className="material-icons text-lg">more_vert</span>
+                                </button>
+                                {currentMenuFolderId === folder._id && (
+                                  <div
+                                    className="absolute right-0 top-full mt-2 bg-[#101922] border border-[#2d3a4b] rounded-lg shadow-xl z-50 min-w-[180px] overflow-hidden"
+                                    data-folder-menu
+                                  >
+                                    <button
+                                      className="w-full text-left px-4 py-3 text-sm text-slate-300 hover:bg-[#1a242f] hover:text-primary flex items-center space-x-3 transition-colors"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setRenameFolderId(folder._id);
+                                        setNewFolderName(folder.name);
+                                        setShowRenameFolderModal(true);
+                                        setCurrentMenuFolderId(null);
+                                      }}
+                                      type="button"
+                                    >
+                                      <span className="material-icons text-sm">edit</span>
+                                      <span className="font-medium">Rename</span>
+                                    </button>
+                                    <div className="border-t border-[#2d3a4b]"></div>
+                                    <button
+                                      className="w-full text-left px-4 py-3 text-sm text-rose-400 hover:bg-[#1a242f] hover:text-rose-300 flex items-center space-x-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDeleteFolder(folder._id);
+                                      }}
+                                      disabled={isOperatingFolder || folder._id === defaultFolderId}
+                                      type="button"
+                                    >
+                                      <span className="material-icons text-sm">delete</span>
+                                      <span className="font-medium">Delete</span>
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
                             </div>
-                            <div>
-                              <p className="font-bold text-sm text-white">{folder.name}</p>
-                              <p className="text-[10px] text-slate-500">{folder.count} canvases</p>
-                            </div>
-                          </button>
-                        ))}
-                        <button className="group flex items-center justify-center p-4 bg-indigo-600 text-white rounded-xl hover:bg-indigo-500 cursor-pointer transition-all" type="button">
+                          );
+                        })}
+                        <button 
+                          className="group flex items-center justify-center p-4 bg-indigo-600 text-white rounded-xl hover:bg-indigo-500 cursor-pointer transition-all" 
+                          onClick={() => setShowCreateFolderModal(true)}
+                          type="button"
+                        >
                           <span className="material-icons text-xl mr-2 text-white/90">create_new_folder</span>
                           <span className="text-xs font-bold uppercase">Add Folder</span>
                         </button>
@@ -2054,9 +2306,9 @@ export default function Dashboard() {
                       {filteredAllCanvases.map((canvas) => (
                         <div
                           key={canvas.id}
-                          className={`group bg-[#1a242f] border border-[#2d3a4b] rounded-xl overflow-hidden hover:shadow-2xl transition-all border-b-4 ${canvas.border}`}
+                          className={`group bg-[#1a242f] border border-[#2d3a4b] rounded-xl hover:shadow-2xl transition-all border-b-4 relative ${canvas.border}`}
                         >
-                          <div className="h-40 bg-[#101922] relative overflow-hidden">
+                          <div className="h-40 bg-[#101922] relative overflow-hidden rounded-t-xl">
                             <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent"></div>
                             <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-[#101922]/60 backdrop-blur-sm z-20">
                               <button
@@ -2087,9 +2339,64 @@ export default function Dashboard() {
                           <div className="p-4">
                             <div className="flex items-start justify-between mb-2">
                               <h4 className="font-bold text-sm truncate text-white">{canvas.title}</h4>
-                              <button className="text-slate-500 hover:text-primary" type="button">
-                                <span className="material-icons text-lg">more_vert</span>
-                              </button>
+                              {isRealCanvas(canvas) && (
+                                <div className="relative">
+                                  <button 
+                                    className="text-slate-500 hover:text-primary transition-colors" 
+                                    type="button"
+                                    data-canvas-menu-button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setCurrentMenuCanvasId(currentMenuCanvasId === canvas.id ? null : canvas.id);
+                                    }}
+                                  >
+                                    <span className="material-icons text-lg">more_vert</span>
+                                  </button>
+                                  {currentMenuCanvasId === canvas.id && (
+                                    <div 
+                                      className="absolute right-0 top-full mt-2 bg-[#101922] border border-[#2d3a4b] rounded-lg shadow-xl z-50 min-w-[180px] overflow-hidden"
+                                      data-canvas-menu
+                                    >
+                                      <button
+                                        className="w-full text-left px-4 py-3 text-sm text-slate-300 hover:bg-[#1a242f] hover:text-primary flex items-center space-x-3 transition-colors"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setRenameCanvasId(canvas.id);
+                                          setNewCanvasName(canvas.title);
+                                          setShowRenameModal(true);
+                                          setCurrentMenuCanvasId(null);
+                                        }}
+                                      >
+                                        <span className="material-icons text-sm">edit</span>
+                                        <span className="font-medium">Rename</span>
+                                      </button>
+                                      <button
+                                        className="w-full text-left px-4 py-3 text-sm text-slate-300 hover:bg-[#1a242f] hover:text-primary flex items-center space-x-3 transition-colors"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleDuplicateCanvas(canvas.id);
+                                        }}
+                                        disabled={isOperating}
+                                      >
+                                        <span className="material-icons text-sm">content_copy</span>
+                                        <span className="font-medium">Duplicate</span>
+                                      </button>
+                                      <div className="border-t border-[#2d3a4b]"></div>
+                                      <button
+                                        className="w-full text-left px-4 py-3 text-sm text-rose-400 hover:bg-[#1a242f] hover:text-rose-300 flex items-center space-x-3 transition-colors"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleDeleteCanvas(canvas.id);
+                                        }}
+                                        disabled={isOperating}
+                                      >
+                                        <span className="material-icons text-sm">delete</span>
+                                        <span className="font-medium">Delete</span>
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
                             </div>
                             <div className="flex items-center text-[11px] text-slate-500 space-x-2">
                               <span className="material-icons text-sm">schedule</span>
@@ -2433,6 +2740,199 @@ export default function Dashboard() {
           <div className="flex flex-col items-center gap-3 rounded-2xl border border-white/10 bg-[#0f172a] px-6 py-5 shadow-2xl">
             <div className="h-10 w-10 animate-spin rounded-full border-2 border-slate-600 border-t-primary"></div>
             <p className="text-sm font-semibold text-slate-100">{meetingTransition.label}</p>
+          </div>
+        </div>
+      )}
+
+      {showRenameModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-sm">
+          <div className="relative w-full max-w-sm rounded-2xl border border-white/10 bg-[#0f172a] p-8 shadow-2xl">
+            <button
+              onClick={() => {
+                setShowRenameModal(false);
+                setRenameCanvasId(null);
+                setNewCanvasName('');
+              }}
+              className="absolute right-4 top-4 text-white/50 hover:text-white"
+              type="button"
+            >
+              <span className="material-icons">close</span>
+            </button>
+            <div className="text-center mb-6">
+              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/20 text-primary">
+                <span className="material-icons">edit</span>
+              </div>
+              <h3 className="text-2xl font-bold">Rename Canvas</h3>
+              <p className="text-slate-400 text-sm mt-1">Enter a new name for your canvas</p>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Canvas Name</label>
+                <input
+                  type="text"
+                  value={newCanvasName}
+                  onChange={(e) => setNewCanvasName(e.target.value)}
+                  placeholder="Enter canvas name"
+                  className="w-full px-4 py-3 rounded-lg premium-input text-white text-sm"
+                  autoFocus
+                />
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowRenameModal(false);
+                    setRenameCanvasId(null);
+                    setNewCanvasName('');
+                  }}
+                  className="flex-1 rounded-lg border border-white/10 py-3 font-bold text-white transition-all hover:bg-white/5"
+                  type="button"
+                  disabled={isOperating}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => handleRenameCanvas(renameCanvasId, newCanvasName)}
+                  className="flex-1 rounded-lg bg-primary py-3 font-bold text-white transition-all hover:brightness-110 disabled:opacity-60 disabled:cursor-not-allowed"
+                  type="button"
+                  disabled={isOperating}
+                >
+                  {isOperating ? 'Renaming...' : 'Rename'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showCreateFolderModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-sm">
+          <div className="relative w-full max-w-sm rounded-2xl border border-white/10 bg-[#0f172a] p-8 shadow-2xl">
+            <button
+              onClick={() => {
+                setShowCreateFolderModal(false);
+                setNewFolderName('');
+              }}
+              className="absolute right-4 top-4 text-white/50 hover:text-white"
+              type="button"
+            >
+              <span className="material-icons">close</span>
+            </button>
+            <div className="text-center mb-6">
+              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-500/20 text-indigo-400">
+                <span className="material-icons">create_new_folder</span>
+              </div>
+              <h3 className="text-2xl font-bold">Create New Folder</h3>
+              <p className="text-slate-400 text-sm mt-1">Enter a name for your new folder</p>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Folder Name</label>
+                <input
+                  type="text"
+                  value={newFolderName}
+                  onChange={(e) => setNewFolderName(e.target.value)}
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter') {
+                      handleCreateFolder();
+                    }
+                  }}
+                  placeholder="Enter folder name"
+                  className="w-full px-4 py-3 rounded-lg premium-input text-white text-sm"
+                  autoFocus
+                />
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowCreateFolderModal(false);
+                    setNewFolderName('');
+                  }}
+                  className="flex-1 rounded-lg border border-white/10 py-3 font-bold text-white transition-all hover:bg-white/5"
+                  type="button"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleCreateFolder}
+                  className="flex-1 rounded-lg bg-indigo-600 py-3 font-bold text-white transition-all hover:brightness-110 disabled:opacity-60 disabled:cursor-not-allowed"
+                  type="button"
+                  disabled={!newFolderName.trim()}
+                >
+                  Create Folder
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showRenameFolderModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-sm">
+          <div className="relative w-full max-w-sm rounded-2xl border border-white/10 bg-[#0f172a] p-8 shadow-2xl">
+            <button
+              onClick={() => {
+                setShowRenameFolderModal(false);
+                setRenameFolderId(null);
+                setNewFolderName('');
+              }}
+              className="absolute right-4 top-4 text-white/50 hover:text-white"
+              type="button"
+            >
+              <span className="material-icons">close</span>
+            </button>
+            <div className="text-center mb-6">
+              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/20 text-primary">
+                <span className="material-icons">edit</span>
+              </div>
+              <h3 className="text-2xl font-bold">Rename Folder</h3>
+              <p className="text-slate-400 text-sm mt-1">Enter a new name for your folder</p>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Folder Name</label>
+                <input
+                  type="text"
+                  value={newFolderName}
+                  onChange={(e) => setNewFolderName(e.target.value)}
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter') {
+                      handleRenameFolder(renameFolderId, newFolderName);
+                    }
+                  }}
+                  placeholder="Enter folder name"
+                  className="w-full px-4 py-3 rounded-lg premium-input text-white text-sm"
+                  autoFocus
+                />
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowRenameFolderModal(false);
+                    setRenameFolderId(null);
+                    setNewFolderName('');
+                  }}
+                  className="flex-1 rounded-lg border border-white/10 py-3 font-bold text-white transition-all hover:bg-white/5"
+                  type="button"
+                  disabled={isOperatingFolder}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => handleRenameFolder(renameFolderId, newFolderName)}
+                  className="flex-1 rounded-lg bg-primary py-3 font-bold text-white transition-all hover:brightness-110 disabled:opacity-60 disabled:cursor-not-allowed"
+                  type="button"
+                  disabled={isOperatingFolder || !newFolderName.trim()}
+                >
+                  {isOperatingFolder ? 'Renaming...' : 'Rename'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
