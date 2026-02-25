@@ -45,6 +45,10 @@ export default function Dashboard() {
   const [showRenameModal, setShowRenameModal] = useState(false);
   const [renameCanvasId, setRenameCanvasId] = useState(null);
   const [newCanvasName, setNewCanvasName] = useState('');
+  const [showCreateCanvasModal, setShowCreateCanvasModal] = useState(false);
+  const [createCanvasName, setCreateCanvasName] = useState('');
+  const [createCanvasError, setCreateCanvasError] = useState('');
+  const [createCanvasCardMessage, setCreateCanvasCardMessage] = useState('');
   const [isOperating, setIsOperating] = useState(false);
   const [folders, setFolders] = useState([]);
   const [folderCanvases, setFolderCanvases] = useState([]);
@@ -489,7 +493,36 @@ export default function Dashboard() {
     }, 2000);
   };
 
-  const handleNewCanvas = async () => {
+  const showCreateCanvasCardFlash = (message) => {
+    setCreateCanvasCardMessage(message);
+    window.setTimeout(() => setCreateCanvasCardMessage(''), 3000);
+  };
+
+  const handleNewCanvas = () => {
+    setCreateCanvasName('');
+    setCreateCanvasError('');
+    setCreateCanvasCardMessage('');
+    setShowCreateCanvasModal(true);
+  };
+
+  const handleCreateCanvas = async () => {
+    const trimmedName = createCanvasName.trim();
+    if (!trimmedName) {
+      setCreateCanvasError('Canvas name is required');
+      return;
+    }
+
+    const normalizedName = trimmedName.toLowerCase();
+    const isDuplicate = savedCanvases.some((cv) =>
+      (cv.title || '').trim().toLowerCase() === normalizedName
+    );
+
+    if (isDuplicate) {
+      setCreateCanvasError('Filename already exists');
+      showCreateCanvasCardFlash('Filename already exists');
+      return;
+    }
+
     try {
       const username = user?.username || 'User';
       const badgeCanvas = document.createElement('canvas');
@@ -509,7 +542,7 @@ export default function Dashboard() {
       const folderId = activeFolderId || defaultFolderId;
 
       const newCanvas = await canvasAPI.create({
-        title: `Untitled Canvas ${Date.now()}`,
+        title: trimmedName,
         folderId: folderId,
         data: {
           elements: [],
@@ -520,6 +553,9 @@ export default function Dashboard() {
       });
 
       if (newCanvas?._id) {
+        setShowCreateCanvasModal(false);
+        setCreateCanvasName('');
+        setCreateCanvasError('');
         navigate(`/paint/${newCanvas._id}`);
       }
     } catch (error) {
@@ -925,6 +961,11 @@ export default function Dashboard() {
                   </div>
                   <h3 className="text-xl font-bold text-white mb-1">New Canvas</h3>
                   <p className="text-white/70 text-sm">Start a blank project from scratch</p>
+                  {createCanvasCardMessage && (
+                    <p className="mt-3 text-xs font-semibold text-rose-100/90 bg-rose-500/30 inline-flex px-2 py-1 rounded">
+                      {createCanvasCardMessage}
+                    </p>
+                  )}
                 </div>
               </button>
               <button
@@ -2026,6 +2067,11 @@ export default function Dashboard() {
                       >
                         <span className="material-icons text-4xl mb-3">add_circle</span>
                         <span className="text-sm font-bold uppercase tracking-wider">New Canvas</span>
+                        {createCanvasCardMessage && (
+                          <span className="mt-3 text-xs font-semibold text-rose-100/90 bg-rose-500/30 inline-flex px-2 py-1 rounded">
+                            {createCanvasCardMessage}
+                          </span>
+                        )}
                       </button>
 
                       {filteredFolderCanvases.map((canvas) => (
@@ -2301,6 +2347,11 @@ export default function Dashboard() {
                       >
                         <span className="material-icons text-4xl mb-3">add_circle</span>
                         <span className="text-sm font-bold uppercase tracking-widest">New Canvas</span>
+                        {createCanvasCardMessage && (
+                          <span className="mt-3 text-xs font-semibold text-rose-100/90 bg-rose-500/30 inline-flex px-2 py-1 rounded">
+                            {createCanvasCardMessage}
+                          </span>
+                        )}
                       </button>
 
                       {filteredAllCanvases.map((canvas) => (
@@ -2740,6 +2791,83 @@ export default function Dashboard() {
           <div className="flex flex-col items-center gap-3 rounded-2xl border border-white/10 bg-[#0f172a] px-6 py-5 shadow-2xl">
             <div className="h-10 w-10 animate-spin rounded-full border-2 border-slate-600 border-t-primary"></div>
             <p className="text-sm font-semibold text-slate-100">{meetingTransition.label}</p>
+          </div>
+        </div>
+      )}
+
+      {showCreateCanvasModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-sm">
+          <div className="relative w-full max-w-sm rounded-2xl border border-white/10 bg-[#0f172a] p-8 shadow-2xl">
+            <button
+              onClick={() => {
+                setShowCreateCanvasModal(false);
+                setCreateCanvasName('');
+                setCreateCanvasError('');
+              }}
+              className="absolute right-4 top-4 text-white/50 hover:text-white"
+              type="button"
+            >
+              <span className="material-icons">close</span>
+            </button>
+            <div className="text-center mb-6">
+              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/20 text-primary">
+                <span className="material-icons">add_circle</span>
+              </div>
+              <h3 className="text-2xl font-bold">Create Canvas</h3>
+              <p className="text-slate-400 text-sm mt-1">Give your canvas a name to get started</p>
+            </div>
+
+            {createCanvasError && (
+              <div className="mb-4 rounded-lg border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
+                {createCanvasError}
+              </div>
+            )}
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Canvas Name</label>
+                <input
+                  type="text"
+                  value={createCanvasName}
+                  onChange={(e) => {
+                    setCreateCanvasName(e.target.value);
+                    if (createCanvasError) {
+                      setCreateCanvasError('');
+                    }
+                  }}
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter') {
+                      handleCreateCanvas();
+                    }
+                  }}
+                  placeholder="Enter canvas name"
+                  className="w-full px-4 py-3 rounded-lg premium-input text-white text-sm"
+                  autoFocus
+                />
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowCreateCanvasModal(false);
+                    setCreateCanvasName('');
+                    setCreateCanvasError('');
+                  }}
+                  className="flex-1 rounded-lg border border-white/10 py-3 font-bold text-white transition-all hover:bg-white/5"
+                  type="button"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleCreateCanvas}
+                  className="flex-1 rounded-lg bg-primary py-3 font-bold text-white transition-all hover:brightness-110 disabled:opacity-60 disabled:cursor-not-allowed"
+                  type="button"
+                  disabled={!createCanvasName.trim()}
+                >
+                  Create
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

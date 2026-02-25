@@ -71,14 +71,14 @@ const PaintCanvas = ({
       c.width = width * 2;
       c.height = height * 2;
 
-      const ctx = c.getContext('2d', { willReadFrequently: true });
+      const ctx = c.getContext('2d');
       ctx.scale(2, 2);
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
     });
 
     if (canvas) {
-      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      const ctx = canvas.getContext('2d');
       contextRef.current = ctx;
       ctx.fillStyle = 'white';
       ctx.fillRect(0, 0, width, height);
@@ -87,7 +87,7 @@ const PaintCanvas = ({
       }
     }
     if (tempCanvas) {
-      const ctx = tempCanvas.getContext('2d', { willReadFrequently: true });
+      const ctx = tempCanvas.getContext('2d');
       tempContextRef.current = ctx;
     }
   }, [canvasRef, tempCanvasRef, contextRef, tempContextRef, mainContainerRef, setCanvasSize]);
@@ -249,7 +249,7 @@ const PaintCanvas = ({
   useEffect(() => {
     const tCtx = tempContextRef.current;
     if (!tCtx) return;
-    tCtx.clearRect(0, 0, canvasSize.width, canvasSize.height);
+    tCtx.clearRect(0, 0, 2304, 1296);
     elements.forEach(el => drawElement(tCtx, el, el.id === selectedId, el.id === editingId));
   }, [elements, selectedId, editingId, zoom, canvasSize]);
 
@@ -277,10 +277,11 @@ const PaintCanvas = ({
       if (tool === 'eraser') {
         const hit = [...elements].reverse().find(el => isPointInElement(coords.x, coords.y, el));
         if (hit) {
-          setElements(prev => prev.filter(el => el.id !== hit.id));
+          const nextElements = elements.filter(el => el.id !== hit.id);
+          setElements(nextElements);
           if (selectedId === hit.id) setSelectedId(null);
           if (editingId === hit.id) setEditingId(null);
-          saveState();
+          saveState(nextElements);
           return;
         }
       }
@@ -349,7 +350,7 @@ const PaintCanvas = ({
         ...textFormat,
         fontSize: textFormat.size
       };
-      setElements(prev => [...prev, newText]);
+      setElements([...elements, newText]);
       setSelectedId(newId);
       return;
     }
@@ -363,7 +364,7 @@ const PaintCanvas = ({
       color, strokeWidth, opacity,
       fill: fillMode
     };
-    setElements(prev => [...prev, newEl]);
+    setElements([...elements, newEl]);
     setSelectedId(newEl.id);
   };
 
@@ -372,14 +373,14 @@ const PaintCanvas = ({
     setCurrPos(coords);
 
     if (dragMode === 'moving' && selectedId) {
-      setElements(prev => prev.map(el => el.id === selectedId ? { ...el, x: coords.x - dragOffset.current.x, y: coords.y - dragOffset.current.y } : el));
+      setElements(elements.map(el => el.id === selectedId ? { ...el, x: coords.x - dragOffset.current.x, y: coords.y - dragOffset.current.y } : el));
     } else if (dragMode === 'resizing' && selectedId) {
-      setElements(prev => prev.map(el => {
+      setElements(elements.map(el => {
         if (el.id !== selectedId) return el;
         return { ...el, w: coords.x - el.x, h: coords.y - el.y };
       }));
     } else if (dragMode === 'creating' && selectedId) {
-      setElements(prev => prev.map(el => {
+      setElements(elements.map(el => {
         if (el.id !== selectedId) return el;
         if (el.type === 'text') {
           return { ...el, w: Math.abs(coords.x - startPos.x), h: Math.abs(coords.y - startPos.y) };

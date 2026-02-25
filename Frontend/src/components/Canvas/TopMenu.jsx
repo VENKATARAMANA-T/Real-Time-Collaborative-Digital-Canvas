@@ -2,7 +2,7 @@ import React from 'react';
 import {
   FileText, FolderOpen, ImageIcon, Clock, Save, Printer, Share2, X,
   Monitor, Settings, Scissors, Copy, Clipboard, ZoomIn, Check, Maximize2,
-  Grid3X3, Undo, Redo
+  Grid3X3, Undo, Redo, ArrowLeft
 } from 'lucide-react';
 import MenuItem, { MenuDivider } from '../shared/MenuItem';
 import IconButton from '../shared/IconButton';
@@ -40,11 +40,12 @@ const TopMenu = ({
   return (
     <nav className="h-10 flex items-center px-4 gap-6 text-sm border-b border-zinc-800 bg-[#09090b] relative z-[100]">
       <button
+        className="inline-flex items-center gap-2 rounded-md bg-zinc-800/70 px-3 py-1.5 text-zinc-200 transition-colors hover:bg-zinc-800 hover:text-white"
         onClick={onBack}
-        className="px-3 py-1 rounded-md bg-white/10 hover:bg-white/20 text-white border border-white/10"
         type="button"
       >
-        Back to Dashboard
+        <ArrowLeft size={16} />
+        <span className="text-sm font-medium">Back to Dashboard</span>
       </button>
       
       <div className="flex gap-1 relative">
@@ -57,7 +58,6 @@ const TopMenu = ({
             setIsViewMenuOpen(false);
           }}
           className={`px-3 py-1 rounded-md transition-colors ${isFileMenuOpen ? 'bg-zinc-800 text-white' : 'hover:bg-zinc-800 text-zinc-300'}`}
-          type="button"
         >
           File
         </button>
@@ -71,7 +71,6 @@ const TopMenu = ({
             setIsViewMenuOpen(false);
           }}
           className={`px-3 py-1 rounded-md transition-colors ${isEditMenuOpen ? 'bg-zinc-800 text-white' : 'hover:bg-zinc-800 text-zinc-300'}`}
-          type="button"
         >
           Edit
         </button>
@@ -85,7 +84,6 @@ const TopMenu = ({
             setIsEditMenuOpen(false);
           }}
           className={`px-3 py-1 rounded-md transition-colors ${isViewMenuOpen ? 'bg-zinc-800 text-white' : 'hover:bg-zinc-800 text-zinc-300'}`}
-          type="button"
         >
           View
         </button>
@@ -186,7 +184,7 @@ const TopMenu = ({
         <IconButton icon={Undo} disabled={historyStep <= 0} onClick={undo} title="Undo (Ctrl+Z)" />
         <IconButton icon={Redo} disabled={historyStep >= historyLength - 1} onClick={redo} title="Redo (Ctrl+Y)" />
         <div className="w-[1px] h-4 bg-zinc-800 mx-1" />
-        <IconButton icon={Save} onClick={handleSave} title="Save" />
+        <IconButton icon={Save} onClick={handleSave} title="Save (Download)" />
       </div>
     </nav>
   );
