@@ -248,6 +248,46 @@ exports.updateMeetingCanvas = async (req, res) => {
   }
 };
 
+// @desc    Duplicate a canvas
+// @route   POST /api/canvases/:id/duplicate
+// @access  Private
+exports.duplicateCanvas = async (req, res) => {
+  try {
+    // Find the original canvas
+    const originalCanvas = await Canvas.findOne({
+      _id: req.params.id,
+      owner: req.user._id
+    });
+
+    if (!originalCanvas) {
+      return res.status(404).json({ message: 'Canvas not found or access denied' });
+    }
+
+    // Create a new canvas with duplicated data
+    const duplicatedTitle = `${originalCanvas.title}_duplicate`;
+    const newCanvas = new Canvas({
+      title: duplicatedTitle,
+      owner: req.user._id,
+      folder: originalCanvas.folder,
+      data: JSON.parse(JSON.stringify(originalCanvas.data)), // Deep copy
+      thumbnail: originalCanvas.thumbnail
+    });
+
+    const savedCanvas = await newCanvas.save();
+
+    // Log Activity
+    await ActivityLog.create({
+      user: req.user._id,
+      action: 'DUPLICATE_CANVAS',
+      ipAddress: req.ip || '127.0.0.1'
+    });
+
+    res.status(201).json(savedCanvas);
+  } catch (error) {
+    res.status(500).json({ message: 'Server Error', error: error.message });
+  }
+};
+
 
 
 // need to update thumbnail   

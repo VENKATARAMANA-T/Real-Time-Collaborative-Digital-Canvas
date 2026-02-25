@@ -6,6 +6,7 @@ const {
   getCanvasById,
   updateCanvas,
   deleteCanvas,
+  duplicateCanvas,
   getMeetingCanvasById,
   updateMeetingCanvas
 } = require('../controllers/canvasController.js');
@@ -26,6 +27,9 @@ router.route('/:id')
   .get(getCanvasById)   // GET: Load specific canvas
   .put(updateCanvas)    // PUT: Save drawing
   .delete(deleteCanvas);// DELETE: Remove canvas
+
+router.route('/:id/duplicate')
+  .post(duplicateCanvas); // POST: Duplicate a canvas
 
 
 

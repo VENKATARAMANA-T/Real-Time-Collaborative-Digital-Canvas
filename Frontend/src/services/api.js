@@ -145,6 +145,11 @@ export const canvasAPI = {
     const response = await api.delete(`/canvases/${id}`);
     return response.data;
   },
+
+  duplicate: async (id) => {
+    const response = await api.post(`/canvases/${id}/duplicate`);
+    return response.data;
+  },
 };
 
 // User API endpoints (placeholder for future use)
@@ -244,6 +249,38 @@ export const chatAPI = {
 
   toggleUser: async (meetingDbId, userId, canChat) => {
     const response = await api.put(`/chat/${meetingDbId}/toggle-user`, { userId, canChat });
+    return response.data;
+  }
+};
+
+export const folderAPI = {
+  getAll: async () => {
+    const response = await api.get('/folders');
+    return response.data;
+  },
+
+  getById: async (id) => {
+    const response = await api.get(`/folders/${id}`);
+    return response.data;
+  },
+
+  create: async (folderData) => {
+    const response = await api.post('/folders', folderData);
+    return response.data;
+  },
+
+  update: async (id, folderData) => {
+    const response = await api.put(`/folders/${id}`, folderData);
+    return response.data;
+  },
+
+  delete: async (id) => {
+    const response = await api.delete(`/folders/${id}`);
+    return response.data;
+  },
+
+  getCanvases: async (id) => {
+    const response = await api.get(`/folders/${id}/canvases`);
     return response.data;
   }
 };

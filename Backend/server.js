@@ -11,6 +11,7 @@ const canvasRoutes = require('./routes/canvasRoutes.js');
 const meetingRoutes = require('./routes/meetingRoutes.js');
 const userRoutes = require('./routes/userRoutes.js');
 const chatRoutes = require('./routes/chatRoutes.js');
+const folderRoutes = require('./routes/folderRoutes.js');
 
 const { notFound, errorHandler } = require('./middleware/errorMiddleware.js');
 
@@ -52,6 +53,7 @@ app.use('/api/canvases', canvasRoutes);
 app.use('/api/meetings', meetingRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/chat', chatRoutes);
+app.use('/api/folders', folderRoutes);
 
 // === ERROR MIDDLEWARE (MUST BE LAST) ===
 app.use(notFound);
