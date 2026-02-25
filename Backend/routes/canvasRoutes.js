@@ -8,12 +8,19 @@ const {
   deleteCanvas,
   duplicateCanvas,
   getMeetingCanvasById,
-  updateMeetingCanvas
+  updateMeetingCanvas,
+  renameCanvas,
+  exportCanvas,
+  importCanvas
 } = require('../controllers/canvasController.js');
 const { authMiddleware } = require('../middleware/authMiddleware.js');
+const { upload } = require('../middleware/uploadMiddleware.js');
 
 // ALL routes are protected
 router.use(authMiddleware);
+
+// Import canvas from JSON file
+router.post('/import', upload.single('canvas'), importCanvas);
 
 router.route('/')
   .post(createCanvas)   // POST: Create blank canvas
@@ -30,6 +37,11 @@ router.route('/:id')
 
 router.route('/:id/duplicate')
   .post(duplicateCanvas); // POST: Duplicate a canvas
+// Rename canvas
+router.patch('/:id/rename', renameCanvas);
+
+// Export canvas as JSON
+router.get('/:id/export', exportCanvas);
 
 
 
