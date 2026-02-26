@@ -456,9 +456,9 @@ useEffect(() => {
         socket.emit('end_meeting', { meetingId: meetingDbId, meetingDbId });
       }
       
-      // Call the backend to end the meeting
+      // Call the backend to end the meeting and save canvas for all participants
       if (meetingDbId) {
-        await meetingAPI.end(meetingDbId);
+        await meetingAPI.end(meetingDbId, { elements });
       }
     } catch (error) {
       console.error('Error ending meeting:', error);

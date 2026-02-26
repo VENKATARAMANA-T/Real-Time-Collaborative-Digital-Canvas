@@ -29,6 +29,10 @@ const canvasSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  isMeetingCanvas: {
+    type: Boolean,
+    default: false
+  },
   versions: [{
     data: Object,
     timestamp: {

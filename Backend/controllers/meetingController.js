@@ -41,7 +41,8 @@ exports.createInstantMeeting = async (req, res) => {
       title: title || `Instant Meeting - ${new Date().toLocaleDateString()} (${timestamp})`,
       owner: req.user._id,
       data: {},
-      folder: null
+      folder: null,
+      isMeetingCanvas: true
     });
     
     // 2. Generate Secure Link Token
@@ -133,7 +134,8 @@ exports.createMeeting = async (req, res) => {
         title: title || `Meeting Canvas - ${new Date().toLocaleDateString()} (${timestamp})`,
         owner: req.user._id,
         data: {},
-        folder: null
+        folder: null,
+        isMeetingCanvas: true
       });
     }
 
@@ -299,29 +301,60 @@ exports.joinMeeting = async (req, res) => {
 // @access  Private (Host Only)
 exports.endMeeting = async (req, res) => {
   try {
+    const { elements } = req.body; // Canvas elements sent from the frontend
+
     // Find meeting by ID and ensure Requester is Host
     const meeting = await Meeting.findOne({ 
       _id: req.params.id, 
       host: req.user._id 
-    });
+    }).populate('participants.user', '_id username');
 
     if (!meeting) {
       return res.status(404).json({ message: 'Meeting not found or not authorized' });
     }
 
-    // Mark as ended
+    // 1. Save the final canvas state to the host's canvas
+    const hostCanvas = await Canvas.findById(meeting.canvas);
+    if (hostCanvas && elements) {
+      hostCanvas.data = { elements };
+      await hostCanvas.save();
+    }
+
+    // 2. Duplicate the canvas for every participant (excluding the host)
+    const participantUserIds = meeting.participants
+      .map(p => p.user?._id || p.user)
+      .filter(uid => uid && uid.toString() !== req.user._id.toString());
+
+    // Remove duplicate user IDs (a user may have joined/left multiple times)
+    const uniqueParticipantIds = [...new Set(participantUserIds.map(id => id.toString()))];
+
+    const canvasTitle = hostCanvas ? hostCanvas.title : 'Meeting Canvas';
+    const canvasData = hostCanvas ? hostCanvas.data : { elements: elements || [] };
+
+    // Create a copy for each participant
+    await Promise.all(
+      uniqueParticipantIds.map(participantId =>
+        Canvas.create({
+          title: canvasTitle,
+          owner: participantId,
+          data: canvasData,
+          folder: null,
+          isMeetingCanvas: true,
+          thumbnail: hostCanvas?.thumbnail || ''
+        })
+      )
+    );
+
+    // 3. Mark meeting as ended
     meeting.status = 'ended';
     meeting.endTime = new Date();
     meeting.participants.forEach(p => {
       if (!p.leaveTime) {
-        p.leaveTime = new Date(); // Mark all active participants as left
+        p.leaveTime = new Date();
       }
     });
 
     await meeting.save();
-
-    // Canvas is ALREADY saved in owner's collection (Canvas Model), 
-    // so no data transfer is needed. It's safe.
 
     res.status(200).json({ 
       success: true,
