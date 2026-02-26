@@ -184,10 +184,11 @@ export default function Dashboard() {
     title: cv.title || 'Untitled Canvas',
     edited: new Date(cv.updatedAt).toLocaleString(),
     folder: cv.folder ? folders.find(f => f._id === cv.folder)?.name || 'Personal Sketches' : 'Personal Sketches',
-    tag: 'Private',
-    tagColor: 'emerald',
-    border: 'border-b-emerald-400/60',
-    preview: cv.thumbnail || 'https://via.placeholder.com/400x200?text=No+Preview'
+    tag: cv.isMeetingCanvas ? 'Meeting' : 'Private',
+    tagColor: cv.isMeetingCanvas ? 'amber' : 'emerald',
+    border: cv.isMeetingCanvas ? 'border-b-amber-400/60' : 'border-b-emerald-400/60',
+    preview: cv.thumbnail || 'https://via.placeholder.com/400x200?text=No+Preview',
+    isMeetingCanvas: cv.isMeetingCanvas || false
   }));
   const activeFolder = folders.find((folder) => folder._id === activeFolderId) || null;
   const activeFolderCanvases = folderCanvases.map(cv => ({
@@ -195,18 +196,19 @@ export default function Dashboard() {
     title: cv.title || 'Untitled Canvas',
     edited: new Date(cv.updatedAt).toLocaleString(),
     folder: activeFolder?.name || '',
-    tag: 'Private',
-    tagColor: 'emerald',
-    border: 'border-b-emerald-400/60',
-    preview: cv.thumbnail || 'https://via.placeholder.com/400x200?text=No+Preview'
+    tag: cv.isMeetingCanvas ? 'Meeting' : 'Private',
+    tagColor: cv.isMeetingCanvas ? 'amber' : 'emerald',
+    border: cv.isMeetingCanvas ? 'border-b-amber-400/60' : 'border-b-emerald-400/60',
+    preview: cv.thumbnail || 'https://via.placeholder.com/400x200?text=No+Preview',
+    isMeetingCanvas: cv.isMeetingCanvas || false
   }));
 
   const filterCanvases = (canvases) => {
-    if (canvasFilter === 'shared') {
-      return canvases.filter((canvas) => canvas.tag === 'Shared');
+    if (canvasFilter === 'meeting') {
+      return canvases.filter((canvas) => canvas.isMeetingCanvas);
     }
     if (canvasFilter === 'private') {
-      return canvases.filter((canvas) => canvas.tag === 'Private');
+      return canvases.filter((canvas) => !canvas.isMeetingCanvas);
     }
     if (canvasFilter === 'recent') {
       return canvases.slice(0, 4);
@@ -1042,13 +1044,13 @@ export default function Dashboard() {
               {activeTab === 'recent' && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                   {savedCanvases.slice(0, 4).map((canvas) => (
-                    <div key={canvas._id} className="group bg-[#111827] border border-[#1f2a3b] rounded-xl overflow-hidden hover:shadow-lg transition-all border-b-4 border-b-emerald-400/60">
+                    <div key={canvas._id} className={`group bg-[#111827] border border-[#1f2a3b] rounded-xl overflow-hidden hover:shadow-lg transition-all border-b-4 ${canvas.isMeetingCanvas ? 'border-b-amber-400/60' : 'border-b-emerald-400/60'}`}>
                       <div className="h-40 bg-[#0b1220] relative overflow-hidden">
-                        <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-transparent"></div>
+                        <div className={`absolute inset-0 bg-gradient-to-br ${canvas.isMeetingCanvas ? 'from-amber-500/10' : 'from-emerald-500/10'} to-transparent`}></div>
                         <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 backdrop-blur-sm">
                           <button
                             className="px-4 py-2 bg-primary  text-white text-xs font-bold rounded-lg shadow-lg"
-                            onClick={() => navigate(`/paint/${canvas._id}`)}
+                            onClick={() => navigate(canvas.isMeetingCanvas ? `/meeting-canvas/${canvas._id}` : `/paint/${canvas._id}`)}
                             type="button"
                           >
                             Open Editor
@@ -1059,6 +1061,13 @@ export default function Dashboard() {
                           className="absolute inset-0 w-full h-full object-cover opacity-50 pointer-events-none group-hover:scale-110 transition-transform duration-500"
                           src={canvas.thumbnail || 'https://via.placeholder.com/400x200?text=No+Preview'}
                         />
+                        {canvas.isMeetingCanvas && (
+                          <div className="absolute top-3 right-3 z-10">
+                            <span className="px-2 py-1 bg-[#101922]/80 text-[10px] font-bold rounded border uppercase text-amber-400 border-amber-400/30">
+                              Meeting
+                            </span>
+                          </div>
+                        )}
                       </div>
                       <div className="p-4">
                         <div className="flex items-start justify-between mb-2">
@@ -2027,14 +2036,14 @@ export default function Dashboard() {
                         </button>
                         <button
                           className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${
-                            canvasFilter === 'shared'
-                              ? 'bg-primary text-white'
+                            canvasFilter === 'meeting'
+                              ? 'bg-amber-500 text-white'
                               : 'text-slate-400 hover:text-white hover:bg-[#101922]'
                           }`}
-                          onClick={() => setCanvasFilter('shared')}
+                          onClick={() => setCanvasFilter('meeting')}
                           type="button"
                         >
-                          Shared
+                          Meeting
                         </button>
                         <button
                           className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${
@@ -2082,7 +2091,11 @@ export default function Dashboard() {
                           <div className="flex-1 bg-[#101922] relative overflow-hidden rounded-t-xl">
                             <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent"></div>
                             <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-[#101922]/60 backdrop-blur-sm z-20">
-                              <button className="px-4 py-2 bg-primary text-white text-xs font-bold rounded-lg shadow-lg" type="button">
+                              <button
+                                className="px-4 py-2 bg-primary text-white text-xs font-bold rounded-lg shadow-lg"
+                                type="button"
+                                onClick={() => navigate(canvas.isMeetingCanvas ? `/meeting-canvas/${canvas.id}` : `/paint/${canvas.id}`)}
+                              >
                                 Open Editor
                               </button>
                             </div>
@@ -2094,7 +2107,9 @@ export default function Dashboard() {
                             <div className="absolute top-3 right-3 z-10">
                               <span
                                 className={`px-2 py-1 bg-[#101922]/80 text-[10px] font-bold rounded border uppercase ${
-                                  canvas.tagColor === 'emerald'
+                                  canvas.tagColor === 'amber'
+                                    ? 'text-amber-400 border-amber-400/30'
+                                    : canvas.tagColor === 'emerald'
                                     ? 'text-emerald-400 border-emerald-400/30'
                                     : 'text-primary border-primary/30'
                                 }`}
@@ -2307,14 +2322,14 @@ export default function Dashboard() {
                         </button>
                         <button
                           className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${
-                            canvasFilter === 'shared'
-                              ? 'bg-primary text-white'
+                            canvasFilter === 'meeting'
+                              ? 'bg-amber-500 text-white'
                               : 'text-slate-400 hover:text-white hover:bg-[#101922]'
                           }`}
-                          onClick={() => setCanvasFilter('shared')}
+                          onClick={() => setCanvasFilter('meeting')}
                           type="button"
                         >
-                          Shared
+                          Meeting
                         </button>
                         <button
                           className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${
@@ -2364,7 +2379,7 @@ export default function Dashboard() {
                             <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-[#101922]/60 backdrop-blur-sm z-20">
                               <button
                                 className="px-4 py-2 bg-primary text-white text-xs font-bold rounded-lg shadow-lg"
-                                onClick={() => navigate(`/paint/${canvas.id}`)}
+                                onClick={() => navigate(canvas.isMeetingCanvas ? `/meeting-canvas/${canvas.id}` : `/paint/${canvas.id}`)}
                                 type="button"
                               >
                                 Open Editor
@@ -2378,7 +2393,9 @@ export default function Dashboard() {
                             <div className="absolute top-3 right-3 z-10">
                               <span
                                 className={`px-2 py-1 bg-[#101922]/80 text-[10px] font-bold rounded border uppercase ${
-                                  canvas.tagColor === 'emerald'
+                                  canvas.tagColor === 'amber'
+                                    ? 'text-amber-400 border-amber-400/30'
+                                    : canvas.tagColor === 'emerald'
                                     ? 'text-emerald-400 border-emerald-400/30'
                                     : 'text-primary border-primary/30'
                                 }`}

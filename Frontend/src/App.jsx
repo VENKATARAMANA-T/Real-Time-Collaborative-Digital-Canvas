@@ -2,6 +2,7 @@ import './App.css'
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import PaintApp from './pages/PaintApp.jsx';
 import Meeting from './pages/Meeting.jsx';
+import MeetingCanvasEditor from './pages/MeetingCanvasEditor.jsx';
 import HelpSystemUI from './pages/HelpSystemUI.jsx'; 
 import CollabCanvasApp from './components/HomePage/CollabCanvasApp.jsx';
 import UserProfileUI from './pages/UserProfileUI.jsx';
@@ -23,6 +24,7 @@ function App() {
         <Route path="/help" element={<HelpSystemUI />} />
         <Route path="/paint/:id" element={<PaintApp />} />
         <Route path="/paint" element={<PaintApp />} />
+        <Route path="/meeting-canvas/:id" element={<MeetingCanvasEditor />} />
         <Route path="/meeting" element={<Meeting />} />
         <Route path="/meeting/:id" element={<Meeting />} />
         {/* Completed the routing for this */}

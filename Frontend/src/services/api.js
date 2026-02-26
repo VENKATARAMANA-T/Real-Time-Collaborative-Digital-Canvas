@@ -202,8 +202,8 @@ export const meetingAPI = {
     return response.data;
   },
 
-  end: async (meetingDbId) => {
-    const response = await api.put(`/meetings/${meetingDbId}/end`);
+  end: async (meetingDbId, canvasData = {}) => {
+    const response = await api.put(`/meetings/${meetingDbId}/end`, canvasData);
     return response.data;
   },
 
