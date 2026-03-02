@@ -1,6 +1,12 @@
 const mongoose = require('mongoose');
 
 const meetingSchema = new mongoose.Schema({
+  // 📛 Meeting Name (User-provided)
+  name: {
+    type: String,
+    default: 'Untitled Meeting'
+  },
+
   // 🆔 Unique Identifier (Generated in Route/Controller)
   meetingId: {
     type: String,
@@ -32,6 +38,34 @@ const meetingSchema = new mongoose.Schema({
   isChatEnabled: {
     type: Boolean,
     default: true // Chat is ON by default
+  },
+
+  isAllMuted: {
+    type: Boolean,
+    default: false // All participants muted by host
+  },
+
+  isAllVideoOff: {
+    type: Boolean,
+    default: false // All participants video off by host
+  },
+
+  isScreenRecordingAllowed: {
+    type: Boolean,
+    default: false // Screen recording disabled by default, host can enable
+  },
+
+  // Path to the recording file on disk (set after upload)
+  recordingPath: {
+    type: String,
+    default: null
+  },
+
+  // Who recorded. Stored after recording is uploaded
+  recordedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: null
   },
 
   // � Meeting Status (pending, live, ended)

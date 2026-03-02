@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import PaintApp from './pages/PaintApp.jsx';
 import Meeting from './pages/Meeting.jsx';
 import MeetingCanvasEditor from './pages/MeetingCanvasEditor.jsx';
+import MeetingNotes from './pages/MeetingNotes.jsx';
 import HelpSystemUI from './pages/HelpSystemUI.jsx'; 
 import CollabCanvasApp from './components/HomePage/CollabCanvasApp.jsx';
 import UserProfileUI from './pages/UserProfileUI.jsx';
@@ -27,6 +28,7 @@ function App() {
         <Route path="/meeting-canvas/:id" element={<MeetingCanvasEditor />} />
         <Route path="/meeting" element={<Meeting />} />
         <Route path="/meeting/:id" element={<Meeting />} />
+        <Route path="/meeting-notes/:id" element={<MeetingNotes />} />
         {/* Completed the routing for this */}
       </Routes>
     </Router>

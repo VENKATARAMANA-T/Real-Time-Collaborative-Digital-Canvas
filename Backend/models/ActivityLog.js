@@ -36,12 +36,9 @@ const activityLogSchema = new mongoose.Schema({
       'TOGGLE_THEME',
       'VIEW_WALKTHROUGH',
       'SEARCH_HELP',
-      'SUBMIT_FEEDBACK'
+      'SUBMIT_FEEDBACK',
+      'IMPORT_CANVAS'
     ]
-  },
-  ipAddress: {
-    type: String,
-    required: true
   },
   timestamp: {
     type: Date,

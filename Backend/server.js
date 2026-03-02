@@ -4,6 +4,7 @@ const cookieParser = require('cookie-parser');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const http = require('http');
+const path = require('path');
 const { Server } = require('socket.io');
 
 const authRoutes = require('./routes/authRoutes.js');
@@ -33,6 +34,7 @@ const io = new Server(server, {
     allowEIO3: true
   }
 });
+app.set('io', io);
 socketHandler(io);
 
 app.use(cors({
@@ -47,6 +49,8 @@ app.use(express.json({ limit: '20mb' }));
 app.use(express.urlencoded({ extended: true, limit: '20mb' }));
 app.use(cookieParser());
 
+// Serve recordings as static files
+app.use('/api/recordings', express.static(path.join(__dirname, 'uploads', 'recordings')));
 
 app.use('/api/auth', authRoutes);
 app.use('/api/canvases', canvasRoutes);

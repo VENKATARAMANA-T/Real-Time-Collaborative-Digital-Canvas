@@ -5,7 +5,7 @@ const getInitials = (name) => {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 };
 
-function MemberCard({ name, role = 'member', status, mic, video, videoStream, mirror = false, brush, onBrushClick, brushDisabled }) {
+function MemberCard({ name, role = 'member', status, mic, video, videoStream, mirror = false, brush, onBrushClick, brushDisabled, isHandRaised = false }) {
   const isHost = role === 'host';
   const initials = getInitials(name);
   const videoRef = useRef(null);
@@ -64,6 +64,14 @@ function MemberCard({ name, role = 'member', status, mic, video, videoStream, mi
       {isHost && !showVideo && (
         <div className="absolute top-3 left-3 px-2 py-0.5 bg-gold text-black rounded text-[8px] font-black uppercase tracking-widest z-10 shadow-sm">
           Host
+        </div>
+      )}
+
+      {/* Raised Hand Indicator */}
+      {isHandRaised && (
+        <div className="absolute top-3 right-3 z-20 flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-500/20 border border-amber-500/30 backdrop-blur-md shadow-md animate-pulse">
+          <span className="text-sm">✋</span>
+          <span className="text-[8px] font-bold text-amber-300 uppercase tracking-wide">Hand</span>
         </div>
       )}
 
@@ -131,7 +139,9 @@ function Sidebar({
   mediaStatusMap,
   localVideoStream,
   remoteVideoStreams,
-  onToggleEditPermission
+  onToggleEditPermission,
+  isChatEnabled = true,
+  raisedHands = {}
 }) {
   const displayName = currentUser?.username || currentUser?.name || 'You';
   const currentUserId = currentUser?._id || currentUser?.id;
@@ -241,11 +251,14 @@ function Sidebar({
               </button>
               <button
                 onClick={() => setView('chat')}
-                className={`flex-1 py-1.5 text-[10px] font-bold rounded-full tracking-widest uppercase transition-all ${
+                className={`flex-1 py-1.5 text-[10px] font-bold rounded-full tracking-widest uppercase transition-all flex items-center justify-center gap-1 ${
                   view === 'chat' ? 'text-white bg-white/10 shadow-sm' : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
                 Chat
+                {!isChatEnabled && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block"></span>
+                )}
               </button>
             </div>
             <button
@@ -293,6 +306,7 @@ function Sidebar({
                         brush={true}
                         onBrushClick={undefined}
                         brushDisabled={true}
+                        isHandRaised={!!raisedHands[participant._id]}
                       />
                         );
                       })()
@@ -324,6 +338,7 @@ function Sidebar({
                           )
                         }
                         brushDisabled={currentRole !== 'host'}
+                        isHandRaised={!!raisedHands[participant._id]}
                       />
                         );
                       })()
@@ -336,6 +351,8 @@ function Sidebar({
                 meetingDbId={meetingDbId}
                 socket={socket}
                 currentUsername={currentUser?.username || currentUser?.name}
+                isChatEnabled={isChatEnabled}
+                currentRole={currentRole}
               />
             )}
           </div>

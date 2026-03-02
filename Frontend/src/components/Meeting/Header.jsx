@@ -8,7 +8,7 @@ const getInitials = (name) => {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 };
 
-function Header({ meetingId, meetingPassword, participants = [] }) {
+function Header({ meetingId, meetingPassword, participants = [], meetingRecorder }) {
   const [showInviteModal, setShowInviteModal] = useState(false);
 
   const activeParticipants = useMemo(
@@ -37,6 +37,18 @@ function Header({ meetingId, meetingPassword, participants = [] }) {
           </div>
         </div>
         <div className="flex items-center gap-4">
+          {/* Recording Indicator */}
+          {meetingRecorder && (
+            <div className="flex items-center gap-2 bg-red-500/10 border border-red-500/20 px-3 py-1.5 rounded-full animate-pulse">
+              <div className="w-2.5 h-2.5 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]"></div>
+              <span className="text-[11px] font-bold text-red-400 tracking-wide uppercase">REC</span>
+              <div className="w-px h-3.5 bg-red-500/30"></div>
+              <div className="flex items-center gap-1">
+                <span className="material-symbols-outlined text-red-400 text-[14px]">person</span>
+                <span className="text-[11px] font-semibold text-red-300">{meetingRecorder.username}</span>
+              </div>
+            </div>
+          )}
           <div className="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-full border border-white/5">
             <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
             <span className="text-[10px] font-bold text-emerald-400 tracking-widest uppercase">Collaborating Now</span>

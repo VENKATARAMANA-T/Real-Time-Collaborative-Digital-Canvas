@@ -75,3 +75,22 @@ input[type="range"]::-webkit-slider-runnable-track {
   );
   border-radius: 99px;
 }
+
+/* Emoji float animation: rises from bottom to top of screen */
+@keyframes emojiFloat {
+  0% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(calc(-100vh - 60px));
+    opacity: 0;
+  }
+}
+
+.animate-emoji-float {
+  animation: emojiFloat 3s ease-out forwards;
+}
