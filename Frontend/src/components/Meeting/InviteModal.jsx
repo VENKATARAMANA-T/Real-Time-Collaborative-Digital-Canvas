@@ -16,19 +16,11 @@ function InviteModal({ meetingId, meetingPassword, onClose }) {
       <div className="relative w-96 mx-4">
         {/* Glass Morphism Card */}
         <div className="bg-white/10 backdrop-blur-2xl border border-white/20 rounded-3xl p-8 shadow-2xl">
-          {/* Close Button */}
-          <button
-            onClick={onClose}
-            className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-all"
-            title="Close"
-          >
-            <span className="material-symbols-outlined text-white text-lg">close</span>
-          </button>
+  
 
           {/* Header */}
           <div className="mb-8">
             <h2 className="text-2xl font-bold text-white mb-2">Invite to Meeting</h2>
-            <p className="text-slate-300 text-sm">Share these details with others</p>
           </div>
 
           {/* Meeting ID Section */}

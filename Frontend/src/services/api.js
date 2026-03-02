@@ -197,6 +197,11 @@ export const meetingAPI = {
     return response.data;
   },
 
+  getMyMeetings: async () => {
+    const response = await api.get('/meetings');
+    return response.data;
+  },
+
   start: async (meetingDbId) => {
     const response = await api.put(`/meetings/${meetingDbId}/start`);
     return response.data;
@@ -233,6 +238,32 @@ export const meetingAPI = {
       permission
     });
     return response.data;
+  },
+
+  updateHostSettings: async (meetingDbId, settings) => {
+    const response = await api.put(`/meetings/${meetingDbId}/host-settings`, settings);
+    return response.data;
+  },
+
+  uploadRecording: async (meetingDbId, blob) => {
+    const formData = new FormData();
+    formData.append('recording', blob, 'recording.webm');
+    const response = await api.post(`/meetings/${meetingDbId}/recording`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 300000 // 5 min timeout for large uploads
+    });
+    return response.data;
+  },
+
+  getMeetingNotes: async (meetingDbId) => {
+    const response = await api.get(`/meetings/${meetingDbId}/notes`);
+    return response.data;
+  },
+
+  getRecordingUrl: (filename) => {
+    const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+    // Recording served via static route at /api/recordings/<filename>
+    return `${baseURL.replace('/api', '')}/api/recordings/${filename}`;
   }
 };
 

@@ -31,11 +31,13 @@ exports.createFolder = async (req, res) => {
     const createdFolder = await folder.save();
 
     // Log Activity
-    await ActivityLog.create({
+    const log = await ActivityLog.create({
       user: req.user._id,
       action: 'CREATE_FOLDER',
-      ipAddress: req.ip || '127.0.0.1'
     });
+    if (req.app && req.app.get('io')) {
+      req.app.get('io').to(req.user._id.toString()).emit('activity_update', { userId: req.user._id, log });
+    }
 
     res.status(201).json(createdFolder);
   } catch (error) {
@@ -125,11 +127,13 @@ exports.deleteFolder = async (req, res) => {
     await Folder.findByIdAndDelete(req.params.id);
 
     // Log Activity
-    await ActivityLog.create({
+    const log = await ActivityLog.create({
       user: req.user._id,
       action: 'DELETE_FOLDER',
-      ipAddress: req.ip || '127.0.0.1'
     });
+    if (req.app && req.app.get('io')) {
+      req.app.get('io').to(req.user._id.toString()).emit('activity_update', { userId: req.user._id, log });
+    }
 
     res.status(200).json({ message: 'Folder deleted successfully' });
   } catch (error) {

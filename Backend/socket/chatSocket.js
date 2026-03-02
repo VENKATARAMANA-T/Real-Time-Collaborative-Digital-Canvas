@@ -26,14 +26,14 @@ const chatSocket =  (io, socket) => {
             return;
         }
 
-        // 1. Is Global Chat Enabled?
-        if (!meeting.isChatEnabled) {
+        // 1. Is the sender the host?
+        const isHost = meeting.host.toString() === userId;
+
+        // 2. Is Global Chat Enabled? (Host can always bypass)
+        if (!meeting.isChatEnabled && !isHost) {
           socket.emit('chat_error', { message: 'Chat is currently disabled by the host.' });
           return;
         }
-
-        // 2. Is Individual User Allowed?
-        const isHost = meeting.host.toString() === userId;
         
         if (!isHost) {
           const participant = meeting.participants.find(p => p.user.toString() === userId);

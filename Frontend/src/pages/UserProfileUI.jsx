@@ -2,14 +2,71 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import { userAPI } from '../services/api';
+import { useSocket } from '../hooks/useSocket.js';
 import { 
   User, Lock, Bell, CreditCard, LogOut, ChevronLeft, 
-  Camera, Check, AlertTriangle, X
+  Camera, Check, AlertTriangle, X, Activity,
+  LogIn, UserPlus, KeyRound, ShieldCheck, UserCog,
+  FilePlus, Trash2, PenLine, Save, Copy, FolderPlus, FolderMinus,
+  Star, Download, RotateCcw, Users, UserMinus, Palette,
+  BookOpen, Search, MessageSquare
 } from 'lucide-react';
+
+const ACTIVITY_CONFIG = {
+  REGISTER_USER:         { icon: UserPlus,       label: 'Registered',       color: 'text-green-400',   bg: 'bg-green-400/10' },
+  LOGIN_SUCCESS:         { icon: LogIn,          label: 'Login',            color: 'text-blue-400',    bg: 'bg-blue-400/10' },
+  LOGOUT:                { icon: LogOut,         label: 'Logout',           color: 'text-slate-400',   bg: 'bg-slate-400/10' },
+  PASSWORD_RESET_REQUEST:{ icon: KeyRound,       label: 'Password Reset Requested', color: 'text-yellow-400', bg: 'bg-yellow-400/10' },
+  PASSWORD_RESET_SUCCESS:{ icon: ShieldCheck,    label: 'Password Reset',   color: 'text-emerald-400', bg: 'bg-emerald-400/10' },
+  UPDATE_PROFILE:        { icon: UserCog,        label: 'Profile Updated',  color: 'text-purple-400',  bg: 'bg-purple-400/10' },
+  CREATE_CANVAS:         { icon: FilePlus,       label: 'Canvas Created',   color: 'text-cyan-400',    bg: 'bg-cyan-400/10' },
+  DELETE_CANVAS:         { icon: Trash2,         label: 'Canvas Deleted',   color: 'text-red-400',     bg: 'bg-red-400/10' },
+  RENAME_CANVAS:         { icon: PenLine,        label: 'Canvas Renamed',   color: 'text-orange-400',  bg: 'bg-orange-400/10' },
+  UPDATE_CANVAS:         { icon: Save,           label: 'Canvas Saved',     color: 'text-sky-400',     bg: 'bg-sky-400/10' },
+  DUPLICATE_CANVAS:      { icon: Copy,           label: 'Canvas Duplicated',color: 'text-indigo-400',  bg: 'bg-indigo-400/10' },
+  CREATE_FOLDER:         { icon: FolderPlus,     label: 'Folder Created',   color: 'text-emerald-400', bg: 'bg-emerald-400/10' },
+  DELETE_FOLDER:         { icon: FolderMinus,    label: 'Folder Deleted',   color: 'text-red-400',     bg: 'bg-red-400/10' },
+  TOGGLE_FAVORITE:       { icon: Star,           label: 'Toggled Favorite', color: 'text-yellow-400',  bg: 'bg-yellow-400/10' },
+  EXPORT_CANVAS:         { icon: Download,       label: 'Canvas Exported',  color: 'text-teal-400',    bg: 'bg-teal-400/10' },
+  RESTORE_VERSION:       { icon: RotateCcw,      label: 'Version Restored', color: 'text-amber-400',   bg: 'bg-amber-400/10' },
+  JOIN_ROOM:             { icon: Users,          label: 'Joined Room',      color: 'text-green-400',   bg: 'bg-green-400/10' },
+  LEAVE_ROOM:            { icon: UserMinus,      label: 'Left Room',        color: 'text-slate-400',   bg: 'bg-slate-400/10' },
+  TOGGLE_THEME:          { icon: Palette,        label: 'Theme Changed',    color: 'text-pink-400',    bg: 'bg-pink-400/10' },
+  VIEW_WALKTHROUGH:      { icon: BookOpen,       label: 'Viewed Walkthrough', color: 'text-blue-300',  bg: 'bg-blue-300/10' },
+  SEARCH_HELP:           { icon: Search,         label: 'Searched Help',    color: 'text-slate-300',   bg: 'bg-slate-300/10' },
+  SUBMIT_FEEDBACK:       { icon: MessageSquare,  label: 'Feedback Submitted', color: 'text-purple-400', bg: 'bg-purple-400/10' },
+  IMPORT_CANVAS:         { icon: Download,       label: 'Canvas Imported',  color: 'text-violet-400',  bg: 'bg-violet-400/10' },
+};
+
+const timeAgo = (date) => {
+  const now = new Date();
+  const diff = now - new Date(date);
+  const seconds = Math.floor(diff / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+  const weeks = Math.floor(days / 7);
+  const months = Math.floor(days / 30);
+
+  if (seconds < 60) return 'Just now';
+  if (minutes < 60) return `${minutes}m ago`;
+  if (hours < 24) return `${hours}hr ago`;
+  if (days < 7) return `${days}d ago`;
+  if (weeks < 4) return `${weeks}w ago`;
+  return `${months}mo ago`;
+};
+
+const formatTimestamp = (date) => {
+  return new Date(date).toLocaleString('en-US', {
+    month: 'short', day: 'numeric', year: 'numeric',
+    hour: 'numeric', minute: '2-digit', hour12: true,
+  });
+};
 
 export default function UserProfileUI() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const socket = useSocket({ userId: user?._id || user?.id, username: user?.username });
   
   const [activeTab, setActiveTab] = useState('profile');
   const [isSaving, setIsSaving] = useState(false);
@@ -24,6 +81,10 @@ export default function UserProfileUI() {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   
+  // Activity logs state
+  const [activityLogs, setActivityLogs] = useState([]);
+  const [activityLoading, setActivityLoading] = useState(false);
+
   // Flash message state
   const [flashByTab, setFlashByTab] = useState({
     profile: { show: false, type: '', message: '' },
@@ -38,6 +99,32 @@ export default function UserProfileUI() {
       setProfileImage(user.profileImage || '');
     }
   }, [user]);
+
+  // Fetch activity logs
+  useEffect(() => {
+    const fetchActivityLogs = async () => {
+      if (!user?.id) return;
+      setActivityLoading(true);
+      try {
+        const data = await userAPI.getActivityLogs(user.id);
+        setActivityLogs(data.logs || []);
+      } catch (err) {
+        console.error('Failed to fetch activity logs:', err);
+      } finally {
+        setActivityLoading(false);
+      }
+    };
+    fetchActivityLogs();
+
+    if (socket) {
+      socket.on('activity_update', () => {
+        fetchActivityLogs();
+      });
+      return () => {
+        socket.off('activity_update');
+      };
+    }
+  }, [user?.id, socket]);
 
   // Flash message handler
   const showFlash = (tab, type, message) => {
@@ -131,6 +218,7 @@ export default function UserProfileUI() {
   const tabs = [
     { id: 'profile', label: 'Profile Settings', icon: User },
     { id: 'security', label: 'Security', icon: Lock },
+    { id: 'activity', label: 'Activity', icon: Activity },
     { id: 'notifications', label: 'Notifications', icon: Bell },
     { id: 'billing', label: 'Billing & Plans', icon: CreditCard },
   ];
@@ -428,6 +516,71 @@ export default function UserProfileUI() {
                     Delete Account
                   </button>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* ACTIVITY TAB */}
+          {activeTab === 'activity' && (
+            <div className="animate-fade-in">
+              <div className="glass bg-slate-900/40 border border-white/10 backdrop-blur-xl rounded-2xl p-8">
+                <h2 className="text-2xl font-bold mb-1">Activity Log</h2>
+                <p className="text-slate-400 text-sm mb-8">Your recent account activity and actions.</p>
+
+                {activityLoading ? (
+                  <div className="space-y-4">
+                    {[...Array(5)].map((_, i) => (
+                      <div key={i} className="flex items-center gap-4 p-4 rounded-lg bg-slate-900/50 animate-pulse">
+                        <div className="w-10 h-10 rounded-full bg-slate-700" />
+                        <div className="flex-1 space-y-2">
+                          <div className="h-4 bg-slate-700 rounded w-1/3" />
+                        </div>
+                        <div className="h-3 bg-slate-700 rounded w-20" />
+                      </div>
+                    ))}
+                  </div>
+                ) : activityLogs.length === 0 ? (
+                  <div className="text-center py-16">
+                    <Activity className="w-12 h-12 text-slate-600 mx-auto mb-4" />
+                    <p className="text-slate-400 text-lg font-medium">No activity yet</p>
+                    <p className="text-slate-500 text-sm mt-1">Your actions will appear here</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {activityLogs.map((log, idx) => {
+                      const config = ACTIVITY_CONFIG[log.action] || {
+                        icon: Activity, label: log.action, color: 'text-slate-400', bg: 'bg-slate-400/10',
+                      };
+                      const IconComp = config.icon;
+                      return (
+                        <div
+                          key={log._id || idx}
+                          className="flex items-center gap-4 p-4 rounded-lg bg-slate-900/50 border border-slate-700/50 hover:border-slate-600 transition-colors group"
+                        >
+                          {/* Icon */}
+                          <div className={`w-10 h-10 rounded-full ${config.bg} flex items-center justify-center flex-shrink-0`}>
+                            <IconComp className={`w-5 h-5 ${config.color}`} />
+                          </div>
+
+                          {/* Label */}
+                          <span className="flex-1 text-sm font-medium text-white truncate">
+                            {config.label}
+                          </span>
+
+                          {/* Timestamp + time ago */}
+                          <div className="flex flex-col items-end flex-shrink-0 gap-0.5">
+                            <span className="text-xs text-slate-400">
+                              {timeAgo(log.timestamp)}
+                            </span>
+                            <span className="text-[11px] text-slate-600 hidden group-hover:block">
+                              {formatTimestamp(log.timestamp)}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </div>
           )}

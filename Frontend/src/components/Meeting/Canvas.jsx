@@ -1,6 +1,20 @@
-import { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect, useState, useCallback, forwardRef, useImperativeHandle } from 'react';
 
-function Canvas({
+// Cache loaded Image objects so we don't recreate them on every render
+const imageCache = new Map();
+
+function getOrLoadImage(src, onLoad) {
+  if (imageCache.has(src)) return imageCache.get(src);
+  const img = new window.Image();
+  img.onload = () => {
+    imageCache.set(src, img);
+    if (onLoad) onLoad();
+  };
+  img.src = src;
+  return null; // not yet loaded
+}
+
+const Canvas = forwardRef(function Canvas({
   onCanvasClick,
   canEdit = true,
   onCursorMove,
@@ -13,7 +27,7 @@ function Canvas({
   onActionStart,
   selectedElementId,
   onSelectElement
-}) {
+}, ref) {
   const canvasRef = useRef(null);
   const helperCanvasRef = useRef(null); // Off-screen canvas for ink layer
   const containerRef = useRef(null);
@@ -38,12 +52,22 @@ function Canvas({
     }
   }, []);
 
-  // Keyboard Listeners for Panning (Spacebar)
+  // Keyboard Listeners for Panning (Spacebar) and Delete key
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.code === 'Space' && !e.repeat && (e.target === document.body || e.target === containerRef.current)) {
         e.preventDefault();
         setIsSpacePressed(true);
+      }
+      // Delete selected element with Delete or Backspace key (but not when typing in a textarea)
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedElementId && canEdit) {
+        const tag = e.target?.tagName?.toLowerCase();
+        if (tag === 'textarea' || tag === 'input') return; // don't interfere with text editing
+        e.preventDefault();
+        onActionStart();
+        const newElements = elements.filter((el) => el.id !== selectedElementId);
+        onElementsChange(newElements);
+        onSelectElement(null);
       }
     };
     const handleKeyUp = (e) => {
@@ -55,7 +79,7 @@ function Canvas({
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, []);
+  }, [selectedElementId, canEdit, elements, onActionStart, onElementsChange, onSelectElement]);
 
   // Zoom Logic (Wheel & Pinch)
   useEffect(() => {
@@ -170,6 +194,7 @@ function Canvas({
   };
 
   const isPointInElement = (x, y, element) => {
+    if (element.type === 'freehand') return false;
     const buffer = 10 / viewport.scale;
     const rx = element.width < 0 ? element.x + element.width : element.x;
     const ry = element.height < 0 ? element.y + element.height : element.y;
@@ -294,6 +319,21 @@ function Canvas({
             }
           }
         }
+      } else if (type === 'image') {
+        // Image element: draw the loaded image
+        const cachedImg = getOrLoadImage(element.src, () => drawScene());
+        if (cachedImg) {
+          ctx.drawImage(cachedImg, x, y, width, height);
+        } else {
+          // Placeholder while loading
+          ctx.fillStyle = 'rgba(255,255,255,0.05)';
+          ctx.fillRect(x, y, width, height);
+          ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(x, y, width, height);
+        }
+        ctx.restore();
+        return;
       } else if (type === 'shape') {
         ctx.strokeStyle = style.brushColor;
         ctx.lineWidth = style.strokeWidth;
@@ -426,6 +466,97 @@ function Canvas({
     ctx.restore();
   };
 
+  // --- Export Canvas as Full HD image ---
+  const exportCanvas = useCallback(() => {
+    if (elements.length === 0) return;
+
+    // 1. Compute bounding box of all elements in world space
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    elements.forEach((el) => {
+      if (el.type === 'freehand' && el.points) {
+        el.points.forEach((p) => {
+          minX = Math.min(minX, p.x);
+          minY = Math.min(minY, p.y);
+          maxX = Math.max(maxX, p.x);
+          maxY = Math.max(maxY, p.y);
+        });
+      } else {
+        const rx = el.width < 0 ? el.x + el.width : el.x;
+        const ry = el.height < 0 ? el.y + el.height : el.y;
+        const rw = Math.abs(el.width || 0);
+        const rh = Math.abs(el.height || 0);
+        minX = Math.min(minX, rx);
+        minY = Math.min(minY, ry);
+        maxX = Math.max(maxX, rx + rw);
+        maxY = Math.max(maxY, ry + rh);
+      }
+    });
+
+    // Add padding
+    const padding = 40;
+    minX -= padding;
+    minY -= padding;
+    maxX += padding;
+    maxY += padding;
+
+    const contentW = maxX - minX;
+    const contentH = maxY - minY;
+
+    // 2. Target Full HD (1920×1080) minimum, scale up if needed
+    const targetW = 1920;
+    const targetH = 1080;
+    const scaleX = targetW / contentW;
+    const scaleY = targetH / contentH;
+    const exportScale = Math.max(scaleX, scaleY, 2); // at least 2x for high clarity
+
+    const canvasW = Math.ceil(contentW * exportScale);
+    const canvasH = Math.ceil(contentH * exportScale);
+
+    // 3. Create offscreen canvases
+    const mainCanvas = document.createElement('canvas');
+    mainCanvas.width = canvasW;
+    mainCanvas.height = canvasH;
+    const mainCtx = mainCanvas.getContext('2d');
+
+    const inkCanvas = document.createElement('canvas');
+    inkCanvas.width = canvasW;
+    inkCanvas.height = canvasH;
+    const inkCtx = inkCanvas.getContext('2d');
+
+    // Match the canvas background color
+    mainCtx.fillStyle = '#101922';
+    mainCtx.fillRect(0, 0, canvasW, canvasH);
+
+    // Apply transform: translate to center content then scale
+    mainCtx.setTransform(exportScale, 0, 0, exportScale, -minX * exportScale, -minY * exportScale);
+    inkCtx.setTransform(exportScale, 0, 0, exportScale, -minX * exportScale, -minY * exportScale);
+
+    // Draw shapes, sticky notes, images
+    elements.filter((el) => el.type === 'shape' || el.type === 'sticky-note' || el.type === 'image').forEach((el) => drawElement(mainCtx, el));
+
+    // Draw freehand / eraser onto ink canvas
+    elements.forEach((el) => {
+      if (el.type === 'freehand' || el.isEraser) {
+        drawElement(inkCtx, el);
+      }
+    });
+
+    // Composite ink onto main
+    mainCtx.setTransform(1, 0, 0, 1, 0, 0);
+    mainCtx.drawImage(inkCanvas, 0, 0, canvasW, canvasH);
+
+    // 4. Download
+    const link = document.createElement('a');
+    link.download = `canvas-export-${Date.now()}.png`;
+    link.href = mainCanvas.toDataURL('image/png');
+    link.click();
+  }, [elements]);
+
+  // Expose exportCanvas to parent via ref
+  useImperativeHandle(ref, () => ({
+    exportCanvas
+  }), [exportCanvas]);
+
   const drawScene = () => {
     const ctx = canvasRef.current?.getContext('2d');
     const helperCtx = helperCanvasRef.current?.getContext('2d');
@@ -449,8 +580,8 @@ function Canvas({
     ctx.setTransform(transformScale, 0, 0, transformScale, transformX, transformY);
     helperCtx.setTransform(transformScale, 0, 0, transformScale, transformX, transformY);
 
-    // Draw Shapes & Sticky Notes to Main Canvas
-    elements.filter((el) => el.type === 'shape' || el.type === 'sticky-note').forEach((el) => drawElement(ctx, el));
+    // Draw Shapes, Sticky Notes & Images to Main Canvas
+    elements.filter((el) => el.type === 'shape' || el.type === 'sticky-note' || el.type === 'image').forEach((el) => drawElement(ctx, el));
 
     // Draw Ink & Eraser to Helper Canvas
     elements.forEach((el) => {
@@ -477,7 +608,7 @@ function Canvas({
     // Draw Selection UI (in World Space)
     if (selectedElementId) {
       const selectedEl = elements.find((el) => el.id === selectedElementId);
-      if (selectedEl && (selectedEl.type === 'shape' || selectedEl.type === 'sticky-note')) {
+      if (selectedEl && (selectedEl.type === 'shape' || selectedEl.type === 'sticky-note' || selectedEl.type === 'image')) {
         drawSelection(ctx, selectedEl);
       }
     }
@@ -591,7 +722,7 @@ function Canvas({
     } else if (activeTool === 'brush' || activeTool === 'eraser') {
       if (activeTool === 'eraser') {
         const targetElement = getElementAtPosition(x, y);
-        if (targetElement && (targetElement.type === 'shape' || targetElement.type === 'sticky-note')) {
+        if (targetElement && (targetElement.type === 'shape' || targetElement.type === 'sticky-note' || targetElement.type === 'image')) {
           onActionStart();
           const newElements = elements.filter((el) => el.id !== targetElement.id);
           onElementsChange(newElements);
@@ -619,7 +750,7 @@ function Canvas({
         const eraserSize = settings.eraserSize;
         const eraserRadius = eraserSize / 2;
         initialElements = initialElements.filter((el) => {
-          if (el.type !== 'shape' && el.type !== 'sticky-note') return true;
+          if (el.type !== 'shape' && el.type !== 'sticky-note' && el.type !== 'image') return true;
           const rx = el.width < 0 ? el.x + el.width : el.x;
           const ry = el.height < 0 ? el.y + el.height : el.y;
           const rw = Math.abs(el.width);
@@ -730,7 +861,7 @@ function Canvas({
         const eraserSize = settings.eraserSize;
         const eraserRadius = eraserSize / 2;
         currentElements = currentElements.filter((el) => {
-          if (el.type !== 'shape' && el.type !== 'sticky-note') return true;
+          if (el.type !== 'shape' && el.type !== 'sticky-note' && el.type !== 'image') return true;
           const rx = el.width < 0 ? el.x + el.width : el.x;
           const ry = el.height < 0 ? el.y + el.height : el.y;
           const rw = Math.abs(el.width);
@@ -889,5 +1020,6 @@ function Canvas({
     </div>
   );
 }
+);
 
 export default Canvas;

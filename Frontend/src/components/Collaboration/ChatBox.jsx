@@ -6,12 +6,15 @@ const formatTime = (timestamp) => {
 	return new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 };
 
-function ChatBox({ meetingDbId, socket, currentUsername }) {
+function ChatBox({ meetingDbId, socket, currentUsername, isChatEnabled = true, currentRole = 'participant' }) {
 	const [messages, setMessages] = useState([]);
 	const [inputValue, setInputValue] = useState('');
 	const [flash, setFlash] = useState(null);
 
 	const normalizedUsername = useMemo(() => currentUsername || 'Me', [currentUsername]);
+	const isHost = currentRole === 'host';
+	// Host can always chat; participants only when chat is enabled
+	const canSendMessage = isHost || isChatEnabled;
 
 	useEffect(() => {
 		if (!meetingDbId) return;
@@ -68,6 +71,11 @@ function ChatBox({ meetingDbId, socket, currentUsername }) {
 	const handleSend = () => {
 		const trimmed = inputValue.trim();
 		if (!trimmed || !socket || !meetingDbId) return;
+		if (!canSendMessage) {
+			setFlash('Chat has been disabled by the host');
+			window.setTimeout(() => setFlash(null), 3000);
+			return;
+		}
 		socket.emit('send_message', { meetingId: meetingDbId, msg: trimmed });
 		setInputValue('');
 	};
@@ -115,6 +123,12 @@ function ChatBox({ meetingDbId, socket, currentUsername }) {
 						{flash}
 					</div>
 				)}
+				{!canSendMessage ? (
+					<div className="flex items-center gap-2 rounded-xl bg-white/5 border border-white/10 px-4 py-3">
+						<span className="material-symbols-outlined text-[18px] text-red-400">speaker_notes_off</span>
+						<span className="text-sm text-slate-400">Chat has been disabled by the host</span>
+					</div>
+				) : (
 				<div className="relative">
 					<input
 						type="text"
@@ -132,6 +146,7 @@ function ChatBox({ meetingDbId, socket, currentUsername }) {
 						<span className="material-symbols-outlined text-[20px] filled">send</span>
 					</button>
 				</div>
+				)}
 			</div>
 		</div>
 	);

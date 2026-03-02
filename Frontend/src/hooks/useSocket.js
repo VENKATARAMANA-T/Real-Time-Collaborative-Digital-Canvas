@@ -11,27 +11,36 @@ export const useSocket = ({ meetingId, userId, username, silentJoin = false, ref
 	const socketUrl = useMemo(() => getSocketUrl(), []);
 
 	useEffect(() => {
-		if (!meetingId || !userId) return;
+		// Need at least a userId to connect (meetingId is optional for dashboard mode)
+		if (!userId) return;
 
 		const nextSocket = io(socketUrl, {
 			withCredentials: true
 		});
 
-		nextSocket.emit('join_meeting', {
-			meetingId,
-			userId,
-			username: username || 'Guest',
-			silent: silentJoin
-		});
+		// Always join the user's personal room for activity updates
+		nextSocket.emit('join_user_room', { userId });
+
+		// If meetingId is provided, also join the meeting room
+		if (meetingId) {
+			nextSocket.emit('join_meeting', {
+				meetingId,
+				userId,
+				username: username || 'Guest',
+				silent: silentJoin
+			});
+		}
 
 		setSocket(nextSocket);
 
 		return () => {
-			const silentDisconnect = refreshKey ? sessionStorage.getItem(refreshKey) === '1' : false;
-			nextSocket.emit('leave_meeting', {
-				meetingId,
-				silent: silentDisconnect
-			});
+			if (meetingId) {
+				const silentDisconnect = refreshKey ? sessionStorage.getItem(refreshKey) === '1' : false;
+				nextSocket.emit('leave_meeting', {
+					meetingId,
+					silent: silentDisconnect
+				});
+			}
 			nextSocket.disconnect();
 			setSocket(null);
 		};

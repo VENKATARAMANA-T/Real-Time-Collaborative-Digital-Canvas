@@ -23,11 +23,13 @@ exports.createCanvas = async (req, res) => {
     const createdCanvas = await canvas.save();
 
     // Log Activity
-    await ActivityLog.create({
+    const log = await ActivityLog.create({
       user: req.user._id,
       action: 'CREATE_CANVAS',
-      ipAddress: req.ip || '127.0.0.1'
     });
+    if (req.app && req.app.get('io')) {
+      req.app.get('io').to(req.user._id.toString()).emit('activity_update', { userId: req.user._id, log });
+    }
 
     res.status(201).json(createdCanvas);
   } catch (error) {
@@ -98,11 +100,13 @@ exports.updateCanvas = async (req, res) => {
     // Log Activity: UPDATE_CANVAS
     // We wrap this in a try-catch so logging failures don't stop the save
     try {
-      await ActivityLog.create({
+      const log = await ActivityLog.create({
         user: req.user._id,
         action: 'UPDATE_CANVAS',
-        ipAddress: req.ip || '127.0.0.1'
       });
+      if (req.app && req.app.get('io')) {
+        req.app.get('io').to(req.user._id.toString()).emit('activity_update', { userId: req.user._id, log });
+      }
     } catch (logError) {
       console.error('Logging failed:', logError);
     }
@@ -128,12 +132,13 @@ exports.deleteCanvas = async (req, res) => {
     }
 
     // Log Activity
-    await ActivityLog.create({
+    const log = await ActivityLog.create({
       user: req.user._id,
       action: 'DELETE_CANVAS',
-      ipAddress: req.ip || '127.0.0.1'
     });
-
+    if (req.app && req.app.get('io')) {
+      req.app.get('io').to(req.user._id.toString()).emit('activity_update', { userId: req.user._id, log });
+    }
     res.status(200).json({ message: 'Canvas deleted successfully' });
   } catch (error) {
     res.status(500).json({ message: 'Server Error', error: error.message });
@@ -276,11 +281,13 @@ exports.duplicateCanvas = async (req, res) => {
     const savedCanvas = await newCanvas.save();
 
     // Log Activity
-    await ActivityLog.create({
+    const log = await ActivityLog.create({
       user: req.user._id,
       action: 'DUPLICATE_CANVAS',
-      ipAddress: req.ip || '127.0.0.1'
     });
+    if (req.app && req.app.get('io')) {
+      req.app.get('io').to(req.user._id.toString()).emit('activity_update', { userId: req.user._id, log });
+    }
 
     res.status(201).json(savedCanvas);
   } catch (error) {
@@ -317,11 +324,13 @@ exports.renameCanvas = async (req, res) => {
 
     // Log Activity
     try {
-      await ActivityLog.create({
+      const log = await ActivityLog.create({
         user: req.user._id,
         action: 'RENAME_CANVAS',
-        ipAddress: req.ip || '127.0.0.1'
       });
+      if (req.app && req.app.get('io')) {
+        req.app.get('io').to(req.user._id.toString()).emit('activity_update', { userId: req.user._id, log });
+      }
     } catch (logError) {
       console.error('Logging failed:', logError);
     }
@@ -358,11 +367,13 @@ exports.exportCanvas = async (req, res) => {
 
     // Log Activity
     try {
-      await ActivityLog.create({
+      const log = await ActivityLog.create({
         user: req.user._id,
         action: 'EXPORT_CANVAS',
-        ipAddress: req.ip || '127.0.0.1'
       });
+      if (req.app && req.app.get('io')) {
+        req.app.get('io').to(req.user._id.toString()).emit('activity_update', { userId: req.user._id, log });
+      }
     } catch (logError) {
       console.error('Logging failed:', logError);
     }
@@ -414,11 +425,13 @@ exports.importCanvas = async (req, res) => {
 
     // Log Activity
     try {
-      await ActivityLog.create({
+      const log = await ActivityLog.create({
         user: req.user._id,
         action: 'IMPORT_CANVAS',
-        ipAddress: req.ip || '127.0.0.1'
       });
+      if (req.app && req.app.get('io')) {
+        req.app.get('io').to(req.user._id.toString()).emit('activity_update', { userId: req.user._id, log });
+      }
     } catch (logError) {
       console.error('Logging failed:', logError);
     }

@@ -51,7 +51,6 @@ exports.registerUser = async (req, res) => {
     const log = new ActivityLog({
       user: user._id,
       action: 'REGISTER_USER',
-      ipAddress: req.ip || '127.0.0.1' // Fallback if local
     });
     await log.save();
 
@@ -110,7 +109,6 @@ exports.loginUser = async (req, res) => {
     const successLog = new ActivityLog({
       user: user._id,
       action: 'LOGIN_SUCCESS',
-      ipAddress: req.ip || '127.0.0.1'
     });
     await successLog.save();
 
@@ -198,6 +196,11 @@ exports.logoutUser = async (req, res) => {
         const decoded = jwt.verify(refreshToken, refreshSecret);
         const user = await User.findById(decoded.id).select('+refreshTokenHash');
         if (user) {
+          // Log logout activity before clearing session
+          const log = await ActivityLog.create({ user: user._id, action: 'LOGOUT' });
+          if (req.app && req.app.get('io')) {
+            req.app.get('io').to(user._id.toString()).emit('activity_update', { userId: user._id, log });
+          }
           user.refreshTokenHash = null;
           await user.save();
         }

@@ -1,4 +1,4 @@
-function Toolbar({ activeTool, setActiveTool, onUndo, onRedo, canUndo, canRedo, canEdit = true }) {
+function Toolbar({ activeTool, setActiveTool, onUndo, onRedo, canUndo, canRedo, canEdit = true, onImportImage, onExportCanvas }) {
   
   const tools = [
     { id: 'selector', icon: 'arrow_selector_tool', title: 'Selector' },
@@ -38,6 +38,29 @@ function Toolbar({ activeTool, setActiveTool, onUndo, onRedo, canUndo, canRedo, 
       <div className="h-[1px] w-8 bg-white/10 my-1 shrink-0"></div>
 
       <button
+        onClick={() => { if (canEdit && onImportImage) onImportImage(); }}
+        disabled={!canEdit}
+        className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all shrink-0 ${
+          !canEdit
+            ? 'text-slate-700 cursor-not-allowed'
+            : 'text-slate-400 hover:bg-white/5 hover:text-white'
+        }`}
+        title="Import Image"
+      >
+        <span className="material-symbols-outlined">add_photo_alternate</span>
+      </button>
+
+      <button
+        onClick={() => { if (onExportCanvas) onExportCanvas(); }}
+        className="w-10 h-10 flex items-center justify-center rounded-xl transition-all shrink-0 text-slate-400 hover:bg-white/5 hover:text-white"
+        title="Export Canvas as Image"
+      >
+        <span className="material-symbols-outlined">ios_share</span>
+      </button>
+
+      <div className="h-[1px] w-8 bg-white/10 my-1 shrink-0"></div>
+
+      <button
         onClick={onUndo}
         disabled={!canUndo || !canEdit}
         className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all shrink-0 ${
@@ -62,17 +85,6 @@ function Toolbar({ activeTool, setActiveTool, onUndo, onRedo, canUndo, canRedo, 
         <span className="material-symbols-outlined">redo</span>
       </button>
 
-      <div className="h-[1px] w-8 bg-white/10 my-1 shrink-0"></div>
-
-      <button
-        className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all shrink-0 ${
-          canEdit ? 'text-slate-400 hover:bg-white/5 hover:text-white' : 'text-slate-700 cursor-not-allowed'
-        }`}
-        title="Save Project"
-        disabled={!canEdit}
-      >
-        <span className="material-symbols-outlined">save</span>
-      </button>
     </div>
   );
 }
