@@ -55,6 +55,36 @@ const canvasSchema = new mongoose.Schema({
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User'
     }
+  }],
+  lastSyncedAt: {
+    type: Date,
+    default: null
+  },
+  backupUrl: {
+    type: String,
+    default: ''
+  },
+  backupPublicId: {
+    type: String,
+    default: ''
+  },
+  drawingActions: [{
+    action: {
+      type: String,
+      required: true
+    },
+    data: {
+      type: Object,
+      default: {}
+    },
+    timestamp: {
+      type: Date,
+      default: Date.now
+    },
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    }
   }]
 }, { timestamps: true });
 

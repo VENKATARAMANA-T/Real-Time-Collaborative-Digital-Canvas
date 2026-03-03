@@ -37,7 +37,10 @@ const activityLogSchema = new mongoose.Schema({
       'VIEW_WALKTHROUGH',
       'SEARCH_HELP',
       'SUBMIT_FEEDBACK',
-      'IMPORT_CANVAS'
+      'IMPORT_CANVAS',
+      'AUTOSAVE_CANVAS',
+      'BACKUP_CANVAS',
+      'IMPORT_IMAGE'
     ]
   },
   timestamp: {
