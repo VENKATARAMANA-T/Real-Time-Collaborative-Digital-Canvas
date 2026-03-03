@@ -310,17 +310,27 @@ export default function Dashboard() {
       try {
         let allFolders = await folderAPI.getAll();
         
-        // Check if "Personal Sketches" folder exists
-        let personalFolder = allFolders.find(f => f.name === 'Personal Sketches');
-        
-        // If not, create it
+        // Check if "Personal Sketches" default folder exists
+        let personalFolder = allFolders.find(f => f.name === 'Personal Sketches' && f.isDefault);
+        // Fallback: match by name alone (for users registered before isDefault was added)
         if (!personalFolder) {
-          personalFolder = await folderAPI.create({ name: 'Personal Sketches' });
+          personalFolder = allFolders.find(f => f.name === 'Personal Sketches');
+        }
+        
+        // If not, create it (handle race condition if already created)
+        if (!personalFolder) {
+          try {
+            personalFolder = await folderAPI.create({ name: 'Personal Sketches' });
+          } catch (createErr) {
+            // Folder may have been created by a concurrent request (React StrictMode)
+            allFolders = await folderAPI.getAll();
+            personalFolder = allFolders.find(f => f.name === 'Personal Sketches');
+          }
           allFolders = await folderAPI.getAll();
         }
         
         setFolders(allFolders || []);
-        setDefaultFolderId(personalFolder._id);
+        if (personalFolder) setDefaultFolderId(personalFolder._id);
       } catch (error) {
         console.error('Failed to fetch folders:', error);
       } finally {
@@ -399,7 +409,7 @@ export default function Dashboard() {
     tag: cv.isMeetingCanvas ? 'Meeting' : 'Private',
     tagColor: cv.isMeetingCanvas ? 'amber' : 'emerald',
     border: cv.isMeetingCanvas ? 'border-b-amber-400/60' : 'border-b-emerald-400/60',
-    preview: cv.thumbnail || 'https://via.placeholder.com/400x200?text=No+Preview',
+    preview: cv.thumbnail || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='200'%3E%3Crect fill='%23111827' width='400' height='200'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%234b5563' font-family='sans-serif' font-size='16'%3ENo Preview%3C/text%3E%3C/svg%3E",
     isMeetingCanvas: cv.isMeetingCanvas || false
   }));
   const activeFolder = folders.find((folder) => folder._id === activeFolderId) || null;
@@ -411,7 +421,7 @@ export default function Dashboard() {
     tag: cv.isMeetingCanvas ? 'Meeting' : 'Private',
     tagColor: cv.isMeetingCanvas ? 'amber' : 'emerald',
     border: cv.isMeetingCanvas ? 'border-b-amber-400/60' : 'border-b-emerald-400/60',
-    preview: cv.thumbnail || 'https://via.placeholder.com/400x200?text=No+Preview',
+    preview: cv.thumbnail || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='200'%3E%3Crect fill='%23111827' width='400' height='200'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%234b5563' font-family='sans-serif' font-size='16'%3ENo Preview%3C/text%3E%3C/svg%3E",
     isMeetingCanvas: cv.isMeetingCanvas || false
   }));
 
@@ -1286,7 +1296,7 @@ export default function Dashboard() {
                         <img
                           alt={`${canvas.title} Preview`}
                           className="absolute inset-0 w-full h-full object-cover opacity-50 pointer-events-none group-hover:scale-110 transition-transform duration-500"
-                          src={canvas.thumbnail || 'https://via.placeholder.com/400x200?text=No+Preview'}
+                          src={canvas.thumbnail || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='200'%3E%3Crect fill='%23111827' width='400' height='200'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%234b5563' font-family='sans-serif' font-size='16'%3ENo Preview%3C/text%3E%3C/svg%3E"}
                         />
                         {canvas.isMeetingCanvas && (
                           <div className="absolute top-3 right-3 z-10">

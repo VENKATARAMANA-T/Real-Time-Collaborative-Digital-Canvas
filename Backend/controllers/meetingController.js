@@ -2,6 +2,9 @@ const Meeting = require('../models/Meeting');
 const Canvas = require('../models/Canvas');
 const { v4: uuidv4 } = require('uuid');
 const crypto = require('crypto'); // Built-in Node module for random passwords
+const { uploadToCloudinary, deleteFromCloudinary } = require('../config/cloudinary');
+const fs = require('fs');
+const path = require('path');
 
 // @desc    Get all meetings for the logged-in user (as host or participant)
 // @route   GET /api/meetings
@@ -399,9 +402,43 @@ exports.endMeeting = async (req, res) => {
     }
 
     // 1. Save the final canvas state to the host's canvas
+    // Upload any base64 images in elements to Cloudinary first
     const hostCanvas = await Canvas.findById(meeting.canvas);
     if (hostCanvas && elements) {
-      hostCanvas.data = { elements };
+      let processedElements = elements;
+      if (Array.isArray(elements)) {
+        processedElements = await Promise.all(
+          elements.map(async (el) => {
+            // Upload image elements with base64 data to Cloudinary
+            if (el.type === 'image' && el.src && el.src.startsWith('data:')) {
+              try {
+                const result = await uploadToCloudinary(el.src, {
+                  folder: 'RealTimeDigitalCanvas/canvas-images',
+                  public_id: `meeting_img_${el.id || Date.now()}`,
+                });
+                return { ...el, src: result.secure_url, cloudinaryPublicId: result.public_id };
+              } catch (err) {
+                console.warn('[endMeeting] Image upload failed:', err.message);
+                return el;
+              }
+            }
+            if (el.imageData && el.imageData.startsWith('data:')) {
+              try {
+                const result = await uploadToCloudinary(el.imageData, {
+                  folder: 'RealTimeDigitalCanvas/canvas-images',
+                  public_id: `meeting_imgdata_${el.id || Date.now()}`,
+                });
+                return { ...el, imageData: result.secure_url, cloudinaryPublicId: result.public_id };
+              } catch (err) {
+                console.warn('[endMeeting] ImageData upload failed:', err.message);
+                return el;
+              }
+            }
+            return el;
+          })
+        );
+      }
+      hostCanvas.data = { elements: processedElements };
       await hostCanvas.save();
     }
 
@@ -700,18 +737,44 @@ exports.uploadRecording = async (req, res) => {
       return res.status(400).json({ message: 'No recording file uploaded' });
     }
 
-    // Save path relative to uploads folder
-    const recordingPath = req.file.filename;
-    meeting.recordingPath = recordingPath;
+    const fileSizeMB = (req.file.size / (1024 * 1024)).toFixed(2);
+    console.log(`[uploadRecording] File received: ${req.file.originalname}, size: ${fileSizeMB}MB, mimetype: ${req.file.mimetype}`);
+
+    // Delete old local recording if it exists
+    if (meeting.recordingPath) {
+      const oldFilePath = path.join(__dirname, '..', 'uploads', 'recordings', meeting.recordingPath);
+      try {
+        if (fs.existsSync(oldFilePath)) {
+          fs.unlinkSync(oldFilePath);
+          console.log(`[uploadRecording] Deleted old recording: ${oldFilePath}`);
+        }
+      } catch (delErr) {
+        console.warn('[uploadRecording] Failed to delete old recording:', delErr.message);
+      }
+    }
+
+    // Save recording to local disk (uploads/recordings/)
+    const filename = `recording_${req.params.id}_${Date.now()}.webm`;
+    const recordingsDir = path.join(__dirname, '..', 'uploads', 'recordings');
+    if (!fs.existsSync(recordingsDir)) {
+      fs.mkdirSync(recordingsDir, { recursive: true });
+    }
+    const filePath = path.join(recordingsDir, filename);
+    fs.writeFileSync(filePath, req.file.buffer);
+    console.log(`[uploadRecording] Saved locally: ${filePath}`);
+
+    // Store just the filename — served via /api/recordings/:filename
+    meeting.recordingPath = filename;
     meeting.recordedBy = req.user._id;
     await meeting.save();
 
     res.status(200).json({
       success: true,
       message: 'Recording uploaded successfully',
-      recordingPath
+      recordingPath: filename
     });
   } catch (error) {
+    console.error('[uploadRecording] Error:', error.message);
     res.status(500).json({ message: 'Server Error', error: error.message });
   }
 };

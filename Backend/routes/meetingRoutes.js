@@ -1,8 +1,6 @@
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
 const { 
   createMeeting,
   createInstantMeeting,
@@ -19,24 +17,11 @@ const {
   uploadRecording,
   getMeetingNotes
 } = require('../controllers/meetingController');
-const { authMiddleware } = require('../middleware/authMiddleware'); // Ensure this matches your export name
+const { authMiddleware } = require('../middleware/authMiddleware');
 
-// Ensure recordings directory exists
-const recordingsDir = path.join(__dirname, '..', 'uploads', 'recordings');
-if (!fs.existsSync(recordingsDir)) {
-  fs.mkdirSync(recordingsDir, { recursive: true });
-}
-
-// Multer config for recording uploads (webm video files)
-const recordingStorage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, recordingsDir),
-  filename: (req, file, cb) => {
-    const uniqueName = `recording_${req.params.id}_${Date.now()}.webm`;
-    cb(null, uniqueName);
-  }
-});
+// Multer config for recording uploads - memory storage (saved to local disk in controller)
 const recordingUpload = multer({
-  storage: recordingStorage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 500 * 1024 * 1024 }, // 500MB limit for recordings
   fileFilter: (req, file, cb) => {
     if (file.mimetype.startsWith('video/') || file.mimetype === 'application/octet-stream') {

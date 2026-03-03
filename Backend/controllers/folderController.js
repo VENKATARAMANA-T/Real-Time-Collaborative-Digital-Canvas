@@ -95,6 +95,11 @@ exports.updateFolder = async (req, res) => {
       return res.status(404).json({ message: 'Folder not found or access denied' });
     }
 
+    // Prevent renaming the default folder
+    if (folder.isDefault) {
+      return res.status(400).json({ message: 'Cannot rename the default Personal Sketches folder' });
+    }
+
     if (name && name.trim()) {
       folder.name = name.trim();
     }
@@ -119,6 +124,11 @@ exports.deleteFolder = async (req, res) => {
 
     if (!folder) {
       return res.status(404).json({ message: 'Folder not found or access denied' });
+    }
+
+    // Prevent deleting the default folder
+    if (folder.isDefault) {
+      return res.status(400).json({ message: 'Cannot delete the default Personal Sketches folder' });
     }
 
     // Delete all canvases in this folder
