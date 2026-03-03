@@ -11,10 +11,20 @@ const {
   updateMeetingCanvas,
   renameCanvas,
   exportCanvas,
-  importCanvas
+  importCanvas,
+  // EPIC 4: File Management, Storage, History & Export
+  toggleFavorite,
+  saveVersion,
+  getVersions,
+  restoreVersion,
+  autosaveCanvas,
+  importImage,
+  getDrawingActions,
+  backupCanvas,
+  syncCanvas
 } = require('../controllers/canvasController.js');
 const { authMiddleware } = require('../middleware/authMiddleware.js');
-const { upload } = require('../middleware/uploadMiddleware.js');
+const { upload, imageUpload } = require('../middleware/uploadMiddleware.js');
 
 // ALL routes are protected
 router.use(authMiddleware);
@@ -29,6 +39,17 @@ router.route('/')
 router.route('/meetingCanvas/:id')
   .get(getMeetingCanvasById)   // GET: Load specific canvas for meeting
   .put(updateMeetingCanvas);   // PUT: Save drawing for meeting
+
+// EPIC 4: Sub-resource routes (must be before /:id catch-all)
+router.patch('/:id/favorite', toggleFavorite);                // Toggle favorite
+router.post('/:id/versions', saveVersion);                    // Save version snapshot
+router.get('/:id/versions', getVersions);                     // Get version history
+router.put('/:id/versions/:versionId/restore', restoreVersion); // Restore a version
+router.put('/:id/autosave', autosaveCanvas);                  // Autosave canvas
+router.post('/:id/import-image', imageUpload.single('image'), importImage); // Import image
+router.get('/:id/drawing-actions', getDrawingActions);        // Time-lapse replay data
+router.post('/:id/backup', backupCanvas);                     // Cloud backup
+router.put('/:id/sync', syncCanvas);                          // Sync across devices
 
 router.route('/:id')
   .get(getCanvasById)   // GET: Load specific canvas

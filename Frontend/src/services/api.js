@@ -150,6 +150,70 @@ export const canvasAPI = {
     const response = await api.post(`/canvases/${id}/duplicate`);
     return response.data;
   },
+
+  // EPIC 4: File Management, Storage, History & Export
+
+  toggleFavorite: async (id) => {
+    const response = await api.patch(`/canvases/${id}/favorite`);
+    return response.data;
+  },
+
+  rename: async (id, title) => {
+    const response = await api.patch(`/canvases/${id}/rename`, { title });
+    return response.data;
+  },
+
+  exportJson: async (id) => {
+    const response = await api.get(`/canvases/${id}/export`);
+    return response.data;
+  },
+
+  saveVersion: async (id) => {
+    const response = await api.post(`/canvases/${id}/versions`);
+    return response.data;
+  },
+
+  getVersions: async (id) => {
+    const response = await api.get(`/canvases/${id}/versions`);
+    return response.data;
+  },
+
+  restoreVersion: async (id, versionId) => {
+    const response = await api.put(`/canvases/${id}/versions/${versionId}/restore`);
+    return response.data;
+  },
+
+  autosave: async (id, data) => {
+    const response = await api.put(`/canvases/${id}/autosave`, data);
+    return response.data;
+  },
+
+  importImage: async (id, imageData) => {
+    // Support both base64 and FormData
+    if (imageData instanceof FormData) {
+      const response = await api.post(`/canvases/${id}/import-image`, imageData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      return response.data;
+    }
+    const response = await api.post(`/canvases/${id}/import-image`, { image: imageData });
+    return response.data;
+  },
+
+  getDrawingActions: async (id) => {
+    const response = await api.get(`/canvases/${id}/drawing-actions`);
+    return response.data;
+  },
+
+  backupCanvas: async (id) => {
+    const response = await api.post(`/canvases/${id}/backup`);
+    return response.data;
+  },
+
+  syncCanvas: async (id, syncData) => {
+    const response = await api.put(`/canvases/${id}/sync`, syncData);
+    return response.data;
+  },
 };
 
 // User API endpoints (placeholder for future use)

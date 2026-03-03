@@ -280,16 +280,16 @@ exports.deleteCanvas = async (req, res) => {
     // Clean up Cloudinary resources
     const cleanupPromises = [];
     if (canvas.thumbnailPublicId) {
-      cleanupPromises.push(deleteFromCloudinary(canvas.thumbnailPublicId).catch(() => {}));
+      cleanupPromises.push(deleteFromCloudinary(canvas.thumbnailPublicId).catch(() => { }));
     }
     if (canvas.pixelDataPublicId) {
-      cleanupPromises.push(deleteFromCloudinary(canvas.pixelDataPublicId).catch(() => {}));
+      cleanupPromises.push(deleteFromCloudinary(canvas.pixelDataPublicId).catch(() => { }));
     }
     // Clean up image elements stored in Cloudinary
     if (canvas.data?.elements && Array.isArray(canvas.data.elements)) {
       canvas.data.elements.forEach(el => {
         if (el.cloudinaryPublicId) {
-          cleanupPromises.push(deleteFromCloudinary(el.cloudinaryPublicId).catch(() => {}));
+          cleanupPromises.push(deleteFromCloudinary(el.cloudinaryPublicId).catch(() => { }));
         }
       });
     }
@@ -674,4 +674,465 @@ exports.importCanvas = async (req, res) => {
   } catch (error) {
     res.status(500).json({ message: 'Server Error', error: error.message });
   }
-};   
+};
+
+// =============================================================================
+// EPIC 4: File Management, Storage, History & Export
+// =============================================================================
+
+// @desc    Toggle favorite status of a canvas
+// @route   PATCH /api/canvases/:id/favorite
+// @access  Private
+exports.toggleFavorite = async (req, res) => {
+  try {
+    const canvas = await Canvas.findOne({
+      _id: req.params.id,
+      owner: req.user._id
+    });
+
+    if (!canvas) {
+      return res.status(404).json({ message: 'Canvas not found or access denied' });
+    }
+
+    canvas.isFavorite = !canvas.isFavorite;
+    const updatedCanvas = await canvas.save();
+
+    // Log Activity
+    try {
+      const log = await ActivityLog.create({
+        user: req.user._id,
+        action: 'TOGGLE_FAVORITE',
+      });
+      if (req.app && req.app.get('io')) {
+        req.app.get('io').to(req.user._id.toString()).emit('activity_update', { userId: req.user._id, log });
+      }
+    } catch (logError) {
+      console.error('Logging failed:', logError);
+    }
+
+    res.status(200).json(updatedCanvas);
+  } catch (error) {
+    res.status(500).json({ message: 'Server Error', error: error.message });
+  }
+};
+
+// @desc    Save a version snapshot of the canvas
+// @route   POST /api/canvases/:id/versions
+// @access  Private
+exports.saveVersion = async (req, res) => {
+  try {
+    const canvas = await Canvas.findOne({
+      _id: req.params.id,
+      owner: req.user._id
+    });
+
+    if (!canvas) {
+      return res.status(404).json({ message: 'Canvas not found or access denied' });
+    }
+
+    // Create a version snapshot from the current canvas data
+    const versionSnapshot = {
+      data: JSON.parse(JSON.stringify(canvas.data)),
+      timestamp: new Date(),
+      editedBy: req.user._id
+    };
+
+    // Push the new version (cap at 50 to prevent unbounded growth)
+    canvas.versions.push(versionSnapshot);
+    if (canvas.versions.length > 50) {
+      canvas.versions = canvas.versions.slice(-50);
+    }
+
+    const updatedCanvas = await canvas.save();
+
+    res.status(201).json({
+      message: 'Version saved successfully',
+      version: updatedCanvas.versions[updatedCanvas.versions.length - 1],
+      totalVersions: updatedCanvas.versions.length
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Server Error', error: error.message });
+  }
+};
+
+// @desc    Get all version history for a canvas
+// @route   GET /api/canvases/:id/versions
+// @access  Private
+exports.getVersions = async (req, res) => {
+  try {
+    const canvas = await Canvas.findOne({
+      _id: req.params.id,
+      owner: req.user._id
+    }).populate('versions.editedBy', 'username email');
+
+    if (!canvas) {
+      return res.status(404).json({ message: 'Canvas not found or access denied' });
+    }
+
+    // Return versions metadata without the heavy data payload
+    const versions = canvas.versions.map((v, index) => ({
+      _id: v._id,
+      index,
+      timestamp: v.timestamp,
+      editedBy: v.editedBy
+    }));
+
+    res.status(200).json({
+      canvasId: canvas._id,
+      canvasTitle: canvas.title,
+      versions: versions.reverse() // newest first
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Server Error', error: error.message });
+  }
+};
+
+// @desc    Restore a specific version of the canvas
+// @route   PUT /api/canvases/:id/versions/:versionId/restore
+// @access  Private
+exports.restoreVersion = async (req, res) => {
+  try {
+    const canvas = await Canvas.findOne({
+      _id: req.params.id,
+      owner: req.user._id
+    });
+
+    if (!canvas) {
+      return res.status(404).json({ message: 'Canvas not found or access denied' });
+    }
+
+    const version = canvas.versions.id(req.params.versionId);
+    if (!version) {
+      return res.status(404).json({ message: 'Version not found' });
+    }
+
+    // Save current state as a version before restoring (so user can undo the restore)
+    canvas.versions.push({
+      data: JSON.parse(JSON.stringify(canvas.data)),
+      timestamp: new Date(),
+      editedBy: req.user._id
+    });
+    if (canvas.versions.length > 50) {
+      canvas.versions = canvas.versions.slice(-50);
+    }
+
+    // Restore the selected version's data
+    canvas.data = JSON.parse(JSON.stringify(version.data));
+    const updatedCanvas = await canvas.save();
+
+    // Log Activity
+    try {
+      const log = await ActivityLog.create({
+        user: req.user._id,
+        action: 'RESTORE_VERSION',
+      });
+      if (req.app && req.app.get('io')) {
+        req.app.get('io').to(req.user._id.toString()).emit('activity_update', { userId: req.user._id, log });
+      }
+    } catch (logError) {
+      console.error('Logging failed:', logError);
+    }
+
+    res.status(200).json({
+      message: 'Version restored successfully',
+      canvas: updatedCanvas
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Server Error', error: error.message });
+  }
+};
+
+// @desc    Autosave canvas data (lightweight, no full activity log)
+// @route   PUT /api/canvases/:id/autosave
+// @access  Private
+exports.autosaveCanvas = async (req, res) => {
+  try {
+    const { data, thumbnail } = req.body;
+
+    // Process canvas images
+    let processedData = data;
+    if (processedData && processedData.elements && Array.isArray(processedData.elements)) {
+      processedData = { ...processedData };
+      processedData.elements = await uploadCanvasImagesToCloud(processedData.elements);
+    }
+
+    // Upload thumbnail and pixel data
+    const mediaResult = await uploadCanvasMediaToCloud(
+      thumbnail, processedData?.pixelData, req.params.id
+    );
+
+    // Remove raw pixel data from data object
+    if (processedData && processedData.pixelData) {
+      processedData = { ...processedData };
+      delete processedData.pixelData;
+    }
+
+    const existingCanvas = await Canvas.findOne({ _id: req.params.id, owner: req.user._id });
+    if (!existingCanvas) {
+      return res.status(404).json({ message: 'Canvas not found or access denied' });
+    }
+
+    // Clean up old Cloudinary resources
+    if (existingCanvas.thumbnailPublicId && mediaResult.thumbnailPublicId) {
+      try { await deleteFromCloudinary(existingCanvas.thumbnailPublicId); } catch (e) { /* ignore */ }
+    }
+    if (existingCanvas.pixelDataPublicId && mediaResult.pixelDataPublicId) {
+      try { await deleteFromCloudinary(existingCanvas.pixelDataPublicId); } catch (e) { /* ignore */ }
+    }
+
+    const canvas = await Canvas.findOneAndUpdate(
+      { _id: req.params.id, owner: req.user._id },
+      {
+        $set: {
+          data: processedData,
+          thumbnail: mediaResult.thumbnail || existingCanvas.thumbnail || '',
+          thumbnailPublicId: mediaResult.thumbnailPublicId || existingCanvas.thumbnailPublicId || '',
+          pixelDataUrl: mediaResult.pixelDataUrl || existingCanvas.pixelDataUrl || '',
+          pixelDataPublicId: mediaResult.pixelDataPublicId || existingCanvas.pixelDataPublicId || '',
+        }
+      },
+      { new: true }
+    );
+
+    // Also store drawing actions if provided (for time-lapse)
+    if (req.body.drawingActions && Array.isArray(req.body.drawingActions)) {
+      canvas.drawingActions.push(...req.body.drawingActions.map(a => ({
+        ...a,
+        userId: req.user._id,
+        timestamp: a.timestamp || new Date()
+      })));
+      // Cap at 1000 actions to prevent unbounded growth
+      if (canvas.drawingActions.length > 1000) {
+        canvas.drawingActions = canvas.drawingActions.slice(-1000);
+      }
+      await canvas.save();
+    }
+
+    res.status(200).json({ message: 'Autosaved', updatedAt: canvas.updatedAt });
+  } catch (error) {
+    res.status(500).json({ message: 'Server Error', error: error.message });
+  }
+};
+
+// @desc    Import an image onto a canvas for annotation
+// @route   POST /api/canvases/:id/import-image
+// @access  Private
+exports.importImage = async (req, res) => {
+  try {
+    const canvas = await Canvas.findOne({
+      _id: req.params.id,
+      owner: req.user._id
+    });
+
+    if (!canvas) {
+      return res.status(404).json({ message: 'Canvas not found or access denied' });
+    }
+
+    let imageUrl = '';
+    let publicId = '';
+
+    // Handle file upload via multer (multipart)
+    if (req.file) {
+      const { uploadBufferToCloudinary } = require('../config/cloudinary.js');
+      const result = await uploadBufferToCloudinary(req.file.buffer, {
+        folder: 'RealTimeDigitalCanvas/canvas-images',
+        public_id: `import_${canvas._id}_${Date.now()}`,
+      });
+      imageUrl = result.secure_url;
+      publicId = result.public_id;
+    }
+    // Handle base64 image in request body
+    else if (req.body.image) {
+      const result = await uploadToCloudinary(req.body.image, {
+        folder: 'RealTimeDigitalCanvas/canvas-images',
+        public_id: `import_${canvas._id}_${Date.now()}`,
+      });
+      imageUrl = result.secure_url;
+      publicId = result.public_id;
+    } else {
+      return res.status(400).json({ message: 'No image provided. Send a file or base64 image.' });
+    }
+
+    // Log Activity
+    try {
+      const log = await ActivityLog.create({
+        user: req.user._id,
+        action: 'IMPORT_IMAGE',
+      });
+      if (req.app && req.app.get('io')) {
+        req.app.get('io').to(req.user._id.toString()).emit('activity_update', { userId: req.user._id, log });
+      }
+    } catch (logError) {
+      console.error('Logging failed:', logError);
+    }
+
+    res.status(201).json({
+      message: 'Image imported successfully',
+      imageUrl,
+      publicId
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Server Error', error: error.message });
+  }
+};
+
+// @desc    Get drawing actions for time-lapse replay
+// @route   GET /api/canvases/:id/drawing-actions
+// @access  Private
+exports.getDrawingActions = async (req, res) => {
+  try {
+    const canvas = await Canvas.findOne({
+      _id: req.params.id,
+      owner: req.user._id
+    }).select('drawingActions title');
+
+    if (!canvas) {
+      return res.status(404).json({ message: 'Canvas not found or access denied' });
+    }
+
+    res.status(200).json({
+      canvasId: canvas._id,
+      canvasTitle: canvas.title,
+      drawingActions: canvas.drawingActions,
+      totalActions: canvas.drawingActions.length
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Server Error', error: error.message });
+  }
+};
+
+// @desc    Create a cloud backup of the canvas
+// @route   POST /api/canvases/:id/backup
+// @access  Private
+exports.backupCanvas = async (req, res) => {
+  try {
+    const canvas = await Canvas.findOne({
+      _id: req.params.id,
+      owner: req.user._id
+    });
+
+    if (!canvas) {
+      return res.status(404).json({ message: 'Canvas not found or access denied' });
+    }
+
+    // Create a backup snapshot as JSON
+    const backupData = {
+      title: canvas.title,
+      data: canvas.data,
+      versions: canvas.versions,
+      isFavorite: canvas.isFavorite,
+      folder: canvas.folder,
+      backupCreatedAt: new Date().toISOString(),
+      originalCanvasId: canvas._id
+    };
+
+    // Upload backup as a raw JSON file to Cloudinary
+    const backupJson = JSON.stringify(backupData);
+    const base64Backup = Buffer.from(backupJson).toString('base64');
+    const dataUri = `data:application/json;base64,${base64Backup}`;
+
+    const result = await uploadToCloudinary(dataUri, {
+      folder: 'RealTimeDigitalCanvas/backups',
+      public_id: `backup_${canvas._id}_${Date.now()}`,
+      resource_type: 'raw',
+    });
+
+    // Clean up old backup from Cloudinary
+    if (canvas.backupPublicId) {
+      try { await deleteFromCloudinary(canvas.backupPublicId, 'raw'); } catch (e) { /* ignore */ }
+    }
+
+    // Update canvas with backup info
+    canvas.backupUrl = result.secure_url;
+    canvas.backupPublicId = result.public_id;
+    await canvas.save();
+
+    // Log Activity
+    try {
+      const log = await ActivityLog.create({
+        user: req.user._id,
+        action: 'BACKUP_CANVAS',
+      });
+      if (req.app && req.app.get('io')) {
+        req.app.get('io').to(req.user._id.toString()).emit('activity_update', { userId: req.user._id, log });
+      }
+    } catch (logError) {
+      console.error('Logging failed:', logError);
+    }
+
+    res.status(201).json({
+      message: 'Backup created successfully',
+      backupUrl: result.secure_url,
+      backupCreatedAt: backupData.backupCreatedAt
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Server Error', error: error.message });
+  }
+};
+
+// @desc    Sync canvas data across devices
+// @route   PUT /api/canvases/:id/sync
+// @access  Private
+exports.syncCanvas = async (req, res) => {
+  try {
+    const { data, thumbnail, clientLastSyncedAt } = req.body;
+
+    const canvas = await Canvas.findOne({
+      _id: req.params.id,
+      owner: req.user._id
+    });
+
+    if (!canvas) {
+      return res.status(404).json({ message: 'Canvas not found or access denied' });
+    }
+
+    // Check for sync conflicts: if server was updated after client's last sync
+    if (clientLastSyncedAt && canvas.updatedAt > new Date(clientLastSyncedAt)) {
+      return res.status(409).json({
+        message: 'Sync conflict detected. Server has newer data.',
+        serverUpdatedAt: canvas.updatedAt,
+        serverData: canvas.data
+      });
+    }
+
+    // Process canvas images
+    let processedData = data;
+    if (processedData && processedData.elements && Array.isArray(processedData.elements)) {
+      processedData = { ...processedData };
+      processedData.elements = await uploadCanvasImagesToCloud(processedData.elements);
+    }
+
+    // Upload media
+    const mediaResult = await uploadCanvasMediaToCloud(
+      thumbnail, processedData?.pixelData, req.params.id
+    );
+
+    if (processedData && processedData.pixelData) {
+      processedData = { ...processedData };
+      delete processedData.pixelData;
+    }
+
+    // Update the canvas
+    const now = new Date();
+    canvas.data = processedData || canvas.data;
+    if (mediaResult.thumbnail) {
+      canvas.thumbnail = mediaResult.thumbnail;
+      canvas.thumbnailPublicId = mediaResult.thumbnailPublicId;
+    }
+    if (mediaResult.pixelDataUrl) {
+      canvas.pixelDataUrl = mediaResult.pixelDataUrl;
+      canvas.pixelDataPublicId = mediaResult.pixelDataPublicId;
+    }
+    canvas.lastSyncedAt = now;
+
+    const updatedCanvas = await canvas.save();
+
+    res.status(200).json({
+      message: 'Canvas synced successfully',
+      lastSyncedAt: now,
+      canvas: updatedCanvas
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Server Error', error: error.message });
+  }
+};
