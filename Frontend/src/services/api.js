@@ -261,8 +261,13 @@ export const meetingAPI = {
   },
 
   getRecordingUrl: (filename) => {
+    if (!filename) return null;
+    // If it's already a full URL, return as-is
+    if (filename.startsWith('http://') || filename.startsWith('https://')) {
+      return filename;
+    }
+    // Local recording served from backend /api/recordings/:filename
     const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-    // Recording served via static route at /api/recordings/<filename>
     return `${baseURL.replace('/api', '')}/api/recordings/${filename}`;
   }
 };
@@ -314,6 +319,60 @@ export const folderAPI = {
     const response = await api.get(`/folders/${id}/canvases`);
     return response.data;
   }
+};
+
+// Cloudinary Upload API endpoints
+export const uploadAPI = {
+  // Upload a single base64 image (canvas thumbnails, imported images, etc.)
+  uploadImage: async (imageData, type = 'general') => {
+    const response = await api.post('/upload/image', {
+      image: imageData,
+      folder: 'RealTimeDigitalCanvas',
+      type,
+    });
+    return response.data;
+  },
+
+  // Upload multiple base64 images (canvas with imported images)
+  uploadImages: async (images) => {
+    const response = await api.post('/upload/images', {
+      images,
+      folder: 'RealTimeDigitalCanvas',
+    });
+    return response.data;
+  },
+
+  // Upload a file (profile picture, etc.)
+  uploadFile: async (file, type = 'general') => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('type', type);
+    formData.append('folder', 'RealTimeDigitalCanvas');
+    const response = await api.post('/upload/file', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
+
+  // Upload a recording
+  uploadRecording: async (blob, meetingId) => {
+    const formData = new FormData();
+    formData.append('recording', blob, 'recording.webm');
+    formData.append('meetingId', meetingId);
+    const response = await api.post('/upload/recording', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 300000, // 5 min timeout
+    });
+    return response.data;
+  },
+
+  // Delete a Cloudinary resource
+  deleteUpload: async (publicId, resourceType = 'image') => {
+    const response = await api.delete('/upload/delete', {
+      data: { publicId, resourceType },
+    });
+    return response.data;
+  },
 };
 
 export default api;

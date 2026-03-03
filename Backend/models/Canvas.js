@@ -25,6 +25,18 @@ const canvasSchema = new mongoose.Schema({
     type: String,
     default: ''
   },
+  thumbnailPublicId: {
+    type: String,
+    default: ''
+  },
+  pixelDataUrl: {
+    type: String,
+    default: ''
+  },
+  pixelDataPublicId: {
+    type: String,
+    default: ''
+  },
   isFavorite: {
     type: Boolean,
     default: false

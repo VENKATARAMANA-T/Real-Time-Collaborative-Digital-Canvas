@@ -1,5 +1,6 @@
 const User = require('../models/User.js');
 const ActivityLog = require('../models/ActivityLog.js');
+const Folder = require('../models/Folder.js');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
@@ -54,6 +55,17 @@ exports.registerUser = async (req, res) => {
     });
     await log.save();
 
+    // 7. Create default "Personal Sketches" folder for the new user
+    try {
+      await Folder.create({
+        name: 'Personal Sketches',
+        owner: user._id,
+        isDefault: true
+      });
+    } catch (folderErr) {
+      console.warn('[Register] Failed to create default folder:', folderErr.message);
+    }
+
     // redirect to login page after registration ********
     res.status(201).json({
       success: true,
@@ -61,6 +73,7 @@ exports.registerUser = async (req, res) => {
         id: user._id,
         username: user.username,
         email: user.email,
+        profileImage: user.profileImage || '',
         createdAt: user.createdAt
       }
     });
@@ -121,6 +134,7 @@ exports.loginUser = async (req, res) => {
         id: user._id,
         username: user.username,
         email: user.email,
+        profileImage: user.profileImage || '',
         createdAt: user.createdAt
       }
     });

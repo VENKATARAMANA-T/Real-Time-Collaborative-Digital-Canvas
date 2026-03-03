@@ -11,6 +11,10 @@ function MeetingCanvasEditor() {
   const navigate = useNavigate();
   const { id: canvasId } = useParams();
   const { user } = useAuth();
+  const canvasCompRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const [fileMenuOpen, setFileMenuOpen] = useState(false);
+  const fileMenuRef = useRef(null);
 
   const [activeTool, setActiveTool] = useState('selector');
   const [isSettingsVisible, setIsSettingsVisible] = useState(false);
@@ -183,6 +187,80 @@ function MeetingCanvasEditor() {
     setIsSettingsVisible(false);
   };
 
+  // Close file menu on outside click
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (fileMenuRef.current && !fileMenuRef.current.contains(e.target)) {
+        setFileMenuOpen(false);
+      }
+    };
+    if (fileMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [fileMenuOpen]);
+
+  // --- Export: calls the Canvas component's exportCanvas via ref ---
+  const handleExport = () => {
+    setFileMenuOpen(false);
+    if (canvasCompRef.current?.exportCanvas) {
+      canvasCompRef.current.exportCanvas();
+    }
+  };
+
+  // --- Import: open file dialog, read image, add as element ---
+  const handleImportClick = () => {
+    setFileMenuOpen(false);
+    fileInputRef.current?.click();
+  };
+
+  const handleImportFile = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Accept images only
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file (PNG, JPG, SVG, etc.)');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const dataUrl = event.target.result;
+      const img = new window.Image();
+      img.onload = () => {
+        // Scale image to fit nicely on canvas (max 800px wide/tall)
+        const maxDim = 800;
+        let w = img.width;
+        let h = img.height;
+        if (w > maxDim || h > maxDim) {
+          const scale = maxDim / Math.max(w, h);
+          w = Math.round(w * scale);
+          h = Math.round(h * scale);
+        }
+
+        const newElement = {
+          id: `img-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          type: 'image',
+          src: dataUrl,
+          x: 100,
+          y: 100,
+          width: w,
+          height: h,
+          style: {}
+        };
+
+        saveToHistory();
+        setElements((prev) => [...prev, newElement]);
+      };
+      img.src = dataUrl;
+    };
+    reader.readAsDataURL(file);
+
+    // Reset the input so the same file can be re-imported
+    e.target.value = '';
+  };
+
   const handleSelectionChange = (id) => {
     setSelectedElementId(id);
     if (id) {
@@ -253,6 +331,45 @@ function MeetingCanvasEditor() {
             <span className="material-symbols-outlined text-[20px]">arrow_back</span>
           </button>
           <div className="h-6 w-[1px] bg-white/10"></div>
+
+          {/* File dropdown menu */}
+          <div className="relative" ref={fileMenuRef}>
+            <button
+              onClick={() => setFileMenuOpen((v) => !v)}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium text-slate-300 hover:text-white hover:bg-white/10 transition-all"
+            >
+              File
+              <span className="material-symbols-outlined text-[16px]">expand_more</span>
+            </button>
+            {fileMenuOpen && (
+              <div className="absolute top-full left-0 mt-1 w-52 bg-[#1e1e2e] border border-white/10 rounded-xl shadow-2xl py-1.5 z-[100]">
+                <button
+                  onClick={handleImportClick}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-300 hover:text-white hover:bg-white/10 transition-all"
+                >
+                  <span className="material-symbols-outlined text-[18px]">upload</span>
+                  Import Image
+                </button>
+                <button
+                  onClick={handleExport}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-300 hover:text-white hover:bg-white/10 transition-all"
+                >
+                  <span className="material-symbols-outlined text-[18px]">download</span>
+                  Export as PNG
+                </button>
+                <div className="border-t border-white/10 my-1"></div>
+                <button
+                  onClick={() => { setFileMenuOpen(false); handleSave(false); }}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-300 hover:text-white hover:bg-white/10 transition-all"
+                >
+                  <span className="material-symbols-outlined text-[18px]">save</span>
+                  Save
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div className="h-6 w-[1px] bg-white/10"></div>
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 bg-gradient-to-br from-amber-500 to-orange-600 rounded-lg flex items-center justify-center shadow-lg">
               <span className="material-symbols-outlined text-white text-[18px]">videocam</span>
@@ -284,6 +401,15 @@ function MeetingCanvasEditor() {
         </div>
       </header>
 
+      {/* Hidden file input for import */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleImportFile}
+      />
+
       {/* Main Area: Toolbar + Canvas + ToolSettings */}
       <main className="flex-1 flex overflow-hidden relative">
         <Toolbar
@@ -294,6 +420,8 @@ function MeetingCanvasEditor() {
           canUndo={history.length > 0}
           canRedo={redoStack.length > 0}
           canEdit={true}
+          onImportImage={handleImportClick}
+          onExportCanvas={handleExport}
         />
 
         <ToolSettings
@@ -311,6 +439,7 @@ function MeetingCanvasEditor() {
         />
 
         <Canvas
+          ref={canvasCompRef}
           activeTool={activeTool}
           canEdit={true}
           onCursorMove={() => {}}

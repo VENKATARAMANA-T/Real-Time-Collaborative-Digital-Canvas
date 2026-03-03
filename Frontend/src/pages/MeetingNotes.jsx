@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { meetingAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext.jsx';
+import VideoPlayer from '../components/Meeting/VideoPlayer.jsx';
 
 export default function MeetingNotes() {
   const { id } = useParams();
@@ -219,29 +220,15 @@ export default function MeetingNotes() {
               </div>
             ) : (
               <div>
-                <div className="rounded-2xl overflow-hidden border border-white/10 bg-black">
-                  <video
-                    src={recordingUrl}
-                    controls
-                    className="w-full aspect-video"
-                    controlsList="nodownload"
-                  >
-                    Your browser does not support the video tag.
-                  </video>
-                </div>
+                <VideoPlayer
+                  src={recordingUrl}
+                  downloadName={`${meeting.name || 'meeting'}_recording.webm`}
+                />
                 <div className="flex items-center justify-between mt-4 px-1">
                   <div className="flex items-center text-xs text-slate-500">
                     <span className="material-symbols-outlined text-sm mr-1">radio_button_checked</span>
                     Recorded by {meeting.recordedBy?.username || 'Unknown'}
                   </div>
-                  <a
-                    href={recordingUrl}
-                    download={`${meeting.name || 'meeting'}_recording.webm`}
-                    className="flex items-center gap-1.5 text-xs font-semibold text-primary hover:text-blue-400 transition-colors"
-                  >
-                    <span className="material-symbols-outlined text-sm">download</span>
-                    Download Recording
-                  </a>
                 </div>
               </div>
             )}

@@ -7,8 +7,9 @@ const {
   hashToken,
   setAuthCookies,
 } = require('../utils/tokenService');
+const { uploadToCloudinary, deleteFromCloudinary, getPublicIdFromUrl } = require('../config/cloudinary');
 
-// @desc    Update User Profile (Username/Email)
+// @desc    Update User Profile (Username/Email/Profile Image)
 // @route   PUT /api/users/:id/profile
 // @access  Private
 const updateUserProfile = async (req, res) => {
@@ -20,7 +21,7 @@ const updateUserProfile = async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    const { username, email } = req.body;
+    const { username, email, profileImage } = req.body;
 
     // Email uniqueness check
     if (email && email !== user.email) {
@@ -33,13 +34,56 @@ const updateUserProfile = async (req, res) => {
 
     if (username) user.username = username;
 
+    // Handle profile image upload to Cloudinary
+    if (profileImage && profileImage.startsWith('data:')) {
+      // Delete old profile image from Cloudinary if exists
+      if (user.profileImagePublicId) {
+        try {
+          await deleteFromCloudinary(user.profileImagePublicId);
+        } catch (deleteErr) {
+          console.warn('Failed to delete old profile image:', deleteErr.message);
+        }
+      }
+
+      // Upload new profile image to Cloudinary
+      const result = await uploadToCloudinary(profileImage, {
+        folder: 'RealTimeDigitalCanvas/profiles',
+        transformation: [{ width: 256, height: 256, crop: 'fill', gravity: 'face', quality: 'auto' }],
+      });
+
+      user.profileImage = result.secure_url;
+      user.profileImagePublicId = result.public_id;
+    } else if (profileImage === '') {
+      // Clear profile image
+      if (user.profileImagePublicId) {
+        try {
+          await deleteFromCloudinary(user.profileImagePublicId);
+        } catch (deleteErr) {
+          console.warn('Failed to delete old profile image:', deleteErr.message);
+        }
+      }
+      user.profileImage = '';
+      user.profileImagePublicId = '';
+    }
+
     const updatedUser = await user.save();
+
+    // Log Activity
+    try {
+      const log = await ActivityLog.create({ user: user._id, action: 'UPDATE_PROFILE' });
+      if (req.app && req.app.get('io')) {
+        req.app.get('io').to(user._id.toString()).emit('activity_update', { userId: user._id, log });
+      }
+    } catch (logErr) {
+      console.warn('Activity log failed:', logErr.message);
+    }
 
     // ✅ Success status
     res.status(200).json({
       _id: updatedUser._id,
       username: updatedUser.username,
       email: updatedUser.email,
+      profileImage: updatedUser.profileImage,
       createdAt: updatedUser.createdAt
     });
 

@@ -147,16 +147,43 @@ export default function UserProfileUI() {
     }));
   };
 
+  // Handle profile image selection
+  const handleProfileImageChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type and size
+    if (!file.type.startsWith('image/')) {
+      showFlash('profile', 'error', 'Please select an image file');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      showFlash('profile', 'error', 'Image must be less than 5MB');
+      return;
+    }
+
+    // Convert to base64 for preview and upload
+    const reader = new FileReader();
+    reader.onload = () => {
+      setProfileImage(reader.result);
+    };
+    reader.readAsDataURL(file);
+  };
+
   // Handle profile update
   const handleProfileUpdate = async (e) => {
     e.preventDefault();
     setIsSaving(true);
 
     try {
-      const updatedData = await userAPI.updateProfile(user.id, {
-        username,
-        email,
-      });
+      const updatePayload = { username, email };
+
+      // Include profile image if it's a new base64 image (user selected a new one)
+      if (profileImage && profileImage.startsWith('data:')) {
+        updatePayload.profileImage = profileImage;
+      }
+
+      const updatedData = await userAPI.updateProfile(user.id, updatePayload);
 
       // Update local storage
       const updatedUser = { ...user, ...updatedData };
@@ -309,13 +336,26 @@ export default function UserProfileUI() {
         <aside className="w-full md:w-64 flex-shrink-0 animate-slide-in">
           <div className="glass bg-slate-900/40 border border-white/10 backdrop-blur-xl rounded-2xl p-6 sticky top-32">
             <div className="flex flex-col items-center mb-8">
-              <div className="w-20 h-20 rounded-full p-1 bg-gradient-to-br from-purple-500 to-cyan-500 mb-4 relative group cursor-pointer">
-                <div className="w-full h-full rounded-full bg-gradient-to-br from-purple-600 to-cyan-600 flex items-center justify-center text-white text-2xl font-bold">
-                  {username?.charAt(0).toUpperCase() || 'U'}
-                </div>
+              <div className="w-20 h-20 rounded-full p-1 bg-gradient-to-br from-purple-500 to-cyan-500 mb-4 relative group cursor-pointer"
+                onClick={() => document.getElementById('profile-image-input')?.click()}
+              >
+                {profileImage ? (
+                  <img src={profileImage} alt="Profile" className="w-full h-full rounded-full object-cover" crossOrigin="anonymous" />
+                ) : (
+                  <div className="w-full h-full rounded-full bg-gradient-to-br from-purple-600 to-cyan-600 flex items-center justify-center text-white text-2xl font-bold">
+                    {username?.charAt(0).toUpperCase() || 'U'}
+                  </div>
+                )}
                 <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                   <Camera className="w-6 h-6 text-white" />
                 </div>
+                <input
+                  id="profile-image-input"
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleProfileImageChange}
+                />
               </div>
               <h2 className="text-xl font-bold">{username}</h2>
               <p className="text-sm text-slate-400">{email}</p>
@@ -363,6 +403,54 @@ export default function UserProfileUI() {
                 <p className="text-slate-400 text-sm mb-8">Update your personal information and account details.</p>
 
                 <form onSubmit={handleProfileUpdate} className="space-y-6 max-w-2xl">
+                  {/* Profile Image Upload */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold text-slate-400 uppercase">Profile Photo</label>
+                    <div className="flex items-center gap-6">
+                      <div 
+                        className="w-24 h-24 rounded-full p-1 bg-gradient-to-br from-purple-500 to-cyan-500 relative group cursor-pointer flex-shrink-0"
+                        onClick={() => document.getElementById('profile-image-upload')?.click()}
+                      >
+                        {profileImage ? (
+                          <img src={profileImage} alt="Profile" className="w-full h-full rounded-full object-cover" crossOrigin="anonymous" />
+                        ) : (
+                          <div className="w-full h-full rounded-full bg-gradient-to-br from-purple-600 to-cyan-600 flex items-center justify-center text-white text-3xl font-bold">
+                            {username?.charAt(0).toUpperCase() || 'U'}
+                          </div>
+                        )}
+                        <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Camera className="w-6 h-6 text-white" />
+                        </div>
+                        <input
+                          id="profile-image-upload"
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={handleProfileImageChange}
+                        />
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <button
+                          type="button"
+                          onClick={() => document.getElementById('profile-image-upload')?.click()}
+                          className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm font-semibold text-white transition-all"
+                        >
+                          Change Photo
+                        </button>
+                        {profileImage && (
+                          <button
+                            type="button"
+                            onClick={() => setProfileImage('')}
+                            className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 rounded-lg text-sm font-semibold text-red-400 transition-all"
+                          >
+                            Remove Photo
+                          </button>
+                        )}
+                        <p className="text-xs text-slate-500">JPG, PNG or GIF. Max 5MB.</p>
+                      </div>
+                    </div>
+                  </div>
+
                   <div className="space-y-2">
                     <label className="text-xs font-semibold text-slate-400 uppercase">Username</label>
                     <div className="relative">
