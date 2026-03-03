@@ -1,9 +1,9 @@
 import React from 'react';
 import { Settings } from 'lucide-react';
 
-const PropertiesPanel = ({ strokeWidth, setStrokeWidth }) => {
+const PropertiesPanel = ({ id, strokeWidth, setStrokeWidth }) => {
   return (
-    <aside className="w-16 flex flex-col items-center py-8 gap-12 bg-zinc-900/30 border-r border-zinc-800/50 backdrop-blur-xl shrink-0">
+    <aside id={id} className="w-16 flex flex-col items-center py-8 gap-12 bg-zinc-900/30 border-r border-zinc-800/50 backdrop-blur-xl shrink-0">
       <div className="flex flex-col items-center gap-4 group">
         <div className="p-2 bg-zinc-800 rounded-lg text-zinc-400">
           <Settings size={18} />

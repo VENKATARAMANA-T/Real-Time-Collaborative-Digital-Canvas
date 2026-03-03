@@ -8,6 +8,7 @@ import MenuItem, { MenuDivider } from '../shared/MenuItem';
 import IconButton from '../shared/IconButton';
 
 const TopMenu = ({
+  id,
   isFileMenuOpen,
   setIsFileMenuOpen,
   isEditMenuOpen,
@@ -38,7 +39,7 @@ const TopMenu = ({
   onBack
 }) => {
   return (
-    <nav className="h-10 flex items-center px-4 gap-6 text-sm border-b border-zinc-800 bg-[#09090b] relative z-[100]">
+    <nav id={id} className="h-10 flex items-center px-4 gap-6 text-sm border-b border-zinc-800 bg-[#09090b] relative z-[100]">
       <button
         className="inline-flex items-center gap-2 rounded-md bg-zinc-800/70 px-3 py-1.5 text-zinc-200 transition-colors hover:bg-zinc-800 hover:text-white"
         onClick={onBack}

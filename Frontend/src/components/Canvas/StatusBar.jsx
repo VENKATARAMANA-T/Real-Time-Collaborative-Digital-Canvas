@@ -1,9 +1,9 @@
 import React from 'react';
 import { MousePointer2, Maximize2, Minus, Plus } from 'lucide-react';
 
-const StatusBar = ({ currPos, canvasSize, zoom, setZoom }) => {
+const StatusBar = ({ id, currPos, canvasSize, zoom, setZoom }) => {
   return (
-    <footer className="h-8 bg-[#18181b] border-t border-zinc-800 flex items-center justify-between px-4 text-[11px] text-zinc-500 shrink-0">
+    <footer id={id} className="h-8 bg-[#18181b] border-t border-zinc-800 flex items-center justify-between px-4 text-[11px] text-zinc-500 shrink-0">
       <div className="flex items-center gap-6">
         <span className="flex items-center gap-2">
           <MousePointer2 size={12} /> {Math.round(currPos.x)}, {Math.round(currPos.y)}px

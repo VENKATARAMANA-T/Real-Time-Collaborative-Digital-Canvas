@@ -125,15 +125,18 @@ const PaintCanvas = ({
   const drawElement = (ctx, el, isSelected, isEditing) => {
     if (!ctx) return;
     ctx.save();
-    ctx.strokeStyle = el.color;
-    ctx.fillStyle = el.color;
+    // Support separate fillColor / strokeColor fields (from bot) or fall back to el.color
+    const strokeCol = el.strokeColor ?? el.color;
+    const fillCol   = el.fillColor   ?? el.color;
+    ctx.strokeStyle = strokeCol;
+    ctx.fillStyle   = fillCol;
     ctx.lineWidth = el.strokeWidth;
     ctx.globalAlpha = el.opacity;
     ctx.beginPath();
 
     if (el.type === 'rect') {
       ctx.strokeRect(el.x, el.y, el.w, el.h);
-      if (el.fill) { ctx.fillStyle = el.color; ctx.fillRect(el.x, el.y, el.w, el.h); }
+      if (el.fill) { ctx.fillStyle = fillCol; ctx.fillRect(el.x, el.y, el.w, el.h); }
     }
     else if (el.type === 'circle') {
       const radiusX = Math.abs(el.w) / 2;
@@ -141,7 +144,8 @@ const PaintCanvas = ({
       const centerX = el.x + el.w / 2;
       const centerY = el.y + el.h / 2;
       ctx.ellipse(centerX, centerY, radiusX, radiusY, 0, 0, 2 * Math.PI);
-      if (el.fill) { ctx.fillStyle = el.color; ctx.fill(); }
+      if (el.fill) { ctx.fillStyle = fillCol; ctx.fill(); }
+      ctx.strokeStyle = strokeCol;
       ctx.stroke();
     }
     else if (el.type === 'line') {
@@ -154,22 +158,22 @@ const PaintCanvas = ({
       ctx.lineTo(el.x, el.y + el.h);
       ctx.lineTo(el.x + el.w, el.y + el.h);
       ctx.closePath();
-      if (el.fill) { ctx.fillStyle = el.color; ctx.fill(); }
-      ctx.stroke();
+      if (el.fill) { ctx.fillStyle = fillCol; ctx.fill(); }
+      ctx.strokeStyle = strokeCol; ctx.stroke();
     }
-    else if (el.type === 'pentagon') drawRegularPolygon(ctx, el.x, el.y, el.w, el.h, 5, el.fill);
-    else if (el.type === 'hexagon') drawRegularPolygon(ctx, el.x, el.y, el.w, el.h, 6, el.fill);
-    else if (el.type === 'callout') drawCalloutShape(ctx, el.x, el.y, el.w, el.h, el.fill);
+    else if (el.type === 'pentagon') drawRegularPolygon(ctx, el.x, el.y, el.w, el.h, 5, el.fill, fillCol, strokeCol);
+    else if (el.type === 'hexagon') drawRegularPolygon(ctx, el.x, el.y, el.w, el.h, 6, el.fill, fillCol, strokeCol);
+    else if (el.type === 'callout') drawCalloutShape(ctx, el.x, el.y, el.w, el.h, el.fill, fillCol, strokeCol);
     else if (el.type === 'rhombus') {
       ctx.moveTo(el.x + el.w / 2, el.y);
       ctx.lineTo(el.x + el.w, el.y + el.h / 2);
       ctx.lineTo(el.x + el.w / 2, el.y + el.h);
       ctx.lineTo(el.x, el.y + el.h / 2);
       ctx.closePath();
-      if (el.fill) { ctx.fillStyle = el.color; ctx.fill(); }
-      ctx.stroke();
-    } else if (el.type === 'star') drawStarShape(ctx, el.x, el.y, el.w, el.h, el.fill);
-    else if (el.type === 'arrow') drawArrowShape(ctx, el.x, el.y, el.w, el.h, el.fill);
+      if (el.fill) { ctx.fillStyle = fillCol; ctx.fill(); }
+      ctx.strokeStyle = strokeCol; ctx.stroke();
+    } else if (el.type === 'star') drawStarShape(ctx, el.x, el.y, el.w, el.h, el.fill, fillCol, strokeCol);
+    else if (el.type === 'arrow') drawArrowShape(ctx, el.x, el.y, el.w, el.h, el.fill, fillCol, strokeCol);
     else if (el.type === 'text') {
       if (!isEditing) {
         const fontSize = el.fontSize || 24;

@@ -1,8 +1,11 @@
+const dotenv = require('dotenv');
+// Load env vars
+dotenv.config();
+
 const express = require('express');
 const connectDB = require('./config/db.js');
 const cookieParser = require('cookie-parser');
 const cors = require('cors');
-const dotenv = require('dotenv');
 const http = require('http');
 const path = require('path');
 const { Server } = require('socket.io');
@@ -13,13 +16,11 @@ const meetingRoutes = require('./routes/meetingRoutes.js');
 const userRoutes = require('./routes/userRoutes.js');
 const chatRoutes = require('./routes/chatRoutes.js');
 const folderRoutes = require('./routes/folderRoutes.js');
+const botRoutes = require('./routes/botRoutes.js');
 
 const { notFound, errorHandler } = require('./middleware/errorMiddleware.js');
 
 const socketHandler = require('./socket/socketHandler');
-
-// Load env vars
-dotenv.config();
 
 const app = express();
 
@@ -28,8 +29,8 @@ const server = http.createServer(app);
 // Initialize Socket.io with CORS settings
 const io = new Server(server, {
   cors: {
-    origin: process.env.FRONTEND_URL || "http://localhost:5173",
-    methods: ["GET", "POST"],
+    origin: ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175'],
+    methods: ['GET', 'POST'],
     credentials: true,
     allowEIO3: true
   }
@@ -37,10 +38,20 @@ const io = new Server(server, {
 app.set('io', io);
 socketHandler(io);
 
+const ALLOWED_ORIGINS = [
+  process.env.FRONTEND_URL || 'http://localhost:5173',
+  'http://localhost:5173',
+  'http://localhost:5174',
+  'http://localhost:5175',
+];
+
 app.use(cors({
-  origin: process.env.FRONTEND_URL,   // read from .env
+  origin: (origin, callback) => {
+    if (!origin || ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+    callback(new Error('Not allowed by CORS'));
+  },
   credentials: true,
-  methods: ["GET", "POST", "PUT", "DELETE"],
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
 }));
 
 
@@ -58,6 +69,7 @@ app.use('/api/meetings', meetingRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/folders', folderRoutes);
+app.use('/api/bot', botRoutes);
 
 // === ERROR MIDDLEWARE (MUST BE LAST) ===
 app.use(notFound);
@@ -72,13 +84,12 @@ app.use(errorHandler);
 const PORT = process.env.PORT || 5000;
 
 // 1. Connect to DB first
-connectDB().then(() => {
-  // 2. ONLY start server if DB connects successfully
-  console.log('Database connected successfully. Starting server...');
-  server.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+// Start server immediately — DB connection failure is non-fatal
+server.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+  // Connect DB in background
+  connectDB().then((dbOk) => {
+    if (dbOk) console.log('[DB] All features available.');
+    else console.warn('[DB] Running in degraded mode — bot & public routes still available.');
   });
-}).catch((err) => {
-  console.log('Database connection failed. Server not started.');
-  console.error(err);
 });
