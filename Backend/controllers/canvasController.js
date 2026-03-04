@@ -1,6 +1,94 @@
 const Canvas = require('../models/Canvas.js');
 const ActivityLog = require('../models/ActivityLog.js');
 const Meeting = require('../models/Meeting.js');
+const { uploadToCloudinary, deleteFromCloudinary } = require('../config/cloudinary.js');
+
+// Helper: Upload images embedded in canvas elements to Cloudinary
+const uploadCanvasImagesToCloud = async (elements) => {
+  if (!elements || !Array.isArray(elements)) return elements;
+
+  const updatedElements = await Promise.all(
+    elements.map(async (el) => {
+      // Check if element is an image with base64 data
+      if (el.type === 'image' && el.src && el.src.startsWith('data:')) {
+        try {
+          const result = await uploadToCloudinary(el.src, {
+            folder: 'RealTimeDigitalCanvas/canvas-images',
+            public_id: `canvas_img_${el.id || Date.now()}`,
+          });
+          return {
+            ...el,
+            src: result.secure_url,
+            cloudinaryPublicId: result.public_id,
+          };
+        } catch (err) {
+          console.warn('[Canvas] Failed to upload image element:', err.message);
+          return el; // Keep original if upload fails
+        }
+      }
+      // Also handle imageData property (some canvas implementations use this)
+      if (el.imageData && el.imageData.startsWith('data:')) {
+        try {
+          const result = await uploadToCloudinary(el.imageData, {
+            folder: 'RealTimeDigitalCanvas/canvas-images',
+            public_id: `canvas_imgdata_${el.id || Date.now()}`,
+          });
+          return {
+            ...el,
+            imageData: result.secure_url,
+            cloudinaryPublicId: result.public_id,
+          };
+        } catch (err) {
+          console.warn('[Canvas] Failed to upload imageData element:', err.message);
+          return el;
+        }
+      }
+      return el;
+    })
+  );
+
+  return updatedElements;
+};
+
+// Helper: Upload thumbnail and pixel data to Cloudinary
+const uploadCanvasMediaToCloud = async (thumbnail, pixelData, canvasId) => {
+  const result = { thumbnail: '', thumbnailPublicId: '', pixelDataUrl: '', pixelDataPublicId: '' };
+
+  if (thumbnail && thumbnail.startsWith('data:')) {
+    try {
+      const thumbResult = await uploadToCloudinary(thumbnail, {
+        folder: 'RealTimeDigitalCanvas/thumbnails',
+        public_id: `thumb_${canvasId || Date.now()}`,
+        overwrite: true,
+        transformation: [{ width: 400, height: 200, crop: 'fill', quality: 'auto:low' }],
+      });
+      result.thumbnail = thumbResult.secure_url;
+      result.thumbnailPublicId = thumbResult.public_id;
+    } catch (err) {
+      console.warn('[Canvas] Thumbnail upload failed:', err.message);
+    }
+  } else if (thumbnail) {
+    result.thumbnail = thumbnail; // Already a URL
+  }
+
+  if (pixelData && pixelData.startsWith('data:')) {
+    try {
+      const pixelResult = await uploadToCloudinary(pixelData, {
+        folder: 'RealTimeDigitalCanvas/canvas-data',
+        public_id: `pixeldata_${canvasId || Date.now()}`,
+        overwrite: true,
+      });
+      result.pixelDataUrl = pixelResult.secure_url;
+      result.pixelDataPublicId = pixelResult.public_id;
+    } catch (err) {
+      console.warn('[Canvas] Pixel data upload failed:', err.message);
+    }
+  } else if (pixelData) {
+    result.pixelDataUrl = pixelData; // Already a URL
+  }
+
+  return result;
+};
 
 // @desc    Create a new blank canvas (Private by default)
 // @route   POST /api/canvases
@@ -12,12 +100,32 @@ exports.createCanvas = async (req, res) => {
       ? title.trim()
       : `Untitled Canvas ${Date.now()}`;
 
+    // Upload images within canvas elements to Cloudinary
+    let processedData = data || {};
+    if (processedData.elements && Array.isArray(processedData.elements)) {
+      processedData.elements = await uploadCanvasImagesToCloud(processedData.elements);
+    }
+
+    // Upload thumbnail and pixel data to Cloudinary
+    const canvasId = Date.now().toString();
+    const mediaResult = await uploadCanvasMediaToCloud(
+      thumbnail, processedData.pixelData, canvasId
+    );
+
+    // Remove raw pixel data from data object (it's now in Cloudinary)
+    if (processedData.pixelData) {
+      delete processedData.pixelData;
+    }
+
     const canvas = new Canvas({
       title: safeTitle,
       owner: req.user._id,
       folder: folderId || null,
-      data: data || {},
-      thumbnail: thumbnail || ''
+      data: processedData,
+      thumbnail: mediaResult.thumbnail,
+      thumbnailPublicId: mediaResult.thumbnailPublicId,
+      pixelDataUrl: mediaResult.pixelDataUrl,
+      pixelDataPublicId: mediaResult.pixelDataPublicId,
     });
 
     const createdCanvas = await canvas.save();
@@ -67,7 +175,14 @@ exports.getCanvasById = async (req, res) => {
       return res.status(404).json({ message: 'Canvas not found or access denied' });
     }
 
-    res.status(200).json(canvas);
+    // Include pixelDataUrl in the response data for frontend to load
+    const responseCanvas = canvas.toObject();
+    if (responseCanvas.pixelDataUrl) {
+      if (!responseCanvas.data) responseCanvas.data = {};
+      responseCanvas.data.pixelData = responseCanvas.pixelDataUrl;
+    }
+
+    res.status(200).json(responseCanvas);
   } catch (error) {
     res.status(500).json({ message: 'Server Error', error: error.message });
   }
@@ -79,14 +194,46 @@ exports.getCanvasById = async (req, res) => {
 exports.updateCanvas = async (req, res) => {
   try {
     const { data, thumbnail, title } = req.body;
-    console.log(data, thumbnail, title);
+
+    // Process canvas images - upload base64 images to Cloudinary
+    let processedData = data;
+    if (processedData && processedData.elements && Array.isArray(processedData.elements)) {
+      processedData = { ...processedData };
+      processedData.elements = await uploadCanvasImagesToCloud(processedData.elements);
+    }
+
+    // Upload thumbnail and pixel data to Cloudinary
+    const mediaResult = await uploadCanvasMediaToCloud(
+      thumbnail, processedData?.pixelData, req.params.id
+    );
+
+    // Remove raw pixel data from data object
+    if (processedData && processedData.pixelData) {
+      processedData = { ...processedData };
+      delete processedData.pixelData;
+    }
+
+    // Delete old thumbnail/pixel data from Cloudinary
+    const existingCanvas = await Canvas.findOne({ _id: req.params.id, owner: req.user._id });
+    if (existingCanvas) {
+      if (existingCanvas.thumbnailPublicId && mediaResult.thumbnailPublicId) {
+        try { await deleteFromCloudinary(existingCanvas.thumbnailPublicId); } catch (e) { /* ignore */ }
+      }
+      if (existingCanvas.pixelDataPublicId && mediaResult.pixelDataPublicId) {
+        try { await deleteFromCloudinary(existingCanvas.pixelDataPublicId); } catch (e) { /* ignore */ }
+      }
+    }
+
     // Find and Update strictly by Owner
     const canvas = await Canvas.findOneAndUpdate(
       { _id: req.params.id, owner: req.user._id },
       {
         $set: {
-          data: data,           // The JSON drawing data 
-          thumbnail: thumbnail, // Screenshot/Preview string
+          data: processedData,
+          thumbnail: mediaResult.thumbnail || (existingCanvas?.thumbnail || ''),
+          thumbnailPublicId: mediaResult.thumbnailPublicId || (existingCanvas?.thumbnailPublicId || ''),
+          pixelDataUrl: mediaResult.pixelDataUrl || (existingCanvas?.pixelDataUrl || ''),
+          pixelDataPublicId: mediaResult.pixelDataPublicId || (existingCanvas?.pixelDataPublicId || ''),
           title: title
         }
       },
@@ -98,7 +245,6 @@ exports.updateCanvas = async (req, res) => {
     }
 
     // Log Activity: UPDATE_CANVAS
-    // We wrap this in a try-catch so logging failures don't stop the save
     try {
       const log = await ActivityLog.create({
         user: req.user._id,
@@ -129,6 +275,26 @@ exports.deleteCanvas = async (req, res) => {
 
     if (!canvas) {
       return res.status(404).json({ message: 'Canvas not found or access denied' });
+    }
+
+    // Clean up Cloudinary resources
+    const cleanupPromises = [];
+    if (canvas.thumbnailPublicId) {
+      cleanupPromises.push(deleteFromCloudinary(canvas.thumbnailPublicId).catch(() => {}));
+    }
+    if (canvas.pixelDataPublicId) {
+      cleanupPromises.push(deleteFromCloudinary(canvas.pixelDataPublicId).catch(() => {}));
+    }
+    // Clean up image elements stored in Cloudinary
+    if (canvas.data?.elements && Array.isArray(canvas.data.elements)) {
+      canvas.data.elements.forEach(el => {
+        if (el.cloudinaryPublicId) {
+          cleanupPromises.push(deleteFromCloudinary(el.cloudinaryPublicId).catch(() => {}));
+        }
+      });
+    }
+    if (cleanupPromises.length > 0) {
+      await Promise.all(cleanupPromises);
     }
 
     // Log Activity
@@ -166,14 +332,15 @@ exports.getMeetingCanvasById = async (req, res) => {
 
     // --- CHECK 1: Are you the Owner? ---
     if (canvas.owner._id.toString() === req.user._id.toString()) {
-      return res.status(200).json(canvas);
+      const responseCanvas = canvas.toObject();
+      if (responseCanvas.pixelDataUrl) {
+        if (!responseCanvas.data) responseCanvas.data = {};
+        responseCanvas.data.pixelData = responseCanvas.pixelDataUrl;
+      }
+      return res.status(200).json(responseCanvas);
     }
 
     // --- CHECK 2: Are you in an Active Meeting? ---
-    // We check the Meeting collection to see if:
-    // a) The meeting is for THIS canvas
-    // b) The meeting is ACTIVE (endTime is null)
-    // c) You are in the participants list AND haven't left
     const activeMeeting = await Meeting.findOne({
       canvas: canvas._id,
       endTime: null,
@@ -186,7 +353,12 @@ exports.getMeetingCanvasById = async (req, res) => {
     });
 
     if (activeMeeting) {
-      return res.status(200).json(canvas);
+      const responseCanvas = canvas.toObject();
+      if (responseCanvas.pixelDataUrl) {
+        if (!responseCanvas.data) responseCanvas.data = {};
+        responseCanvas.data.pixelData = responseCanvas.pixelDataUrl;
+      }
+      return res.status(200).json(responseCanvas);
     }
 
     // If neither, access denied
@@ -237,14 +409,46 @@ exports.updateMeetingCanvas = async (req, res) => {
       return res.status(403).json({ message: 'You do not have permission to edit this canvas.' });
     }
     const { data, thumbnail, title } = req.body;
+
+    // Process canvas images - upload base64 images to Cloudinary
+    let processedData = data;
+    if (processedData && processedData.elements && Array.isArray(processedData.elements)) {
+      processedData = { ...processedData };
+      processedData.elements = await uploadCanvasImagesToCloud(processedData.elements);
+    }
+
+    // Upload thumbnail and pixel data to Cloudinary
+    const mediaResult = await uploadCanvasMediaToCloud(
+      thumbnail, processedData?.pixelData, req.params.id
+    );
+
+    // Remove raw pixel data from data object
+    if (processedData && processedData.pixelData) {
+      processedData = { ...processedData };
+      delete processedData.pixelData;
+    }
+
     // --- PERFORM UPDATE ---
-    if (data) canvas.data = data;
-    if (thumbnail) canvas.thumbnail = thumbnail;
+    if (processedData) canvas.data = processedData;
+    if (mediaResult.thumbnail) {
+      // Clean up old thumbnail
+      if (canvas.thumbnailPublicId) {
+        try { await deleteFromCloudinary(canvas.thumbnailPublicId); } catch (e) { /* ignore */ }
+      }
+      canvas.thumbnail = mediaResult.thumbnail;
+      canvas.thumbnailPublicId = mediaResult.thumbnailPublicId;
+    }
+    if (mediaResult.pixelDataUrl) {
+      // Clean up old pixel data
+      if (canvas.pixelDataPublicId) {
+        try { await deleteFromCloudinary(canvas.pixelDataPublicId); } catch (e) { /* ignore */ }
+      }
+      canvas.pixelDataUrl = mediaResult.pixelDataUrl;
+      canvas.pixelDataPublicId = mediaResult.pixelDataPublicId;
+    }
     if (title) canvas.title = title;
 
     const updatedCanvas = await canvas.save();
-
-    // No need to log activites in meeting 
 
     res.status(200).json(updatedCanvas);
 
@@ -270,15 +474,45 @@ exports.duplicateCanvas = async (req, res) => {
 
     // Create a new canvas with duplicated data
     const duplicatedTitle = `${originalCanvas.title}_duplicate`;
+    const duplicatedData = JSON.parse(JSON.stringify(originalCanvas.data)); // Deep copy
+
     const newCanvas = new Canvas({
       title: duplicatedTitle,
       owner: req.user._id,
       folder: originalCanvas.folder,
-      data: JSON.parse(JSON.stringify(originalCanvas.data)), // Deep copy
-      thumbnail: originalCanvas.thumbnail
+      data: duplicatedData,
+      thumbnail: originalCanvas.thumbnail,
+      pixelDataUrl: originalCanvas.pixelDataUrl || '',
+      // Don't copy publicIds – re-upload to give the duplicate its own Cloudinary copies
     });
 
-    const savedCanvas = await newCanvas.save();
+    let savedCanvas = await newCanvas.save();
+
+    // Re-upload thumbnail & pixelData so each canvas owns its own Cloudinary resources
+    try {
+      if (originalCanvas.thumbnail) {
+        const thumbResult = await uploadToCloudinary(originalCanvas.thumbnail, {
+          folder: 'RealTimeDigitalCanvas/thumbnails',
+          public_id: `canvas_${savedCanvas._id}_thumb`,
+          overwrite: true,
+          transformation: [{ width: 400, height: 300, crop: 'limit', quality: 'auto' }],
+        });
+        savedCanvas.thumbnail = thumbResult.secure_url;
+        savedCanvas.thumbnailPublicId = thumbResult.public_id;
+      }
+      if (originalCanvas.pixelDataUrl) {
+        const pixelResult = await uploadToCloudinary(originalCanvas.pixelDataUrl, {
+          folder: 'RealTimeDigitalCanvas/canvas-data',
+          public_id: `canvas_${savedCanvas._id}_pixels`,
+          overwrite: true,
+        });
+        savedCanvas.pixelDataUrl = pixelResult.secure_url;
+        savedCanvas.pixelDataPublicId = pixelResult.public_id;
+      }
+      savedCanvas = await savedCanvas.save();
+    } catch (uploadErr) {
+      console.error('Duplicate canvas: cloud re-upload failed, using shared URLs', uploadErr.message);
+    }
 
     // Log Activity
     const log = await ActivityLog.create({

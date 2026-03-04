@@ -6,6 +6,10 @@ const imageCache = new Map();
 function getOrLoadImage(src, onLoad) {
   if (imageCache.has(src)) return imageCache.get(src);
   const img = new window.Image();
+  // Set crossOrigin for Cloudinary URLs to allow canvas operations
+  if (src && (src.startsWith('http://') || src.startsWith('https://'))) {
+    img.crossOrigin = 'anonymous';
+  }
   img.onload = () => {
     imageCache.set(src, img);
     if (onLoad) onLoad();
@@ -260,7 +264,8 @@ const Canvas = forwardRef(function Canvas({
   };
 
   const drawElement = (ctx, element) => {
-    const { x, y, width, height, style, points, type, shapeType } = element;
+    const { x, y, width, height, points, type, shapeType } = element;
+    const style = element.style || {};
 
     ctx.save();
 

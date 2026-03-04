@@ -693,6 +693,7 @@ const PaintApp = () => {
     if (!loadedPixelData || !canvasRef.current || !contextRef.current) return;
 
     const img = new Image();
+    img.crossOrigin = 'anonymous'; // Required for Cloudinary URLs to work with canvas
     img.src = loadedPixelData;
     img.onload = () => {
       if (!canvasRef.current || !contextRef.current) return;

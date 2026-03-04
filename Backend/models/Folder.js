@@ -4,13 +4,16 @@ const folderSchema = new mongoose.Schema({
   name: {
     type: String,
     required: [true, 'Please provide a folder name'],
-    unique: true, // Folder names must now be unique
     trim: true
   },
   owner: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: true
+  },
+  isDefault: {
+    type: Boolean,
+    default: false
   },
   parentFolder: {
     type: mongoose.Schema.Types.ObjectId,
@@ -28,5 +31,8 @@ const folderSchema = new mongoose.Schema({
     ref: 'Folder'
   }]
 }, { timestamps: true });
+
+// Compound unique: each user can have only one folder with a given name
+folderSchema.index({ name: 1, owner: 1 }, { unique: true });
 
 module.exports = mongoose.model('Folder', folderSchema);

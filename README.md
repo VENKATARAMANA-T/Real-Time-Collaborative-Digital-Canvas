@@ -151,10 +151,10 @@ Each section is designed to be **independent, reusable, and API-driven**.
 - CRDT / OT algorithms
 
 ### Database
-- MongoDB / Firebase Firestore
+- MongoDB
 
 ### Storage
-- AWS S3 / Firebase Storage
+- Cloudinary (images) / Local disk (recordings)
 
 ### AI & ML
 - TensorFlow.js
