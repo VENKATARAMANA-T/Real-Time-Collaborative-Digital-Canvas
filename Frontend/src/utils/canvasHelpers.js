@@ -1,4 +1,4 @@
-export const drawRegularPolygon = (ctx, x, y, w, h, sides, fill) => {
+export const drawRegularPolygon = (ctx, x, y, w, h, sides, fill, fillCol, strokeCol) => {
   const centerX = x + w / 2;
   const centerY = y + h / 2;
   const radius = Math.min(Math.abs(w), Math.abs(h)) / 2;
@@ -10,11 +10,13 @@ export const drawRegularPolygon = (ctx, x, y, w, h, sides, fill) => {
     if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
   }
   ctx.closePath();
-  if (fill) ctx.fill();
+  if (fill && fillCol) { ctx.fillStyle = fillCol; ctx.fill(); }
+  else if (fill) ctx.fill();
+  if (strokeCol) ctx.strokeStyle = strokeCol;
   ctx.stroke();
 };
 
-export const drawStarShape = (ctx, x, y, w, h, fill) => {
+export const drawStarShape = (ctx, x, y, w, h, fill, fillCol, strokeCol) => {
   const centerX = x + w / 2;
   const centerY = y + h / 2;
   const outerRadius = Math.min(Math.abs(w), Math.abs(h)) / 2;
@@ -39,11 +41,13 @@ export const drawStarShape = (ctx, x, y, w, h, fill) => {
   }
   ctx.lineTo(cx, cy - outerRadius);
   ctx.closePath();
-  if (fill) ctx.fill();
+  if (fill && fillCol) { ctx.fillStyle = fillCol; ctx.fill(); }
+  else if (fill) ctx.fill();
+  if (strokeCol) ctx.strokeStyle = strokeCol;
   ctx.stroke();
 };
 
-export const drawArrowShape = (ctx, x, y, w, h, fill) => {
+export const drawArrowShape = (ctx, x, y, w, h, fill, fillCol, strokeCol) => {
   const p1x = x; const p1y = y + h * 0.25;
   const p2x = x + w * 0.6; const p2y = y + h * 0.25;
   const p3x = x + w * 0.6; const p3y = y;
@@ -57,11 +61,13 @@ export const drawArrowShape = (ctx, x, y, w, h, fill) => {
   ctx.lineTo(p4x, p4y); ctx.lineTo(p5x, p5y); ctx.lineTo(p6x, p6y);
   ctx.lineTo(p7x, p7y);
   ctx.closePath();
-  if (fill) ctx.fill();
+  if (fill && fillCol) { ctx.fillStyle = fillCol; ctx.fill(); }
+  else if (fill) ctx.fill();
+  if (strokeCol) ctx.strokeStyle = strokeCol;
   ctx.stroke();
 };
 
-export const drawCalloutShape = (ctx, x, y, w, h, fill) => {
+export const drawCalloutShape = (ctx, x, y, w, h, fill, fillCol, strokeCol) => {
   const bx = w < 0 ? x + w : x;
   const by = h < 0 ? y + h : y;
   const bw = Math.abs(w);
@@ -84,7 +90,9 @@ export const drawCalloutShape = (ctx, x, y, w, h, fill) => {
   ctx.lineTo(bx, by + r);
   ctx.quadraticCurveTo(bx, by, bx + r, by);
   ctx.closePath();
-  if (fill) ctx.fill();
+  if (fill && fillCol) { ctx.fillStyle = fillCol; ctx.fill(); }
+  else if (fill) ctx.fill();
+  if (strokeCol) ctx.strokeStyle = strokeCol;
   ctx.stroke();
 };
 

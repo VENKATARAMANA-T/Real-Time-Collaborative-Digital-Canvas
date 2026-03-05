@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import TopMenu from '../components/Canvas/TopMenu';
 import Toolbar from '../components/Canvas/Toolbar';
 import PropertiesPanel from '../components/Canvas/PropertiesPanel';
@@ -9,11 +9,261 @@ import usePaintHistory from '../hooks/usePaintHistory';
 import usePaintTools from '../hooks/usePaintTools';
 import { canvasAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext.jsx';
+import BotWidget from '../components/Bot/BotWidget';
+import HelpOptionsButton from '../components/shared/HelpOptionsButton';
+
+/* ─── Walkthrough tooltip card (reusable) ─── */
+const PaintWalkthroughCard = ({ step, totalSteps, title, description, onBack, onNext, onClose, isLast }) => (
+  <div
+    data-walkthrough-card
+    style={{
+      background: 'linear-gradient(135deg, #101922 0%, #1a242f 100%)',
+      backdropFilter: 'blur(24px)',
+      WebkitBackdropFilter: 'blur(24px)',
+      boxShadow: '0 25px 60px -12px rgba(0,0,0,0.55), 0 0 0 1px rgba(19,127,236,0.12)',
+    }}
+    className="rounded-2xl overflow-hidden w-[370px] border border-[#2d3a4b]/60 wt-step-enter"
+  >
+    {/* Header */}
+    <div className="flex items-center justify-between px-6 pt-5 pb-3">
+      <div className="flex items-center gap-3">
+        <div
+          className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-black flex-shrink-0"
+          style={{
+            background: 'linear-gradient(135deg, #137fec 0%, #1065c0 100%)',
+            boxShadow: '0 4px 14px rgba(19,127,236,0.45)',
+          }}
+        >
+          {step + 1}
+        </div>
+        <h3 className="text-[15px] font-bold text-white leading-tight tracking-tight">{title}</h3>
+      </div>
+      <button
+        onClick={(e) => { e.stopPropagation(); onClose(); }}
+        className="w-7 h-7 rounded-lg flex items-center justify-center text-white/40 hover:text-white hover:bg-white/10 transition-all duration-200 ml-2 flex-shrink-0"
+      >
+        <span className="material-icons text-[18px]">close</span>
+      </button>
+    </div>
+
+    {/* Body */}
+    <div className="px-6 pb-4 pt-1">
+      <p className="text-[13.5px] text-white/60 leading-relaxed text-center">{description}</p>
+    </div>
+
+    {/* Footer */}
+    <div className="flex items-center justify-between px-6 pb-5">
+      {/* Progress dots */}
+      <div className="flex gap-[6px] items-center">
+        {Array.from({ length: totalSteps }).map((_, i) => (
+          <div
+            key={i}
+            className="rounded-full"
+            style={{
+              width: i === step ? 20 : 7,
+              height: 7,
+              background: i === step
+                ? 'linear-gradient(90deg, #137fec, #3b9af5)'
+                : 'rgba(255,255,255,0.15)',
+              transition: 'width 0.3s ease, background 0.3s ease',
+            }}
+          />
+        ))}
+      </div>
+
+      {/* Action buttons */}
+      <div className="flex items-center gap-2">
+        {step > 0 && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onBack(); }}
+            className="flex items-center gap-1 px-4 py-[7px] text-[13px] font-semibold text-white/60 hover:text-white border border-[#2d3a4b] hover:border-white/25 rounded-lg transition-all duration-200"
+          >
+            <span className="material-icons text-[16px]">chevron_left</span>
+            Back
+          </button>
+        )}
+        {isLast ? (
+          <button
+            onClick={(e) => { e.stopPropagation(); onClose(); }}
+            className="flex items-center gap-[6px] px-5 py-[7px] text-[13px] font-bold text-white rounded-lg transition-all duration-200 hover:brightness-110"
+            style={{
+              background: 'linear-gradient(135deg, #137fec 0%, #1065c0 100%)',
+              boxShadow: '0 4px 14px rgba(19,127,236,0.35)',
+            }}
+          >
+            🎨 Finish
+          </button>
+        ) : (
+          <button
+            onClick={(e) => { e.stopPropagation(); onNext(); }}
+            className="flex items-center gap-1 px-5 py-[7px] text-[13px] font-bold text-white rounded-lg transition-all duration-200 hover:brightness-110"
+            style={{
+              background: 'linear-gradient(135deg, #137fec 0%, #1065c0 100%)',
+              boxShadow: '0 4px 14px rgba(19,127,236,0.35)',
+            }}
+          >
+            Next
+            <span className="material-icons text-[16px]">chevron_right</span>
+          </button>
+        )}
+      </div>
+    </div>
+  </div>
+);
+
+const PaintWalkthroughOverlay = ({ step, setStep, onClose }) => {
+  const [rect, setRect] = useState(null);
+  const [cardVisible, setCardVisible] = useState(true);
+
+  const steps = [
+    {
+      title: "Navigation & Menus",
+      description: "Access file operations, editing tools, and view options from the top menu bar.",
+      elementId: "paint-topmenu"
+    },
+    {
+      title: "Painting Tools",
+      description: "Select from Pencil, Brush, Eraser, Shapes and more to create your artwork.",
+      elementId: "paint-toolbar"
+    },
+    {
+      title: "Tool Properties",
+      description: "Customize your active tool — adjust stroke width, opacity, and fill settings here.",
+      elementId: "paint-properties"
+    },
+    {
+      title: "Status & Information",
+      description: "View cursor coordinates, canvas size, and adjust zoom levels for precision.",
+      elementId: "paint-statusbar"
+    },
+    {
+      title: "Ready to paint! 🎨",
+      description: "You're all set to use the canvas editor. Click the Help icon at any time to re-run this guide.",
+      elementId: null
+    }
+  ];
+
+  const currentStep = steps[step];
+  const hasElement = !!currentStep.elementId;
+
+  // Animate card in on step change
+  useEffect(() => {
+    setCardVisible(false);
+    const t = setTimeout(() => setCardVisible(true), 60);
+    return () => clearTimeout(t);
+  }, [step]);
+
+  useEffect(() => {
+    if (!currentStep.elementId) return;
+
+    const updateRect = () => {
+      const el = document.getElementById(currentStep.elementId);
+      if (el) {
+        const bounds = el.getBoundingClientRect();
+        setRect({ top: bounds.top, left: bounds.left, width: bounds.width, height: bounds.height });
+      }
+    };
+
+    updateRect();
+    const timer = setTimeout(updateRect, 80);
+    window.addEventListener('resize', updateRect);
+    return () => {
+      window.removeEventListener('resize', updateRect);
+      clearTimeout(timer);
+    };
+  }, [step]);
+
+  const cardStyle = {
+    opacity: cardVisible ? 1 : 0,
+    transform: cardVisible ? 'translateY(0)' : 'translateY(12px)',
+    transition: 'opacity 0.35s ease, transform 0.35s ease',
+  };
+
+  // ── Final step: centered floating card ──
+  if (!hasElement) {
+    return (
+      <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', transition: 'background 0.4s ease' }}>
+        <div style={cardStyle}>
+          <PaintWalkthroughCard
+            key={step}
+            step={step}
+            totalSteps={steps.length}
+            title={currentStep.title}
+            description={currentStep.description}
+            onBack={() => setStep(step - 1)}
+            onNext={() => { }}
+            onClose={onClose}
+            isLast={true}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // ── Waiting for rect ──
+  if (!rect) {
+    return <div className="fixed inset-0 z-[200] bg-black/70 pointer-events-auto" style={{ transition: 'background 0.4s ease' }} />;
+  }
+
+  // ── Position tooltip ──
+  const TOOLTIP_H = 230;
+  const GAP = 16;
+  const PAD = 8;
+  const fitsBelow = rect.top + rect.height + GAP + TOOLTIP_H <= window.innerHeight;
+  const rawTop = fitsBelow ? rect.top + rect.height + GAP : rect.top - TOOLTIP_H - GAP;
+  const tooltipTop = Math.max(12, Math.min(window.innerHeight - TOOLTIP_H - 12, rawTop));
+  const tooltipLeft = Math.max(12, Math.min(window.innerWidth - 386, rect.left + rect.width / 2 - 185));
+
+  return (
+    <div className="fixed inset-0 z-[200] pointer-events-none">
+      {/* Spotlight — smoothly moves between elements */}
+      <div
+        className="absolute rounded-xl"
+        style={{
+          top: rect.top - PAD,
+          left: rect.left - PAD,
+          width: rect.width + PAD * 2,
+          height: rect.height + PAD * 2,
+          border: '2px solid rgba(19,127,236,0.6)',
+          boxShadow: '0 0 0 9999px rgba(0,0,0,0.7), 0 0 30px 4px rgba(19,127,236,0.25), inset 0 0 20px 2px rgba(19,127,236,0.08)',
+          borderRadius: 14,
+          transition: 'top 0.45s cubic-bezier(.4,0,.2,1), left 0.45s cubic-bezier(.4,0,.2,1), width 0.45s cubic-bezier(.4,0,.2,1), height 0.45s cubic-bezier(.4,0,.2,1)',
+        }}
+      />
+
+      {/* Tooltip card — fades in smoothly */}
+      <div
+        className="absolute pointer-events-auto"
+        style={{
+          top: tooltipTop, left: tooltipLeft,
+          transition: 'top 0.4s cubic-bezier(.4,0,.2,1), left 0.4s cubic-bezier(.4,0,.2,1)',
+        }}
+      >
+        <div style={cardStyle}>
+          <PaintWalkthroughCard
+            key={step}
+            step={step}
+            totalSteps={steps.length}
+            title={currentStep.title}
+            description={currentStep.description}
+            onBack={() => setStep(step - 1)}
+            onNext={() => setStep(step + 1)}
+            onClose={onClose}
+            isLast={false}
+          />
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const PaintApp = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { id } = useParams();
+  const location = useLocation();
+  // Support ?title= query param for offline new-canvas creation
+  const queryTitle = new URLSearchParams(location.search).get('title') || '';
   const canvasRef = useRef(null);
   const tempCanvasRef = useRef(null);
   const contextRef = useRef(null);
@@ -23,7 +273,7 @@ const PaintApp = () => {
   const mainContainerRef = useRef(null);
 
   const [activeCanvasId, setActiveCanvasId] = useState(id || null);
-  const [canvasTitle, setCanvasTitle] = useState('');
+  const [canvasTitle, setCanvasTitle] = useState(queryTitle);
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
   const [loadError, setLoadError] = useState('');
@@ -45,6 +295,9 @@ const PaintApp = () => {
   const [showGridlines, setShowGridlines] = useState(false);
   const [showStatusBar, setShowStatusBar] = useState(true);
   const [alwaysShowToolbar, setAlwaysShowToolbar] = useState(true);
+  const [isBotOpen, setIsBotOpen] = useState(false);
+  const [showWalkthrough, setShowWalkthrough] = useState(false);
+  const [walkthroughStep, setWalkthroughStep] = useState(0);
 
   const {
     tool,
@@ -84,6 +337,214 @@ const PaintApp = () => {
   const fontSizes = [8, 9, 10, 11, 12, 14, 16, 18, 20, 22, 24, 26, 28, 36, 48, 72];
 
   const isTextToolActive = tool === 'text' || (selectedId && elements.find(e => e.id === selectedId)?.type === 'text');
+
+  // Bot Actions Integration — 15 agentic action types
+  const handleBotAction = useCallback((action) => {
+    // Map bot JSON → canvas element schema: w/h/color/fill(bool)/opacity
+    const buildShape = (s, idOffset = 0) => {
+      const hasFill = s.fill && s.fill !== 'transparent';
+      const fillHex = hasFill ? s.fill : null;
+      const strokeHex = s.stroke || null;
+      // fillColor/strokeColor are separate fields for dual-color rendering
+      return {
+        id: Date.now() + idOffset + Math.floor(Math.random() * 1000),
+        type: s.shape || s.type || 'rect',
+        x: s.x ?? 700,
+        y: s.y ?? 300,
+        w: s.width ?? s.w ?? 160,
+        h: s.height ?? s.h ?? 120,
+        color: fillHex || strokeHex || color, // legacy fallback
+        fillColor: fillHex || undefined,        // interior color (undefined = use color)
+        strokeColor: strokeHex || undefined,        // border color (undefined = use color)
+        fill: hasFill,                             // boolean: true = filled shape
+        strokeWidth: s.strokeWidth ?? strokeWidth,
+        opacity: s.opacity ?? 1,
+        rotation: s.rotation ?? 0,
+      };
+    };
+
+    const buildText = (s) => ({
+      id: Date.now() + Math.floor(Math.random() * 1000),
+      type: 'text',
+      text: s.text || 'Text',
+      x: s.x ?? 700,
+      y: s.y ?? 300,
+      w: s.width ?? s.w ?? 300,
+      h: s.height ?? s.h ?? 60,
+      color: s.color || s.fill || color,
+      font: s.fontFamily || s.font || 'Arial',
+      fontSize: s.fontSize || 28,
+      strokeWidth,
+      opacity: 1,
+    });
+
+    switch (action.type) {
+      // ── Canvas-level ─────────────────────────────────────────
+      case 'CLEAR_CANVAS':
+        setElements([]);
+        saveState([]);
+        break;
+
+      case 'FILL_BACKGROUND': {
+        if (action.color) {
+          const bg = buildShape({
+            type: 'rect', x: 0, y: 0,
+            width: canvasSize.width, height: canvasSize.height,
+            fill: action.color, stroke: action.color,
+          });
+          // Remove any existing full-canvas background rects so stacking doesn't hide the new one
+          const withoutOldBg = elements.filter(e =>
+            !(e.type === 'rect' && e.x <= 0 && e.y <= 0 &&
+              e.w >= canvasSize.width * 0.9 && e.h >= canvasSize.height * 0.9)
+          );
+          const next = [bg, ...withoutOldBg];
+          setElements(next); saveState(next);
+        }
+        break;
+      }
+
+      case 'UNDO':
+        baseUndo(contextRef, setElements, setSelectedId, setEditingId);
+        break;
+
+      case 'REDO':
+        baseRedo(contextRef, setElements, setSelectedId, setEditingId);
+        break;
+
+      // ── Tool / style ──────────────────────────────────────────
+      case 'CHANGE_TOOL':
+        if (action.tool) handleToolChange(action.tool);
+        break;
+
+      case 'CHANGE_COLOR':
+        if (action.color) baseUpdateColor(action.color, elements, setElements, saveState);
+        break;
+
+      case 'SET_STROKE_WIDTH':
+        if (action.width !== undefined) setStrokeWidth(Math.max(1, Math.min(50, action.width)));
+        break;
+
+      case 'SET_FILL_MODE':
+        setFillMode(action.enabled !== undefined ? Boolean(action.enabled) : !fillMode);
+        break;
+
+      case 'SET_ZOOM':
+        if (action.zoom !== undefined) setZoom(Math.max(10, Math.min(500, action.zoom)));
+        break;
+
+      // ── Selection & editing ───────────────────────────────────
+      case 'SELECT_LAST':
+        if (elements.length > 0) setSelectedId(elements[elements.length - 1].id);
+        break;
+
+      case 'DELETE_SELECTED':
+        if (selectedId) {
+          const next = elements.filter(e => e.id !== selectedId);
+          setElements(next); setSelectedId(null); saveState(next);
+        }
+        break;
+
+      case 'MOVE_SELECTED':
+        if (selectedId) {
+          const next = elements.map(e =>
+            e.id === selectedId
+              ? { ...e, x: e.x + (action.dx || 0), y: e.y + (action.dy || 0) }
+              : e
+          );
+          setElements(next); saveState(next);
+        }
+        break;
+
+      case 'RESIZE_SELECTED':
+        if (selectedId) {
+          const next = elements.map(e =>
+            e.id === selectedId
+              ? {
+                ...e,
+                w: action.width ?? e.w,
+                h: action.height ?? e.h
+              }
+              : e
+          );
+          setElements(next); saveState(next);
+        }
+        break;
+
+      case 'DUPLICATE_SELECTED':
+        if (selectedId) {
+          const orig = elements.find(e => e.id === selectedId);
+          if (orig) {
+            const dup = {
+              ...orig, id: Date.now(),
+              x: orig.x + (action.offsetX ?? 30),
+              y: orig.y + (action.offsetY ?? 30)
+            };
+            const next = [...elements, dup];
+            setElements(next); setSelectedId(dup.id); saveState(next);
+          }
+        }
+        break;
+
+      // ── Drawing ───────────────────────────────────────────────
+      case 'DRAW_SHAPE': {
+        const newShape = buildShape(action);
+        const next = [...elements, newShape];
+        setElements(next); setSelectedId(newShape.id); saveState(next);
+        break;
+      }
+
+      case 'DRAW_MULTIPLE': {
+        if (Array.isArray(action.shapes) && action.shapes.length > 0) {
+          const newShapes = action.shapes.map((s, i) => buildShape(s, i * 10));
+          const next = [...elements, ...newShapes];
+          setElements(next); setSelectedId(newShapes[newShapes.length - 1].id); saveState(next);
+        }
+        break;
+      }
+
+      case 'ARRANGE_GRID': {
+        const { shape = 'rect', rows = 3, cols = 3,
+          x = 200, y = 150, width = 80, height = 80,
+          colSpacing = 20, rowSpacing = 20,
+          fill, stroke, strokeWidth: sw } = action;
+        const newShapes = [];
+        for (let r = 0; r < rows; r++)
+          for (let c = 0; c < cols; c++) {
+            const hasFill = fill && fill !== 'transparent';
+            const fillHex = hasFill ? fill : null;
+            newShapes.push({
+              id: Date.now() + r * 1000 + c,
+              type: shape,
+              x: x + c * (width + colSpacing),
+              y: y + r * (height + rowSpacing),
+              w: width, h: height,
+              color: fillHex || stroke || color,
+              fillColor: fillHex || undefined,
+              strokeColor: stroke || undefined,
+              fill: hasFill,
+              strokeWidth: sw ?? strokeWidth,
+              opacity: 1, rotation: 0,
+            });
+          }
+        const next = [...elements, ...newShapes];
+        setElements(next); saveState(next);
+        break;
+      }
+
+      case 'ADD_TEXT': {
+        const newText = buildText(action);
+        const next = [...elements, newText];
+        setElements(next); setSelectedId(newText.id); saveState(next);
+        break;
+      }
+
+      default:
+        console.warn('Unknown bot action:', action.type);
+    }
+  }, [elements, color, strokeWidth, fillMode, selectedId, canvasSize,
+    handleToolChange, baseUpdateColor, saveState,
+    setStrokeWidth, setFillMode, setZoom, setSelectedId,
+    baseUndo, baseRedo, contextRef, setEditingId]);
 
   useEffect(() => {
     if (editingId && textAreaRef.current) {
@@ -272,7 +733,8 @@ const PaintApp = () => {
     let isMounted = true;
 
     const loadCanvas = async () => {
-      if (!user) {
+      // Only redirect to login when trying to open a specific canvas that requires auth
+      if (!user && activeCanvasId) {
         navigate('/');
         return;
       }
@@ -323,13 +785,14 @@ const PaintApp = () => {
     return () => {
       isMounted = false;
     };
-  }, [activeCanvasId, navigate, saveState, user]);
+  }, [activeCanvasId, navigate, user]);
 
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (!editingId) {
-        if (e.ctrlKey && e.key === 'r') { e.preventDefault(); setShowRulers(prev => !prev); }
-        if (e.ctrlKey && e.key === 'g') { e.preventDefault(); setShowGridlines(prev => !prev); }
+        const key = e.key.toLowerCase();
+        if (e.ctrlKey && key === 'r') { e.preventDefault(); setShowRulers(prev => !prev); }
+        if (e.ctrlKey && key === 'g') { e.preventDefault(); setShowGridlines(prev => !prev); }
         if (e.key === 'F11') { e.preventDefault(); handleFullScreen(); }
         if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId) {
           const nextElements = elements.filter(el => el.id !== selectedId);
@@ -338,19 +801,23 @@ const PaintApp = () => {
           saveState(nextElements);
         }
         if (e.metaKey || e.ctrlKey) {
-          if (e.key === 'c') { e.preventDefault(); handleCopy(); }
-          else if (e.key === 'x') { e.preventDefault(); handleCut(); }
-          else if (e.key === 'v') { e.preventDefault(); handlePaste(); }
+          if (key === 'c') { e.preventDefault(); handleCopy(); }
+          else if (key === 'x') { e.preventDefault(); handleCut(); }
+          else if (key === 'v') { e.preventDefault(); handlePaste(); }
+          else if (key === 's') { e.preventDefault(); handleSave(); }
+          else if (key === 'z') { e.preventDefault(); undo(); }
+          else if (key === 'y') { e.preventDefault(); redo(); }
         }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedId, editingId, elements, saveState, handleCopy, handleCut, handlePaste]);
+  }, [selectedId, editingId, elements, saveState, handleCopy, handleCut, handlePaste, handleSave, undo, redo]);
 
   return (
     <div ref={workspaceRef} className="flex flex-col h-screen w-full bg-[#09090b] text-zinc-200 overflow-hidden font-sans select-none">
       <TopMenu
+        id="paint-topmenu"
         isFileMenuOpen={isFileMenuOpen}
         setIsFileMenuOpen={setIsFileMenuOpen}
         isEditMenuOpen={isEditMenuOpen}
@@ -383,6 +850,7 @@ const PaintApp = () => {
 
       {alwaysShowToolbar && (
         <Toolbar
+          id="paint-toolbar"
           tool={tool}
           handleToolChange={handleToolChange}
           fillMode={fillMode}
@@ -404,7 +872,7 @@ const PaintApp = () => {
       )}
 
       <main className="flex-1 flex relative overflow-hidden bg-[#09090b]">
-        <PropertiesPanel strokeWidth={strokeWidth} setStrokeWidth={setStrokeWidth} />
+        <PropertiesPanel id="paint-properties" strokeWidth={strokeWidth} setStrokeWidth={setStrokeWidth} />
 
         <div ref={mainContainerRef} className="flex-1 overflow-hidden bg-zinc-950 flex items-center justify-center relative">
           <PaintCanvas
@@ -439,7 +907,7 @@ const PaintApp = () => {
       </main>
 
       {showStatusBar && (
-        <StatusBar currPos={currPos} canvasSize={canvasSize} zoom={zoom} setZoom={setZoom} />
+        <StatusBar id="paint-statusbar" currPos={currPos} canvasSize={canvasSize} zoom={zoom} setZoom={setZoom} />
       )}
 
       {/* Title Modal */}
@@ -479,9 +947,9 @@ const PaintApp = () => {
         html, body { margin: 0; padding: 0; overflow: hidden; height: 100vh; width: 100vw; background-color: #0c0c0e; }
         body { font-family: 'Inter', sans-serif; color: #a1a1aa; }
 
-        nav button, 
-        header .grid-cols-3 button, 
-        header .grid-cols-5 button {
+        #paint-topmenu button, 
+        #paint-toolbar .grid-cols-3 button, 
+        #paint-toolbar .grid-cols-5 button {
           background: transparent !important;
           border: none !important;
           outline: none !important;
@@ -493,41 +961,41 @@ const PaintApp = () => {
           transition: all 0.2s ease;
         }
 
-        header .grid-cols-3 button {
+        #paint-toolbar .grid-cols-3 button {
           border-radius: 12px !important;
           width: 42px !important;
           height: 42px !important;
           color: #e4e4e7 !important;
         }
-        header .grid-cols-3 button:hover {
+        #paint-toolbar .grid-cols-3 button:hover {
           background-color: rgba(39, 39, 42, 0.5) !important;
         }
-        header .grid-cols-3 .bg-zinc-700 {
+        #paint-toolbar .grid-cols-3 .bg-zinc-700 {
           background-color: #27272a !important; 
           color: #3b82f6 !important; 
         }
 
-        header .grid-cols-5 button {
+        #paint-toolbar .grid-cols-5 button {
           border-radius: 10px !important;
           width: 38px !important;
           height: 38px !important;
           color: #e4e4e7 !important;
         }
-        header .grid-cols-5 .bg-blue-600 {
+        #paint-toolbar .grid-cols-5 .bg-blue-600 {
           background-color: #2563eb !important; 
           border: 2px solid white !important; 
           color: white !important;
           box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
         }
 
-        nav button {
+        #paint-topmenu button {
           border-radius: 8px !important;
           padding: 6px 16px !important;
           background-color: #18181b !important;
           color: white !important;
         }
 
-        header .flex.items-center.gap-2 button {
+        #paint-toolbar .flex.items-center.gap-2 button {
           background-color: #ffffff !important;
           color: #18181b !important;
           border-radius: 6px !important;
@@ -535,9 +1003,70 @@ const PaintApp = () => {
           height: 30px !important;
         }
 
+        /* Walkthrough overlay: keep Material Icons font intact */
+        [data-walkthrough-card] .material-icons {
+          font-family: 'Material Icons' !important;
+          font-weight: normal !important;
+          font-style: normal !important;
+          font-size: inherit !important;
+          line-height: 1 !important;
+          letter-spacing: normal !important;
+          text-transform: none !important;
+          display: inline-block !important;
+          white-space: nowrap !important;
+          -webkit-font-smoothing: antialiased !important;
+        }
+
         .no-scrollbar::-webkit-scrollbar { display: none; }
         canvas { image-rendering: pixelated; }
       `}</style>
+      {/* Walkthrough Overlay */}
+      {showWalkthrough && (
+        <PaintWalkthroughOverlay
+          step={walkthroughStep}
+          setStep={setWalkthroughStep}
+          onClose={() => setShowWalkthrough(false)}
+        />
+      )}
+
+      {/* Floating AI & Help Options */}
+      <HelpOptionsButton
+        onBotClick={() => setIsBotOpen(true)}
+        onWalkthroughClick={() => {
+          setWalkthroughStep(0);
+          setShowWalkthrough(true);
+        }}
+      />
+
+      {/* AI Bot Widget */}
+      {isBotOpen && (
+        <BotWidget
+          onClose={() => setIsBotOpen(false)}
+          onAction={handleBotAction}
+          contextSnapshot={{
+            view: 'paint',
+            tool,
+            color,
+            strokeWidth,
+            fillMode,
+            zoom,
+            canvasSize,
+            elementsCount: elements.length,
+            selectedElementId: selectedId,
+            elements: elements.slice(-15).map(e => ({
+              type: e.type,
+              id: e.id,
+              x: Math.round(e.x),
+              y: Math.round(e.y),
+              w: Math.round(e.w || 0),
+              h: Math.round(e.h || 0),
+              color: e.color,          // single color field (hex)
+              filled: e.fill,           // boolean: true = filled shape
+              text: e.text,
+            })),
+          }}
+        />
+      )}
     </div>
   );
 };

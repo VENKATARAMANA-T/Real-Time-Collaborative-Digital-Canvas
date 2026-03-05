@@ -10,6 +10,7 @@ import ColorPalette from './ColorPalette';
 import ViewControls from './ViewControls';
 
 const Toolbar = ({
+  id,
   tool,
   handleToolChange,
   fillMode,
@@ -29,18 +30,23 @@ const Toolbar = ({
   setShowGridlines
 }) => {
   return (
-    <header className="bg-[#18181b] border-b border-zinc-800 p-2 flex items-stretch gap-1 shrink-0 overflow-x-auto no-scrollbar">
+    <header id={id} className="relative z-40 bg-[#18181b] border-b border-zinc-800 p-2 flex items-stretch gap-1 shrink-0 flex-wrap no-scrollbar overflow-visible">
       <Section title="Tools">
         <div className="grid grid-cols-3 gap-1 h-full">
-          <IconButton icon={Pencil} active={tool === 'pencil'} onClick={() => handleToolChange('pencil')} />
-          <IconButton icon={Eraser} active={tool === 'eraser'} onClick={() => handleToolChange('eraser')} />
-          <IconButton icon={TextIcon} active={tool === 'text'} onClick={() => handleToolChange('text')} />
-          <IconButton icon={MousePointer2} active={tool === 'select'} onClick={() => handleToolChange('select')} />
+          <IconButton icon={Pencil} active={tool === 'pencil'} onClick={() => handleToolChange('pencil')}
+            title="Pencil" description="Draw freehand lines with tapered strokes." tooltipAlign="left" />
+          <IconButton icon={Eraser} active={tool === 'eraser'} onClick={() => handleToolChange('eraser')}
+            title="Eraser" description="Erase parts of your drawing." tooltipAlign="left" />
+          <IconButton icon={TextIcon} active={tool === 'text'} onClick={() => handleToolChange('text')}
+            title="Text Tool" description="Click canvas to insert editable text." />
+          <IconButton icon={MousePointer2} active={tool === 'select'} onClick={() => handleToolChange('select')}
+            title="Select" description="Click or drag to select & move objects." tooltipAlign="left" />
           <IconButton
             icon={fillMode ? FillIcon : FillIcon}
             active={fillMode}
             onClick={() => setFillMode(!fillMode)}
-            label="Fill Mode"
+            title="Fill Mode"
+            description={fillMode ? 'Shapes are filled with color.' : 'Shapes are drawn as outlines only.'}
           />
         </div>
       </Section>

@@ -8,6 +8,7 @@ import MenuItem, { MenuDivider } from '../shared/MenuItem';
 import IconButton from '../shared/IconButton';
 
 const TopMenu = ({
+  id,
   isFileMenuOpen,
   setIsFileMenuOpen,
   isEditMenuOpen,
@@ -38,7 +39,7 @@ const TopMenu = ({
   onBack
 }) => {
   return (
-    <nav className="h-10 flex items-center px-4 gap-6 text-sm border-b border-zinc-800 bg-[#09090b] relative z-[100]">
+    <nav id={id} className="h-10 flex items-center px-4 gap-6 text-sm border-b border-zinc-800 bg-[#09090b] relative z-[100]">
       <button
         className="inline-flex items-center gap-2 rounded-md bg-zinc-800/70 px-3 py-1.5 text-zinc-200 transition-colors hover:bg-zinc-800 hover:text-white"
         onClick={onBack}
@@ -47,7 +48,7 @@ const TopMenu = ({
         <ArrowLeft size={16} />
         <span className="text-sm font-medium">Back to Dashboard</span>
       </button>
-      
+
       <div className="flex gap-1 relative">
         {/* File Menu */}
         <button
@@ -177,14 +178,14 @@ const TopMenu = ({
           </div>
         )}
       </div>
-      
+
       <div className="flex-1" />
-      
+
       <div className="flex items-center gap-3">
-        <IconButton icon={Undo} disabled={historyStep <= 0} onClick={undo} title="Undo (Ctrl+Z)" />
-        <IconButton icon={Redo} disabled={historyStep >= historyLength - 1} onClick={redo} title="Redo (Ctrl+Y)" />
+        <IconButton icon={Undo} disabled={historyStep <= 0} onClick={undo} title="Undo (Ctrl+Z)" tooltipAlign="right" />
+        <IconButton icon={Redo} disabled={historyStep >= historyLength - 1} onClick={redo} title="Redo (Ctrl+Y)" tooltipAlign="right" />
         <div className="w-[1px] h-4 bg-zinc-800 mx-1" />
-        <IconButton icon={Save} onClick={handleSave} title="Save (Download)" />
+        <IconButton icon={Save} onClick={handleSave} title="Save (Download)" tooltipAlign="right" />
       </div>
     </nav>
   );
