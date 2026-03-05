@@ -30,7 +30,7 @@ const Toolbar = ({
   setShowGridlines
 }) => {
   return (
-    <header id={id} className="bg-[#18181b] border-b border-zinc-800 p-2 flex items-stretch gap-1 shrink-0 flex-wrap no-scrollbar overflow-visible">
+    <header id={id} className="relative z-40 bg-[#18181b] border-b border-zinc-800 p-2 flex items-stretch gap-1 shrink-0 flex-wrap no-scrollbar overflow-visible">
       <Section title="Tools">
         <div className="grid grid-cols-3 gap-1 h-full">
           <IconButton icon={Pencil} active={tool === 'pencil'} onClick={() => handleToolChange('pencil')}
@@ -40,7 +40,7 @@ const Toolbar = ({
           <IconButton icon={TextIcon} active={tool === 'text'} onClick={() => handleToolChange('text')}
             title="Text Tool" description="Click canvas to insert editable text." />
           <IconButton icon={MousePointer2} active={tool === 'select'} onClick={() => handleToolChange('select')}
-            title="Select" description="Click or drag to select & move objects." />
+            title="Select" description="Click or drag to select & move objects." tooltipAlign="left" />
           <IconButton
             icon={fillMode ? FillIcon : FillIcon}
             active={fillMode}

@@ -1,20 +1,251 @@
-import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useEffect, useState, useRef } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import { userAPI, canvasAPI, meetingAPI, folderAPI } from '../services/api';
+import { useSocket } from '../hooks/useSocket.js';
 import BotWidget from '../components/Bot/BotWidget';
 import HelpOptionsButton from '../components/shared/HelpOptionsButton';
 
+const ACTIVITY_ICON_MAP = {
+  REGISTER_USER: { icon: 'person_add', color: 'text-green-400', border: 'border-green-500/20', bg: 'bg-green-500/10' },
+  LOGIN_SUCCESS: { icon: 'login', color: 'text-blue-400', border: 'border-blue-500/20', bg: 'bg-blue-500/10' },
+  LOGOUT: { icon: 'logout', color: 'text-slate-400', border: 'border-slate-500/20', bg: 'bg-slate-500/10' },
+  PASSWORD_RESET_REQUEST: { icon: 'key', color: 'text-yellow-400', border: 'border-yellow-500/20', bg: 'bg-yellow-500/10' },
+  PASSWORD_RESET_SUCCESS: { icon: 'shield', color: 'text-emerald-400', border: 'border-emerald-500/20', bg: 'bg-emerald-500/10' },
+  UPDATE_PROFILE: { icon: 'manage_accounts', color: 'text-purple-400', border: 'border-purple-500/20', bg: 'bg-purple-500/10' },
+  CREATE_CANVAS: { icon: 'note_add', color: 'text-cyan-400', border: 'border-cyan-500/20', bg: 'bg-cyan-500/10' },
+  DELETE_CANVAS: { icon: 'delete_forever', color: 'text-red-400', border: 'border-red-500/20', bg: 'bg-red-500/10' },
+  RENAME_CANVAS: { icon: 'edit_note', color: 'text-orange-400', border: 'border-orange-500/20', bg: 'bg-orange-500/10' },
+  UPDATE_CANVAS: { icon: 'save', color: 'text-sky-400', border: 'border-sky-500/20', bg: 'bg-sky-500/10' },
+  DUPLICATE_CANVAS: { icon: 'content_copy', color: 'text-indigo-400', border: 'border-indigo-500/20', bg: 'bg-indigo-500/10' },
+  IMPORT_CANVAS: { icon: 'upload_file', color: 'text-violet-400', border: 'border-violet-500/20', bg: 'bg-violet-500/10' },
+  CREATE_FOLDER: { icon: 'create_new_folder', color: 'text-emerald-400', border: 'border-emerald-500/20', bg: 'bg-emerald-500/10' },
+  DELETE_FOLDER: { icon: 'folder_delete', color: 'text-red-400', border: 'border-red-500/20', bg: 'bg-red-500/10' },
+  TOGGLE_FAVORITE: { icon: 'star', color: 'text-yellow-400', border: 'border-yellow-500/20', bg: 'bg-yellow-500/10' },
+  EXPORT_CANVAS: { icon: 'download', color: 'text-teal-400', border: 'border-teal-500/20', bg: 'bg-teal-500/10' },
+  RESTORE_VERSION: { icon: 'history', color: 'text-amber-400', border: 'border-amber-500/20', bg: 'bg-amber-500/10' },
+  JOIN_ROOM: { icon: 'group_add', color: 'text-green-400', border: 'border-green-500/20', bg: 'bg-green-500/10' },
+  LEAVE_ROOM: { icon: 'group_remove', color: 'text-slate-400', border: 'border-slate-500/20', bg: 'bg-slate-500/10' },
+  TOGGLE_THEME: { icon: 'palette', color: 'text-pink-400', border: 'border-pink-500/20', bg: 'bg-pink-500/10' },
+  VIEW_WALKTHROUGH: { icon: 'menu_book', color: 'text-blue-300', border: 'border-blue-300/20', bg: 'bg-blue-300/10' },
+  SEARCH_HELP: { icon: 'search', color: 'text-slate-300', border: 'border-slate-300/20', bg: 'bg-slate-300/10' },
+  SUBMIT_FEEDBACK: { icon: 'chat', color: 'text-purple-400', border: 'border-purple-500/20', bg: 'bg-purple-500/10' },
+};
+
+const ACTIVITY_LABELS = {
+  REGISTER_USER: 'Registered',
+  LOGIN_SUCCESS: 'Login',
+  LOGOUT: 'Logout',
+  PASSWORD_RESET_REQUEST: 'Password Reset Requested',
+  PASSWORD_RESET_SUCCESS: 'Password Reset',
+  UPDATE_PROFILE: 'Profile Updated',
+  CREATE_CANVAS: 'Canvas Created',
+  DELETE_CANVAS: 'Canvas Deleted',
+  RENAME_CANVAS: 'Canvas Renamed',
+  UPDATE_CANVAS: 'Canvas Saved',
+  DUPLICATE_CANVAS: 'Canvas Duplicated',
+  IMPORT_CANVAS: 'Canvas Imported',
+  CREATE_FOLDER: 'Folder Created',
+  DELETE_FOLDER: 'Folder Deleted',
+  TOGGLE_FAVORITE: 'Toggled Favorite',
+  EXPORT_CANVAS: 'Canvas Exported',
+  RESTORE_VERSION: 'Version Restored',
+  JOIN_ROOM: 'Joined Room',
+  LEAVE_ROOM: 'Left Room',
+  TOGGLE_THEME: 'Theme Changed',
+  VIEW_WALKTHROUGH: 'Viewed Walkthrough',
+  SEARCH_HELP: 'Searched Help',
+  SUBMIT_FEEDBACK: 'Feedback Submitted',
+};
+
+const timeAgo = (date) => {
+  const now = new Date();
+  const diff = now - new Date(date);
+  const seconds = Math.floor(diff / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+  const weeks = Math.floor(days / 7);
+  const months = Math.floor(days / 30);
+  if (seconds < 60) return 'Just now';
+  if (minutes < 60) return `${minutes}m ago`;
+  if (hours < 24) return `${hours}hr ago`;
+  if (days < 7) return `${days}d ago`;
+  if (weeks < 4) return `${weeks}w ago`;
+  return `${months}mo ago`;
+};
+
+const formatTimestamp = (date) => {
+  return new Date(date).toLocaleString('en-US', {
+    month: 'short', day: 'numeric', year: 'numeric',
+    hour: 'numeric', minute: '2-digit', hour12: true,
+  });
+};
+
+/* ─── Walkthrough tooltip card (reusable, same style as PaintApp) ─── */
+const DashboardWalkthroughCard = ({ step, totalSteps, title, description, onBack, onNext, onClose, isLast }) => (
+  <div
+    data-walkthrough-card
+    style={{
+      background: 'linear-gradient(135deg, #101922 0%, #1a242f 100%)',
+      backdropFilter: 'blur(24px)',
+      WebkitBackdropFilter: 'blur(24px)',
+      boxShadow: '0 25px 60px -12px rgba(0,0,0,0.55), 0 0 0 1px rgba(19,127,236,0.12)',
+    }}
+    className="rounded-2xl overflow-hidden w-[370px] border border-[#2d3a4b]/60 wt-step-enter"
+  >
+    <div className="flex items-center justify-between px-6 pt-5 pb-3">
+      <div className="flex items-center gap-3">
+        <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-black flex-shrink-0"
+          style={{ background: 'linear-gradient(135deg, #137fec 0%, #1065c0 100%)', boxShadow: '0 4px 14px rgba(19,127,236,0.45)' }}>
+          {step + 1}
+        </div>
+        <h3 className="text-[15px] font-bold text-white leading-tight tracking-tight">{title}</h3>
+      </div>
+      <button onClick={(e) => { e.stopPropagation(); onClose(); }}
+        className="w-7 h-7 rounded-lg flex items-center justify-center text-white/40 hover:text-white hover:bg-white/10 transition-all duration-200 ml-2 flex-shrink-0">
+        <span className="material-icons text-[18px]">close</span>
+      </button>
+    </div>
+    <div className="px-6 pb-4 pt-1">
+      <p className="text-[13.5px] text-white/60 leading-relaxed text-center">{description}</p>
+    </div>
+    <div className="flex items-center justify-between px-6 pb-5">
+      <div className="flex gap-[6px] items-center">
+        {Array.from({ length: totalSteps }).map((_, i) => (
+          <div key={i} className="rounded-full" style={{
+            width: i === step ? 20 : 7, height: 7,
+            background: i === step ? 'linear-gradient(90deg, #137fec, #3b9af5)' : 'rgba(255,255,255,0.15)',
+            transition: 'width 0.3s ease, background 0.3s ease',
+          }} />
+        ))}
+      </div>
+      <div className="flex items-center gap-2">
+        {step > 0 && (
+          <button onClick={(e) => { e.stopPropagation(); onBack(); }}
+            className="flex items-center gap-1 px-4 py-[7px] text-[13px] font-semibold text-white/60 hover:text-white border border-[#2d3a4b] hover:border-white/25 rounded-lg transition-all duration-200">
+            <span className="material-icons text-[16px]">chevron_left</span> Back
+          </button>
+        )}
+        {isLast ? (
+          <button onClick={(e) => { e.stopPropagation(); onClose(); }}
+            className="flex items-center gap-[6px] px-5 py-[7px] text-[13px] font-bold text-white rounded-lg transition-all duration-200 hover:brightness-110"
+            style={{ background: 'linear-gradient(135deg, #137fec 0%, #1065c0 100%)', boxShadow: '0 4px 14px rgba(19,127,236,0.35)' }}>
+            🎉 Finish
+          </button>
+        ) : (
+          <button onClick={(e) => { e.stopPropagation(); onNext(); }}
+            className="flex items-center gap-1 px-5 py-[7px] text-[13px] font-bold text-white rounded-lg transition-all duration-200 hover:brightness-110"
+            style={{ background: 'linear-gradient(135deg, #137fec 0%, #1065c0 100%)', boxShadow: '0 4px 14px rgba(19,127,236,0.35)' }}>
+            Next <span className="material-icons text-[16px]">chevron_right</span>
+          </button>
+        )}
+      </div>
+    </div>
+  </div>
+);
+
+/* ─── Dashboard Walkthrough Overlay (smooth transitions) ─── */
+const DashboardWalkthroughOverlay = ({ step, setStep, onClose }) => {
+  const [rect, setRect] = useState(null);
+  const [cardVisible, setCardVisible] = useState(true);
+
+  const steps = [
+    { title: "Sidebar Navigation", description: "Switch between Home, Canvases, Meetings, and Settings views from the sidebar.", elementId: "dashboard-sidebar-nav" },
+    { title: "Search Bar", description: "Quickly find canvases, meetings, or templates by typing keywords here.", elementId: "dashboard-searchbar" },
+    { title: "Quick Actions", description: "Create a new canvas, join or host a meeting from these quick action cards.", elementId: "dashboard-quickactions" },
+    { title: "Your Canvases", description: "Browse, filter, rename, duplicate, or delete your saved canvases here.", elementId: "dashboard-card-canvases" },
+    { title: "Ready to go! \ud83d\ude80", description: "You're all set to use the dashboard. Click the Help icon at any time to re-run this guide.", elementId: null }
+  ];
+
+  const currentStep = steps[step];
+  const hasElement = !!currentStep.elementId;
+
+  // Animate card in on step change
+  useEffect(() => {
+    setCardVisible(false);
+    const t = setTimeout(() => setCardVisible(true), 60);
+    return () => clearTimeout(t);
+  }, [step]);
+
+  useEffect(() => {
+    if (!currentStep.elementId) return;
+    const updateRect = () => {
+      const el = document.getElementById(currentStep.elementId);
+      if (el) {
+        const bounds = el.getBoundingClientRect();
+        setRect({ top: bounds.top, left: bounds.left, width: bounds.width, height: bounds.height });
+      }
+    };
+    updateRect();
+    const timer = setTimeout(updateRect, 80);
+    window.addEventListener('resize', updateRect);
+    return () => { window.removeEventListener('resize', updateRect); clearTimeout(timer); };
+  }, [step]);
+
+  const cardStyle = {
+    opacity: cardVisible ? 1 : 0,
+    transform: cardVisible ? 'translateY(0)' : 'translateY(12px)',
+    transition: 'opacity 0.35s ease, transform 0.35s ease',
+  };
+
+  if (!hasElement) {
+    return (
+      <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', transition: 'background 0.4s ease' }}>
+        <div style={cardStyle}>
+          <DashboardWalkthroughCard key={step} step={step} totalSteps={steps.length}
+            title={currentStep.title} description={currentStep.description}
+            onBack={() => setStep(step - 1)} onNext={() => { }} onClose={onClose} isLast={true} />
+        </div>
+      </div>
+    );
+  }
+
+  if (!rect) return <div className="fixed inset-0 z-[200] bg-black/70 pointer-events-auto" style={{ transition: 'background 0.4s ease' }} />;
+
+  const TOOLTIP_H = 230, GAP = 16, PAD = 8;
+  const fitsBelow = rect.top + rect.height + GAP + TOOLTIP_H <= window.innerHeight;
+  const rawTop = fitsBelow ? rect.top + rect.height + GAP : rect.top - TOOLTIP_H - GAP;
+  const tooltipTop = Math.max(12, Math.min(window.innerHeight - TOOLTIP_H - 12, rawTop));
+  const tooltipLeft = Math.max(12, Math.min(window.innerWidth - 386, rect.left + rect.width / 2 - 185));
+
+  return (
+    <div className="fixed inset-0 z-[200] pointer-events-none">
+      {/* Spotlight — smoothly moves between elements */}
+      <div className="absolute rounded-xl" style={{
+        top: rect.top - PAD, left: rect.left - PAD, width: rect.width + PAD * 2, height: rect.height + PAD * 2,
+        border: '2px solid rgba(19,127,236,0.6)',
+        boxShadow: '0 0 0 9999px rgba(0,0,0,0.7), 0 0 30px 4px rgba(19,127,236,0.25), inset 0 0 20px 2px rgba(19,127,236,0.08)',
+        borderRadius: 14,
+        transition: 'top 0.45s cubic-bezier(.4,0,.2,1), left 0.45s cubic-bezier(.4,0,.2,1), width 0.45s cubic-bezier(.4,0,.2,1), height 0.45s cubic-bezier(.4,0,.2,1)',
+      }} />
+      {/* Tooltip card — fades in */}
+      <div className="absolute pointer-events-auto" style={{
+        top: tooltipTop, left: tooltipLeft,
+        transition: 'top 0.4s cubic-bezier(.4,0,.2,1), left 0.4s cubic-bezier(.4,0,.2,1)',
+      }}>
+        <div style={cardStyle}>
+          <DashboardWalkthroughCard key={step} step={step} totalSteps={steps.length}
+            title={currentStep.title} description={currentStep.description}
+            onBack={() => setStep(step - 1)} onNext={() => setStep(step + 1)} onClose={onClose} isLast={false} />
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export default function Dashboard() {
   const { user, updateUser, logout } = useAuth();
+  // Setup socket for activity updates
+  const socket = useSocket({ userId: user?._id || user?.id, username: user?.username });
   const navigate = useNavigate();
+  const location = useLocation();
   const [activeTab, setActiveTab] = useState('recent');
   const [activeView, setActiveView] = useState('home');
   const [activeFolderId, setActiveFolderId] = useState(null);
   const [canvasFilter, setCanvasFilter] = useState('all');
   const [settingsTab, setSettingsTab] = useState('profile');
   const [isLoggingOut, setIsLoggingOut] = useState(false);
-  const [isBotOpen, setIsBotOpen] = useState(false);
   const [profileUsername, setProfileUsername] = useState('');
   const [profileEmail, setProfileEmail] = useState('');
   const [oldPassword, setOldPassword] = useState('');
@@ -44,6 +275,14 @@ export default function Dashboard() {
   const [scheduledMeetingDetails, setScheduledMeetingDetails] = useState(null);
   const [isInstantGenerating, setIsInstantGenerating] = useState(false);
   const [isScheduledGenerating, setIsScheduledGenerating] = useState(false);
+  const [meetingName, setMeetingName] = useState('');
+
+  // Real meetings data
+  const [liveMeetings, setLiveMeetings] = useState([]);
+  const [pendingMeetings, setPendingMeetings] = useState([]);
+  const [endedMeetings, setEndedMeetings] = useState([]);
+  const [isLoadingMeetings, setIsLoadingMeetings] = useState(false);
+
   const [currentMenuCanvasId, setCurrentMenuCanvasId] = useState(null);
   const [showRenameModal, setShowRenameModal] = useState(false);
   const [renameCanvasId, setRenameCanvasId] = useState(null);
@@ -63,8 +302,15 @@ export default function Dashboard() {
   const [showRenameFolderModal, setShowRenameFolderModal] = useState(false);
   const [renameFolderId, setRenameFolderId] = useState(null);
   const [isOperatingFolder, setIsOperatingFolder] = useState(false);
+
+  // Bot & Walkthrough state
+  const [isBotOpen, setIsBotOpen] = useState(false);
   const [showWalkthrough, setShowWalkthrough] = useState(false);
   const [walkthroughStep, setWalkthroughStep] = useState(0);
+
+  // Activity logs state
+  const [activityLogs, setActivityLogs] = useState([]);
+  const [isLoadingActivity, setIsLoadingActivity] = useState(false);
 
   // Listen for walkthrough start event
   useEffect(() => {
@@ -82,6 +328,126 @@ export default function Dashboard() {
       setProfileEmail(user.email || '');
     }
   }, [user]);
+
+  // Fetch activity logs
+  useEffect(() => {
+    const fetchActivityLogs = async () => {
+      if (!user) return;
+      const userId = user._id || user.id;
+      if (!userId) return;
+      setIsLoadingActivity(true);
+      try {
+        const data = await userAPI.getActivityLogs(userId);
+        setActivityLogs(data.logs || []);
+      } catch (err) {
+        console.error('Failed to fetch activity logs:', err);
+      } finally {
+        setIsLoadingActivity(false);
+      }
+    };
+    fetchActivityLogs();
+
+    if (socket) {
+      socket.on('activity_update', (payload) => {
+        if (payload && payload.userId === (user._id || user.id)) {
+          fetchActivityLogs();
+        }
+      });
+      return () => {
+        socket.off('activity_update');
+      };
+    }
+  }, [user, socket]);
+
+  // ─── Meeting fetch logic (simplified, direct fetch) ───
+  const pollTimerRef = useRef(null);
+
+  // Direct fetch function — always calls API fresh
+  const doFetchMeetings = async () => {
+    if (!user) return;
+    try {
+      const data = await meetingAPI.getMyMeetings();
+      console.log('[Dashboard] fetchMeetings => live:', data.live?.length, 'pending:', data.pending?.length, 'ended:', data.ended?.length);
+      setLiveMeetings(data.live || []);
+      setPendingMeetings(data.pending || []);
+      setEndedMeetings(data.ended || []);
+      return data;
+    } catch (err) {
+      console.error('[Dashboard] Failed to fetch meetings:', err);
+      return null;
+    }
+  };
+
+  // On mount: detect meetingJustEnded, switch tab, fetch meetings, poll if needed
+  useEffect(() => {
+    if (!user) return;
+
+    const cameFromEndedMeeting = location?.state?.meetingJustEnded === true || sessionStorage.getItem('meetingJustEnded') === 'true';
+
+    if (cameFromEndedMeeting) {
+      console.log('[Dashboard] Detected meetingJustEnded! Switching to completed tab.');
+      setActiveTab('completed');
+      // Clear both navigation state and sessionStorage flag
+      sessionStorage.removeItem('meetingJustEnded');
+      window.history.replaceState({}, document.title);
+    }
+
+    // Initial fetch
+    setIsLoadingMeetings(true);
+    doFetchMeetings().finally(() => setIsLoadingMeetings(false));
+
+    // If coming from an ended meeting, poll every 1.5s for 12 seconds
+    // This handles any DB propagation delay and ensures data shows up
+    if (cameFromEndedMeeting) {
+      let attempts = 0;
+      const maxAttempts = 8;
+      pollTimerRef.current = setInterval(async () => {
+        attempts++;
+        console.log(`[Dashboard] Polling for ended meetings (attempt ${attempts}/${maxAttempts})`);
+        const data = await doFetchMeetings();
+        if ((data?.ended?.length > 0) || attempts >= maxAttempts) {
+          clearInterval(pollTimerRef.current);
+          pollTimerRef.current = null;
+          if (data?.ended?.length > 0) {
+            console.log('[Dashboard] Found ended meetings, stopping poll.');
+          }
+        }
+      }, 1500);
+    }
+
+    return () => {
+      if (pollTimerRef.current) {
+        clearInterval(pollTimerRef.current);
+        pollTimerRef.current = null;
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?._id]);
+
+  // Socket-based real-time updates
+  useEffect(() => {
+    if (!socket) return;
+    const handler = () => {
+      console.log('[Dashboard] meeting_update received via socket — refetching');
+      doFetchMeetings();
+    };
+    socket.on('meeting_update', handler);
+    return () => { socket.off('meeting_update', handler); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [socket]);
+
+  // Window focus / visibility refetch
+  useEffect(() => {
+    const refetch = () => doFetchMeetings();
+    const onVisible = () => { if (document.visibilityState === 'visible') refetch(); };
+    window.addEventListener('focus', refetch);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.removeEventListener('focus', refetch);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?._id]);
 
   useEffect(() => {
     const fetchCanvases = async () => {
@@ -113,17 +479,27 @@ export default function Dashboard() {
       try {
         let allFolders = await folderAPI.getAll();
 
-        // Check if "Personal Sketches" folder exists
-        let personalFolder = allFolders.find(f => f.name === 'Personal Sketches');
-
-        // If not, create it
+        // Check if "Personal Sketches" default folder exists
+        let personalFolder = allFolders.find(f => f.name === 'Personal Sketches' && f.isDefault);
+        // Fallback: match by name alone (for users registered before isDefault was added)
         if (!personalFolder) {
-          personalFolder = await folderAPI.create({ name: 'Personal Sketches' });
+          personalFolder = allFolders.find(f => f.name === 'Personal Sketches');
+        }
+
+        // If not, create it (handle race condition if already created)
+        if (!personalFolder) {
+          try {
+            personalFolder = await folderAPI.create({ name: 'Personal Sketches' });
+          } catch (createErr) {
+            // Folder may have been created by a concurrent request (React StrictMode)
+            allFolders = await folderAPI.getAll();
+            personalFolder = allFolders.find(f => f.name === 'Personal Sketches');
+          }
           allFolders = await folderAPI.getAll();
         }
 
         setFolders(allFolders || []);
-        setDefaultFolderId(personalFolder._id);
+        if (personalFolder) setDefaultFolderId(personalFolder._id);
       } catch (error) {
         console.error('Failed to fetch folders:', error);
       } finally {
@@ -199,10 +575,11 @@ export default function Dashboard() {
     title: cv.title || 'Untitled Canvas',
     edited: new Date(cv.updatedAt).toLocaleString(),
     folder: cv.folder ? folders.find(f => f._id === cv.folder)?.name || 'Personal Sketches' : 'Personal Sketches',
-    tag: 'Private',
-    tagColor: 'emerald',
-    border: 'border-b-emerald-400/60',
-    preview: cv.thumbnail || 'https://via.placeholder.com/400x200?text=No+Preview'
+    tag: cv.isMeetingCanvas ? 'Meeting' : 'Private',
+    tagColor: cv.isMeetingCanvas ? 'amber' : 'emerald',
+    border: cv.isMeetingCanvas ? 'border-b-amber-400/60' : 'border-b-emerald-400/60',
+    preview: cv.thumbnail || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='200'%3E%3Crect fill='%23111827' width='400' height='200'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%234b5563' font-family='sans-serif' font-size='16'%3ENo Preview%3C/text%3E%3C/svg%3E",
+    isMeetingCanvas: cv.isMeetingCanvas || false
   }));
   const activeFolder = folders.find((folder) => folder._id === activeFolderId) || null;
   const activeFolderCanvases = folderCanvases.map(cv => ({
@@ -210,18 +587,19 @@ export default function Dashboard() {
     title: cv.title || 'Untitled Canvas',
     edited: new Date(cv.updatedAt).toLocaleString(),
     folder: activeFolder?.name || '',
-    tag: 'Private',
-    tagColor: 'emerald',
-    border: 'border-b-emerald-400/60',
-    preview: cv.thumbnail || 'https://via.placeholder.com/400x200?text=No+Preview'
+    tag: cv.isMeetingCanvas ? 'Meeting' : 'Private',
+    tagColor: cv.isMeetingCanvas ? 'amber' : 'emerald',
+    border: cv.isMeetingCanvas ? 'border-b-amber-400/60' : 'border-b-emerald-400/60',
+    preview: cv.thumbnail || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='200'%3E%3Crect fill='%23111827' width='400' height='200'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%234b5563' font-family='sans-serif' font-size='16'%3ENo Preview%3C/text%3E%3C/svg%3E",
+    isMeetingCanvas: cv.isMeetingCanvas || false
   }));
 
   const filterCanvases = (canvases) => {
-    if (canvasFilter === 'shared') {
-      return canvases.filter((canvas) => canvas.tag === 'Shared');
+    if (canvasFilter === 'meeting') {
+      return canvases.filter((canvas) => canvas.isMeetingCanvas);
     }
     if (canvasFilter === 'private') {
-      return canvases.filter((canvas) => canvas.tag === 'Private');
+      return canvases.filter((canvas) => !canvas.isMeetingCanvas);
     }
     if (canvasFilter === 'recent') {
       return canvases.slice(0, 4);
@@ -271,6 +649,7 @@ export default function Dashboard() {
     setInstantMeetingDetails(null);
     setScheduledMeetingDetails(null);
     setCreateMeetingFlash(null);
+    setMeetingName('');
     setShowCreateMeeting(true);
 
     setIsInstantGenerating(true);
@@ -364,6 +743,11 @@ export default function Dashboard() {
   };
 
   const handleGenerateScheduledMeeting = async () => {
+    if (!meetingName.trim()) {
+      setScheduleError('Please enter a meeting name.');
+      setScheduledMeetingDetails(null);
+      return;
+    }
     const validationError = validateSchedule();
     if (validationError) {
       setScheduleError(validationError);
@@ -373,13 +757,17 @@ export default function Dashboard() {
     setScheduleError('');
     setIsScheduledGenerating(true);
     try {
-      // Generate credentials for scheduled meeting (no DB creation yet)
-      const data = await meetingAPI.generateCredentials();
+      // Create scheduled meeting in DB with pending status
+      const data = await meetingAPI.create({
+        name: meetingName.trim(),
+        scheduledDate: scheduleDate,
+        scheduledTime: scheduleTime
+      });
       setScheduledMeetingDetails({
         id: data.meetingId,
         password: data.password,
         shareLink: data.shareLink,
-        meetingDbId: null,
+        meetingDbId: data.meetingDbId,
         role: 'host',
         permission: 'edit',
         status: 'pending',
@@ -394,6 +782,10 @@ export default function Dashboard() {
   };
 
   const handleInstantJoin = async () => {
+    if (!meetingName.trim()) {
+      showMeetingFlash(setCreateMeetingFlash, 'Please enter a meeting name');
+      return;
+    }
     setIsInstantGenerating(true);
 
     try {
@@ -401,7 +793,8 @@ export default function Dashboard() {
       if (instantMeetingDetails && !instantMeetingDetails?.meetingDbId) {
         const data = await meetingAPI.createInstant({
           meetingId: instantMeetingDetails.id,
-          password: instantMeetingDetails.password
+          password: instantMeetingDetails.password,
+          name: meetingName.trim()
         });
         const meetingData = {
           id: data.meetingId,
@@ -575,11 +968,7 @@ export default function Dashboard() {
       }
     } catch (error) {
       console.error('Failed to create canvas:', error);
-      // Fallback: open paint in offline/local mode when backend is unavailable
-      setShowCreateCanvasModal(false);
-      setCreateCanvasName('');
-      setCreateCanvasError('');
-      navigate(`/paint?title=${encodeURIComponent(trimmedName)}`);
+      showFlash('error', 'Failed to create canvas');
     }
   };
 
@@ -742,15 +1131,14 @@ export default function Dashboard() {
       `}</style>
 
       <div className="flex h-screen overflow-hidden">
-        <aside id="dashboard-sidebar" className="w-64 flex-shrink-0 bg-[#111827] border-r border-[#1f2a3b] flex flex-col">
+        <aside className="w-64 flex-shrink-0 bg-[#111827] border-r border-[#1f2a3b] flex flex-col">
           <div className="p-6 flex items-center space-x-3">
             <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
               <span className="material-icons text-white text-xl font-bold">dashboard_customize</span>
             </div>
             <span className="text-xl font-extrabold tracking-tight">CollabCanvas</span>
           </div>
-          <nav className="flex-1 px-4 space-y-1 mt-4">
-            <div id="dashboard-sidebar-nav" className="space-y-1">
+          <nav id="dashboard-sidebar-nav" className="flex-1 px-4 space-y-1 mt-4">
             <button
               className={`w-full flex items-center px-4 py-3 text-sm font-semibold rounded-xl transition-all ${activeView === 'home' ? 'bg-[#1a2b4a] text-white' : 'text-slate-400 hover:bg-[#1a2b4a] hover:text-white'
                 }`}
@@ -815,7 +1203,6 @@ export default function Dashboard() {
               <span className="material-icons mr-3">settings</span>
               Settings
             </button>
-            </div>
           </nav>
           <div className="p-4 mt-auto">
             <button
@@ -844,8 +1231,8 @@ export default function Dashboard() {
         <main className="flex-1 flex flex-col overflow-hidden">
           {activeView === 'home' ? (
             <header className="h-16 flex-shrink-0 flex items-center justify-between px-8 bg-[#0f172a] border-b border-[#1f2a3b]">
-              <div className="flex-1 max-w-xl">
-                <div id="dashboard-search" className="relative group">
+              <div id="dashboard-searchbar" className="flex-1 max-w-xl">
+                <div className="relative group">
                   <span className="material-icons absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors">search</span>
                   <input
                     className="w-full pl-10 pr-4 py-2 bg-[#111827] border border-[#1f2a3b] focus:border-primary focus:ring-0 rounded-xl text-sm transition-all text-slate-200"
@@ -1016,7 +1403,7 @@ export default function Dashboard() {
                   </button>
                 </section>
 
-                <section id="dashboard-canvases">
+                <section id="dashboard-card-canvases">
                   <div className="flex items-center space-x-8 mb-6 border-b border-[#1f2a3b]">
                     <button
                       className={`pb-4 text-sm font-bold border-b-2 transition-all ${activeTab === 'recent'
@@ -1053,13 +1440,13 @@ export default function Dashboard() {
                   {activeTab === 'recent' && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                       {savedCanvases.slice(0, 4).map((canvas) => (
-                        <div key={canvas._id} className="group bg-[#111827] border border-[#1f2a3b] rounded-xl overflow-hidden hover:shadow-lg transition-all border-b-4 border-b-emerald-400/60">
+                        <div key={canvas._id} className={`group bg-[#111827] border border-[#1f2a3b] rounded-xl overflow-hidden hover:shadow-lg transition-all border-b-4 ${canvas.isMeetingCanvas ? 'border-b-amber-400/60' : 'border-b-emerald-400/60'}`}>
                           <div className="h-40 bg-[#0b1220] relative overflow-hidden">
-                            <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-transparent"></div>
+                            <div className={`absolute inset-0 bg-gradient-to-br ${canvas.isMeetingCanvas ? 'from-amber-500/10' : 'from-emerald-500/10'} to-transparent`}></div>
                             <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 backdrop-blur-sm">
                               <button
                                 className="px-4 py-2 bg-primary  text-white text-xs font-bold rounded-lg shadow-lg"
-                                onClick={() => navigate(`/paint/${canvas._id}`)}
+                                onClick={() => navigate(canvas.isMeetingCanvas ? `/meeting-canvas/${canvas._id}` : `/paint/${canvas._id}`)}
                                 type="button"
                               >
                                 Open Editor
@@ -1068,8 +1455,15 @@ export default function Dashboard() {
                             <img
                               alt={`${canvas.title} Preview`}
                               className="absolute inset-0 w-full h-full object-cover opacity-50 pointer-events-none group-hover:scale-110 transition-transform duration-500"
-                              src={canvas.thumbnail || 'https://via.placeholder.com/400x200?text=No+Preview'}
+                              src={canvas.thumbnail || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='200'%3E%3Crect fill='%23111827' width='400' height='200'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%234b5563' font-family='sans-serif' font-size='16'%3ENo Preview%3C/text%3E%3C/svg%3E"}
                             />
+                            {canvas.isMeetingCanvas && (
+                              <div className="absolute top-3 right-3 z-10">
+                                <span className="px-2 py-1 bg-[#101922]/80 text-[10px] font-bold rounded border uppercase text-amber-400 border-amber-400/30">
+                                  Meeting
+                                </span>
+                              </div>
+                            )}
                           </div>
                           <div className="p-4">
                             <div className="flex items-start justify-between mb-2">
@@ -1147,450 +1541,319 @@ export default function Dashboard() {
 
                   {activeTab === 'upcoming' && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                      <div className="group bg-white dark:bg-surface-dark border border-slate-200 dark:border-border-dark rounded-xl p-5 hover:shadow-lg transition-all border-l-4 border-l-primary">
-                        <div className="flex justify-between items-start mb-4">
-                          <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center text-primary">
-                            <span className="material-icons">event_available</span>
-                          </div>
-                          <span className="px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 text-[10px] font-bold rounded uppercase">In 15 Mins</span>
+                      {isLoadingMeetings ? (
+                        <div className="col-span-3 text-center py-12">
+                          <span className="material-icons animate-spin text-primary text-3xl">refresh</span>
+                          <p className="text-slate-500 mt-2">Loading meetings...</p>
                         </div>
-                        <h4 className="font-bold text-base mb-1">Weekly Design Alignment</h4>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
-                          Reviewing final prototypes for the mobile app navigation overhaul.
-                        </p>
-                        <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-border-dark">
-                          <div className="flex -space-x-2">
-                            <img
-                              alt="Team member"
-                              className="w-7 h-7 rounded-full border-2 border-white dark:border-surface-dark"
-                              src="https://lh3.googleusercontent.com/aida-public/AB6AXuDqTfywyR1V-K_AIjWqiOpMkL5HqSbth_mGsQcF68NS0z93K1S6BUVP0lqSnWROCkio9XUfSI18giEkbkPLo_W23mJ-k0X_w7EkGW1Dew_eQHHSfMx0u2oiT5gHyh97czYjZXFtmWtQT6X_d6vDduce1MqiC3odtK22ShLDLaA6q4FsSZERi21w-kCoM-xTt9Q99dhAqT4ybTq_zUr_E4KiMaI5GvwJSfk2i0xNPBWytcC0AuTgUvcRChDtHaKevbzhcFlp0dPNyiU"
-                            />
-                            <img
-                              alt="Team member"
-                              className="w-7 h-7 rounded-full border-2 border-white dark:border-surface-dark"
-                              src="https://lh3.googleusercontent.com/aida-public/AB6AXuBP3Jffw2Ed86qLcQBO1a05mSUUVVKiWWIFMs5eaQUtbgZZ4WJ_YsRgPDXetsYBMgE5cwexXnXHnLy5tzdCTEB8Lm88P7PDk6cb1yiWobJMGU54wKA656FbzmD0HUDm-twu2t2QlQzMcGo83A8g14CN7wfS42kaCoMq3HghIJpfzsIxlw9F0-qfuyjFhl4rn7v7NuVj2swvt3ceKSi_dsi9dsHo3-V702VS9fDUJNATljFvadY7ZQRFxGEH2hKU4YrnGYmKET_jfD0"
-                            />
-                            <div className="w-7 h-7 rounded-full bg-slate-200 dark:bg-slate-700 border-2 border-white dark:border-surface-dark flex items-center justify-center text-[10px] font-bold">
-                              +3
+                      ) : [...liveMeetings, ...pendingMeetings].length === 0 ? (
+                        <div className="col-span-3 text-center py-12">
+                          <span className="material-icons text-slate-600 text-4xl block mb-2">event_busy</span>
+                          <p className="text-slate-500">No upcoming meetings. Schedule one to get started!</p>
+                        </div>
+                      ) : (
+                        [...liveMeetings, ...pendingMeetings].map((meeting) => (
+                          <div key={meeting._id} className={`group bg-white dark:bg-surface-dark border border-slate-200 dark:border-border-dark rounded-xl p-5 hover:shadow-lg transition-all border-l-4 ${meeting.status === 'live' ? 'border-l-emerald-500' : 'border-l-primary'}`}>
+                            <div className="flex justify-between items-start mb-4">
+                              <div className={`w-10 h-10 ${meeting.status === 'live' ? 'bg-emerald-500/10' : 'bg-primary/10'} rounded-lg flex items-center justify-center ${meeting.status === 'live' ? 'text-emerald-500' : 'text-primary'}`}>
+                                <span className="material-icons">{meeting.status === 'live' ? 'videocam' : 'event_available'}</span>
+                              </div>
+                              <span className={`px-2 py-1 ${meeting.status === 'live' ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400' : 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'} text-[10px] font-bold rounded uppercase`}>
+                                {meeting.status === 'live' ? 'Live Now' : 'Scheduled'}
+                              </span>
+                            </div>
+                            <h4 className="font-bold text-base mb-1 text-start">{meeting.name}</h4>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
+                              Meeting ID: {meeting.meetingId}
+                            </p>
+                            <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-border-dark">
+                              <div className="flex items-center text-xs text-slate-500">
+                                <span className="material-icons text-sm mr-1">group</span>
+                                {meeting.participants?.length || 0} participant{(meeting.participants?.length || 0) !== 1 ? 's' : ''}
+                              </div>
+                              <button
+                                className="text-primary text-xs font-bold hover:underline flex items-center"
+                                type="button"
+                                onClick={() => navigate(`/meeting/${meeting.meetingId}`)}
+                              >
+                                {meeting.status === 'live' ? 'Join Now' : 'View Details'} <span className="material-icons text-sm ml-1">arrow_forward</span>
+                              </button>
                             </div>
                           </div>
-                          <button className="text-primary text-xs font-bold hover:underline flex items-center" type="button">
-                            Join Meeting <span className="material-icons text-sm ml-1">arrow_forward</span>
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="group bg-white dark:bg-surface-dark border border-slate-200 dark:border-border-dark rounded-xl p-5 hover:shadow-lg transition-all border-l-4 border-l-deep-purple">
-                        <div className="flex justify-between items-start mb-4">
-                          <div className="w-10 h-10 bg-deep-purple/10 rounded-lg flex items-center justify-center text-deep-purple">
-                            <span className="material-icons">groups</span>
-                          </div>
-                          <span className="px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-[10px] font-bold rounded uppercase">Today, 2:00 PM</span>
-                        </div>
-                        <h4 className="font-bold text-base mb-1">Product Roadmap Q1</h4>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
-                          Stakeholder sync to finalize the feature priority list for early 2024.
-                        </p>
-                        <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-border-dark">
-                          <div className="flex -space-x-2">
-                            <img
-                              alt="Team member"
-                              className="w-7 h-7 rounded-full border-2 border-white dark:border-surface-dark"
-                              src="https://lh3.googleusercontent.com/aida-public/AB6AXuAkXpCRHQ-UPXaJsLlUZdtA6naCVhm0E8mn-XUR7zD0CADV8MeTxlg3Sql9v9OO0nscMWorf4ji5EI3pTGy1cVGzp_Wgsiry-KXMPTfgYObiKvsGsQT-RCjJkMFW1uBj-Nuh18F_QMrwQdzlR1Bl7tHY75q8SFQqD0SQ51kQ1UqTmvj_Dh8MS9rcL_eVXqf71_OGa0SgNL4FInMVAT5e5O6xC_4aAVzE0p7A6fiU9GmIy3kJuv0EZ_e3seFc1wufAg-HHOwdxWs9e8"
-                            />
-                            <img
-                              alt="Team member"
-                              className="w-7 h-7 rounded-full border-2 border-white dark:border-surface-dark"
-                              src="https://lh3.googleusercontent.com/aida-public/AB6AXuA1G-Hn3vTP4BF8Tw65GNWLXCvphxit-gjaQaTS4e4417fPSGMKmx5zWr3w71xhaFli15vvoNhXAQzFsZhbXrYJnyiMAASvjonWiMDpUrf74kM00j8LO0v8ZIeWjxaTbQuwyPqYZPfUeaOJ0wxlWWLxz3b8aKfJIiOrN14CKccdESbzqpgCNmOz0yLKqEPnT9TLpYA75qsT7GKR2uA3ES71XLf46HSiL3x1oGxqtIPUL_bm67_UVcIPd6dxq-bs8_hsxaiualJBX4s"
-                            />
-                            <div className="w-7 h-7 rounded-full bg-slate-200 dark:bg-slate-700 border-2 border-white dark:border-surface-dark flex items-center justify-center text-[10px] font-bold">
-                              +12
-                            </div>
-                          </div>
-                          <button className="text-slate-400 text-xs font-bold flex items-center cursor-not-allowed" type="button">
-                            View Details
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="group bg-white dark:bg-surface-dark border border-slate-200 dark:border-border-dark rounded-xl p-5 hover:shadow-lg transition-all border-l-4 border-l-teal-accent">
-                        <div className="flex justify-between items-start mb-4">
-                          <div className="w-10 h-10 bg-teal-accent/10 rounded-lg flex items-center justify-center text-teal-accent">
-                            <span className="material-icons">psychology</span>
-                          </div>
-                          <span className="px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-[10px] font-bold rounded uppercase">Tomorrow, 10:00 AM</span>
-                        </div>
-                        <h4 className="font-bold text-base mb-1">Brainstorming: Marketing Site</h4>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
-                          Creative session for the new landing page concept and messaging.
-                        </p>
-                        <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-border-dark">
-                          <div className="flex -space-x-2">
-                            <img
-                              alt="Team member"
-                              className="w-7 h-7 rounded-full border-2 border-white dark:border-surface-dark"
-                              src="https://lh3.googleusercontent.com/aida-public/AB6AXuDqTfywyR1V-K_AIjWqiOpMkL5HqSbth_mGsQcF68NS0z93K1S6BUVP0lqSnWROCkio9XUfSI18giEkbkPLo_W23mJ-k0X_w7EkGW1Dew_eQHHSfMx0u2oiT5gHyh97czYjZXFtmWtQT6X_d6vDduce1MqiC3odtK22ShLDLaA6q4FsSZERi21w-kCoM-xTt9Q99dhAqT4ybTq_zUr_E4KiMaI5GvwJSfk2i0xNPBWytcC0AuTgUvcRChDtHaKevbzhcFlp0dPNyiU"
-                            />
-                            <div className="w-7 h-7 rounded-full bg-slate-200 dark:bg-slate-700 border-2 border-white dark:border-surface-dark flex items-center justify-center text-[10px] font-bold">
-                              +2
-                            </div>
-                          </div>
-                          <button className="text-slate-400 text-xs font-bold flex items-center cursor-not-allowed" type="button">
-                            View Details
-                          </button>
-                        </div>
-                      </div>
+                        ))
+                      )}
                     </div>
                   )}
 
                   {activeTab === 'completed' && (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                      <div className="group bg-white dark:bg-surface-dark border border-slate-200 dark:border-border-dark rounded-xl p-5 hover:shadow-lg transition-all">
-                        <div className="flex justify-between items-start mb-4">
-                          <div className="w-10 h-10 bg-slate-100 dark:bg-slate-800 rounded-lg flex items-center justify-center text-slate-500">
-                            <span className="material-icons">history</span>
-                          </div>
-                          <span className="px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-[10px] font-bold rounded uppercase">
-                            Oct 22 · 45m
-                          </span>
-                        </div>
-                        <h4 className="font-bold text-base mb-1">Backend Architecture Review</h4>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
-                          Detailed walkthrough of the microservices transition plan and database schema.
-                        </p>
-                        <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-border-dark">
-                          <div className="flex -space-x-2">
-                            <img
-                              alt="Team member"
-                              className="w-7 h-7 rounded-full border-2 border-white dark:border-surface-dark"
-                              src="https://lh3.googleusercontent.com/aida-public/AB6AXuDqTfywyR1V-K_AIjWqiOpMkL5HqSbth_mGsQcF68NS0z93K1S6BUVP0lqSnWROCkio9XUfSI18giEkbkPLo_W23mJ-k0X_w7EkGW1Dew_eQHHSfMx0u2oiT5gHyh97czYjZXFtmWtQT6X_d6vDduce1MqiC3odtK22ShLDLaA6q4FsSZERi21w-kCoM-xTt9Q99dhAqT4ybTq_zUr_E4KiMaI5GvwJSfk2i0xNPBWytcC0AuTgUvcRChDtHaKevbzhcFlp0dPNyiU"
-                            />
-                            <img
-                              alt="Team member"
-                              className="w-7 h-7 rounded-full border-2 border-white dark:border-surface-dark"
-                              src="https://lh3.googleusercontent.com/aida-public/AB6AXuBP3Jffw2Ed86qLcQBO1a05mSUUVVKiWWIFMs5eaQUtbgZZ4WJ_YsRgPDXetsYBMgE5cwexXnXHnLy5tzdCTEB8Lm88P7PDk6cb1yiWobJMGU54wKA656FbzmD0HUDm-twu2t2QlQzMcGo83A8g14CN7wfS42kaCoMq3HghIJpfzsIxlw9F0-qfuyjFhl4rn7v7NuVj2swvt3ceKSi_dsi9dsHo3-V702VS9fDUJNATljFvadY7ZQRFxGEH2hKU4YrnGYmKET_jfD0"
-                            />
-                            <div className="w-7 h-7 rounded-full bg-slate-200 dark:bg-slate-700 border-2 border-white dark:border-surface-dark flex items-center justify-center text-[10px] font-bold">
-                              +2
-                            </div>
-                          </div>
-                          <button className="text-primary text-xs font-bold hover:underline flex items-center" type="button">
-                            View Recap <span className="material-icons text-sm ml-1">description</span>
-                          </button>
-                        </div>
+                    <>
+                      <div className="flex items-center justify-between mb-4">
+                        <p className="text-xs text-slate-500">{endedMeetings.length} completed meeting{endedMeetings.length !== 1 ? 's' : ''}</p>
+                        <button
+                          className="text-xs text-slate-400 hover:text-primary flex items-center gap-1 transition-colors"
+                          type="button"
+                          onClick={() => { setIsLoadingMeetings(true); doFetchMeetings().finally(() => setIsLoadingMeetings(false)); }}
+                        >
+                          <span className={`material-icons text-sm ${isLoadingMeetings ? 'animate-spin' : ''}`}>refresh</span>
+                          Refresh
+                        </button>
                       </div>
-
-                      <div className="group bg-white dark:bg-surface-dark border border-slate-200 dark:border-border-dark rounded-xl p-5 hover:shadow-lg transition-all">
-                        <div className="flex justify-between items-start mb-4">
-                          <div className="w-10 h-10 bg-slate-100 dark:bg-slate-800 rounded-lg flex items-center justify-center text-slate-500">
-                            <span className="material-icons">campaign</span>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {isLoadingMeetings ? (
+                          <div className="col-span-3 text-center py-12">
+                            <span className="material-icons animate-spin text-primary text-3xl">refresh</span>
+                            <p className="text-slate-500 mt-2">Loading meetings...</p>
                           </div>
-                          <span className="px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-[10px] font-bold rounded uppercase">
-                            Oct 21 · 60m
-                          </span>
-                        </div>
-                        <h4 className="font-bold text-base mb-1">Marketing Strategy Session</h4>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
-                          Aligning on the holiday campaign assets and cross-channel promotion timelines.
-                        </p>
-                        <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-border-dark">
-                          <div className="flex -space-x-2">
-                            <img
-                              alt="Team member"
-                              className="w-7 h-7 rounded-full border-2 border-white dark:border-surface-dark"
-                              src="https://lh3.googleusercontent.com/aida-public/AB6AXuAkXpCRHQ-UPXaJsLlUZdtA6naCVhm0E8mn-XUR7zD0CADV8MeTxlg3Sql9v9OO0nscMWorf4ji5EI3pTGy1cVGzp_Wgsiry-KXMPTfgYObiKvsGsQT-RCjJkMFW1uBj-Nuh18F_QMrwQdzlR1Bl7tHY75q8SFQqD0SQ51kQ1UqTmvj_Dh8MS9rcL_eVXqf71_OGa0SgNL4FInMVAT5e5O6xC_4aAVzE0p7A6fiU9GmIy3kJuv0EZ_e3seFc1wufAg-HHOwdxWs9e8"
-                            />
-                            <img
-                              alt="Team member"
-                              className="w-7 h-7 rounded-full border-2 border-white dark:border-surface-dark"
-                              src="https://lh3.googleusercontent.com/aida-public/AB6AXuA1G-Hn3vTP4BF8Tw65GNWLXCvphxit-gjaQaTS4e4417fPSGMKmx5zWr3w71xhaFli15vvoNhXAQzFsZhbXrYJnyiMAASvjonWiMDpUrf74kM00j8LO0v8ZIeWjxaTbQuwyPqYZPfUeaOJ0wxlWWLxz3b8aKfJIiOrN14CKccdESbzqpgCNmOz0yLKqEPnT9TLpYA75qsT7GKR2uA3ES71XLf46HSiL3x1oGxqtIPUL_bm67_UVcIPd6dxq-bs8_hsxaiualJBX4s"
-                            />
-                            <div className="w-7 h-7 rounded-full bg-slate-200 dark:bg-slate-700 border-2 border-white dark:border-surface-dark flex items-center justify-center text-[10px] font-bold">
-                              +5
+                        ) : endedMeetings.length === 0 ? (
+                          <div className="col-span-3 text-center py-12">
+                            <span className="material-icons text-slate-600 text-4xl block mb-2">history</span>
+                            <p className="text-slate-500">No completed meetings yet.</p>
+                          </div>
+                        ) : (
+                          endedMeetings.map((meeting) => (
+                            <div key={meeting._id} className="group bg-white dark:bg-surface-dark border border-slate-200 dark:border-border-dark rounded-xl p-5 hover:shadow-lg transition-all">
+                              <div className="flex justify-between items-start mb-4">
+                                <div className="w-10 h-10 bg-slate-100 dark:bg-slate-800 rounded-lg flex items-center justify-center text-slate-500">
+                                  <span className="material-icons">history</span>
+                                </div>
+                                <span className="px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-[10px] font-bold rounded uppercase">
+                                  {meeting.endTime ? new Date(meeting.endTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'Ended'}
+                                  {meeting.startTime && meeting.endTime ? ` · ${Math.round((new Date(meeting.endTime) - new Date(meeting.startTime)) / 60000)}m` : ''}
+                                </span>
+                              </div>
+                              <h4 className="font-bold text-base mb-1 text-start">{meeting.name}</h4>
+                              <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
+                                Meeting ID: {meeting.meetingId}
+                              </p>
+                              <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-border-dark">
+                                <div className="flex items-center text-xs text-slate-500">
+                                  <span className="material-icons text-sm mr-1">group</span>
+                                  {meeting.participants?.length || 0} participant{(meeting.participants?.length || 0) !== 1 ? 's' : ''}
+                                </div>
+                                <button
+                                  className="text-primary text-xs font-bold hover:underline flex items-center"
+                                  type="button"
+                                  onClick={() => navigate(`/meeting-notes/${meeting._id}`)}
+                                >
+                                  View Notes <span className="material-icons text-sm ml-1">description</span>
+                                </button>
+                              </div>
                             </div>
-                          </div>
-                          <button className="text-primary text-xs font-bold hover:underline flex items-center" type="button">
-                            View Summary <span className="material-icons text-sm ml-1">article</span>
-                          </button>
-                        </div>
+                          ))
+                        )}
                       </div>
-
-                      <div className="group bg-white dark:bg-surface-dark border border-slate-200 dark:border-border-dark rounded-xl p-5 hover:shadow-lg transition-all">
-                        <div className="flex justify-between items-start mb-4">
-                          <div className="w-10 h-10 bg-slate-100 dark:bg-slate-800 rounded-lg flex items-center justify-center text-slate-500">
-                            <span className="material-icons">event_note</span>
-                          </div>
-                          <span className="px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-[10px] font-bold rounded uppercase">
-                            Oct 20 · 90m
-                          </span>
-                        </div>
-                        <h4 className="font-bold text-base mb-1">Q3 Retrospective</h4>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
-                          Analyzing performance metrics, team feedback, and setting goals for the next quarter.
-                        </p>
-                        <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-border-dark">
-                          <div className="flex -space-x-2">
-                            <img
-                              alt="Team member"
-                              className="w-7 h-7 rounded-full border-2 border-white dark:border-surface-dark"
-                              src="https://lh3.googleusercontent.com/aida-public/AB6AXuDqTfywyR1V-K_AIjWqiOpMkL5HqSbth_mGsQcF68NS0z93K1S6BUVP0lqSnWROCkio9XUfSI18giEkbkPLo_W23mJ-k0X_w7EkGW1Dew_eQHHSfMx0u2oiT5gHyh97czYjZXFtmWtQT6X_d6vDduce1MqiC3odtK22ShLDLaA6q4FsSZERi21w-kCoM-xTt9Q99dhAqT4ybTq_zUr_E4KiMaI5GvwJSfk2i0xNPBWytcC0AuTgUvcRChDtHaKevbzhcFlp0dPNyiU"
-                            />
-                            <img
-                              alt="Team member"
-                              className="w-7 h-7 rounded-full border-2 border-white dark:border-surface-dark"
-                              src="https://lh3.googleusercontent.com/aida-public/AB6AXuDqTfywyR1V-K_AIjWqiOpMkL5HqSbth_mGsQcF68NS0z93K1S6BUVP0lqSnWROCkio9XUfSI18giEkbkPLo_W23mJ-k0X_w7EkGW1Dew_eQHHSfMx0u2oiT5gHyh97czYjZXFtmWtQT6X_d6vDduce1MqiC3odtK22ShLDLaA6q4FsSZERi21w-kCoM-xTt9Q99dhAqT4ybTq_zUr_E4KiMaI5GvwJSfk2i0xNPBWytcC0AuTgUvcRChDtHaKevbzhcFlp0dPNyiU"
-                            />
-                            <div className="w-7 h-7 rounded-full bg-slate-200 dark:bg-slate-700 border-2 border-white dark:border-surface-dark flex items-center justify-center text-[10px] font-bold">
-                              +8
-                            </div>
-                          </div>
-                          <button className="text-primary text-xs font-bold hover:underline flex items-center" type="button">
-                            View Recap <span className="material-icons text-sm ml-1">description</span>
-                          </button>
-                        </div>
-                      </div>
-                    </div>
+                    </>
                   )}
 
-                  <div id="dashboard-schedule" className="mt-12">
+                  <div className="mt-12">
                     <div className="flex items-center justify-between mb-6">
                       <h3 className="text-lg font-bold">Today's Schedule</h3>
-                      <button className="text-primary text-sm font-bold hover:underline">View Calendar</button>
+                      <button className="text-primary text-sm font-bold hover:underline" onClick={() => setActiveView('meetings')}>View All Meetings</button>
                     </div>
                     <div className="space-y-3">
-                      <div className="flex items-center justify-between p-4 bg-[#111827] border border-[#1f2a3b] rounded-xl group hover:border-primary transition-all">
-                        <div className="flex items-center space-x-4">
-                          <div className="w-12 h-12 bg-primary/10 rounded-lg flex flex-col items-center justify-center text-primary">
-                            <span className="text-[10px] font-bold leading-none uppercase">Oct</span>
-                            <span className="text-xl font-extrabold leading-none">24</span>
-                          </div>
-                          <div>
-                            <h4 className="font-bold text-sm text-start">Frontend Sync-up</h4>
-                            <p className="text-xs text-slate-500 text-start">10:00 AM — 11:00 AM • 4 participants</p>
-                          </div>
+                      {[...liveMeetings, ...pendingMeetings].length === 0 ? (
+                        <div className="text-center py-8">
+                          <p className="text-slate-500 text-sm">No meetings scheduled.</p>
                         </div>
-                        <div className="flex items-center space-x-3">
-                          <div className="flex -space-x-2 mr-4">
-                            <img
-                              alt="Team member profile picture small"
-                              className="w-7 h-7 rounded-full border-2 border-[#0f172a]"
-                              src="https://lh3.googleusercontent.com/aida-public/AB6AXuDqTfywyR1V-K_AIjWqiOpMkL5HqSbth_mGsQcF68NS0z93K1S6BUVP0lqSnWROCkio9XUfSI18giEkbkPLo_W23mJ-k0X_w7EkGW1Dew_eQHHSfMx0u2oiT5gHyh97czYjZXFtmWtQT6X_d6vDduce1MqiC3odtK22ShLDLaA6q4FsSZERi21w-kCoM-xTt9Q99dhAqT4ybTq_zUr_E4KiMaI5GvwJSfk2i0xNPBWytcC0AuTgUvcRChDtHaKevbzhcFlp0dPNyiU"
-                            />
-                            <img
-                              alt="Team member profile picture small"
-                              className="w-7 h-7 rounded-full border-2 border-[#0f172a]"
-                              src="https://lh3.googleusercontent.com/aida-public/AB6AXuBP3Jffw2Ed86qLcQBO1a05mSUUVVKiWWIFMs5eaQUtbgZZ4WJ_YsRgPDXetsYBMgE5cwexXnXHnLy5tzdCTEB8Lm88P7PDk6cb1yiWobJMGU54wKA656FbzmD0HUDm-twu2t2QlQzMcGo83A8g14CN7wfS42kaCoMq3HghIJpfzsIxlw9F0-qfuyjFhl4rn7v7NuVj2swvt3ceKSi_dsi9dsHo3-V702VS9fDUJNATljFvadY7ZQRFxGEH2hKU4YrnGYmKET_jfD0"
-                            />
-                            <div className="w-7 h-7 rounded-full bg-[#1f2a3b] border-2 border-[#0f172a] flex items-center justify-center text-[10px] font-bold">+2</div>
+                      ) : (
+                        [...liveMeetings, ...pendingMeetings].slice(0, 3).map((meeting) => (
+                          <div key={meeting._id} className="flex items-center justify-between p-4 bg-[#111827] border border-[#1f2a3b] rounded-xl group hover:border-primary transition-all">
+                            <div className="flex items-center space-x-4">
+                              <div className={`w-12 h-12 ${meeting.status === 'live' ? 'bg-emerald-500/10' : 'bg-primary/10'} rounded-lg flex items-center justify-center ${meeting.status === 'live' ? 'text-emerald-400' : 'text-primary'}`}>
+                                <span className="material-icons text-xl">{meeting.status === 'live' ? 'videocam' : 'event'}</span>
+                              </div>
+                              <div>
+                                <h4 className="font-bold text-sm text-start">{meeting.name}</h4>
+                                <p className="text-xs text-slate-500 text-start">
+                                  {meeting.status === 'live' ? 'Live Now' : meeting.startTime ? new Date(meeting.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Scheduled'} · {meeting.participants?.length || 0} participants
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center space-x-3">
+                              {meeting.status === 'live' ? (
+                                <button
+                                  className="px-4 py-2 bg-primary text-white text-xs font-bold rounded-lg hover:bg-primary/90 transition-all"
+                                  onClick={() => navigate(`/meeting/${meeting.meetingId}`)}
+                                >
+                                  Join Now
+                                </button>
+                              ) : (
+                                <button className="px-4 py-2 border border-[#1f2a3b] text-slate-400 text-xs font-bold rounded-lg cursor-not-allowed">
+                                  Upcoming
+                                </button>
+                              )}
+                            </div>
                           </div>
-                          <button className="px-4 py-2 bg-primary text-white text-xs font-bold rounded-lg opacity-0 group-hover:opacity-100 transition-opacity">
-                            Join Now
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between p-4 bg-[#111827] border border-[#1f2a3b] rounded-xl group hover:border-primary transition-all">
-                        <div className="flex items-center space-x-4">
-                          <div className="w-12 h-12 bg-[#0b1220] rounded-lg flex flex-col items-center justify-center text-slate-400">
-                            <span className="text-[10px] font-bold leading-none uppercase">Oct</span>
-                            <span className="text-xl font-extrabold leading-none">24</span>
-                          </div>
-                          <div>
-                            <h4 className="font-bold text-sm text-start">Sprint Retrospective</h4>
-                            <p className="text-xs text-slate-500 text-start">03:30 PM — 04:30 PM • 8 participants</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center space-x-3">
-                          <div className="flex -space-x-2 mr-4">
-                            <img
-                              alt="Team member profile picture small"
-                              className="w-7 h-7 rounded-full border-2 border-[#0f172a]"
-                              src="https://lh3.googleusercontent.com/aida-public/AB6AXuAkXpCRHQ-UPXaJsLlUZdtA6naCVhm0E8mn-XUR7zD0CADV8MeTxlg3Sql9v9OO0nscMWorf4ji5EI3pTGy1cVGzp_Wgsiry-KXMPTfgYObiKvsGsQT-RCjJkMFW1uBj-Nuh18F_QMrwQdzlR1Bl7tHY75q8SFQqD0SQ51kQ1UqTmvj_Dh8MS9rcL_eVXqf71_OGa0SgNL4FInMVAT5e5O6xC_4aAVzE0p7A6fiU9GmIy3kJuv0EZ_e3seFc1wufAg-HHOwdxWs9e8"
-                            />
-                            <div className="w-7 h-7 rounded-full bg-[#1f2a3b] border-2 border-[#0f172a] flex items-center justify-center text-[10px] font-bold">+7</div>
-                          </div>
-                          <button className="px-4 py-2 border border-[#1f2a3b] text-slate-400 text-xs font-bold rounded-lg cursor-not-allowed">
-                            Later Today
-                          </button>
-                        </div>
-                      </div>
+                        ))
+                      )}
                     </div>
                   </div>
                 </section>
               </>
             ) : activeView === 'meetings' ? (
               <>
+                {/* Active & Upcoming Meetings */}
                 <section className="mb-12">
                   <div className="flex items-center mb-6">
                     <div className="w-2 h-2 rounded-full bg-primary mr-3"></div>
-                    <h3 className="text-sm font-bold uppercase tracking-widest text-slate-500">Today — October 24</h3>
+                    <h3 className="text-sm font-bold uppercase tracking-widest text-slate-500">Active & Upcoming</h3>
                   </div>
                   <div className="space-y-6">
-                    <div className="relative group p-6 bg-[#1a242f] border-l-4 border-primary rounded-xl border border-[#2d3a4b] ">
-                      <div className="absolute top-6 right-6 flex items-center bg-emerald-500/10 text-emerald-400 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider">
-                        <span className="relative flex h-2 w-2 mr-2">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                          <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                        </span>
-                        Live Now
+                    {isLoadingMeetings ? (
+                      <div className="text-center py-12">
+                        <span className="material-icons animate-spin text-primary text-3xl">refresh</span>
+                        <p className="text-slate-500 mt-2">Loading meetings...</p>
                       </div>
-                      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
-                        <div className="flex-1">
-                          <h4 className="text-xl font-bold mb-2 text-start">Q4 Strategic Product Roadmap</h4>
-                          <div className="flex items-center text-slate-400 text-sm space-x-4">
-                            <span className="flex items-center">
-                              <span className="material-symbols-outlined text-sm mr-1">schedule</span> 10:00 AM - 11:30 AM
-                            </span>
-                            <span className="flex items-center">
-                              <span className="material-symbols-outlined text-sm mr-1">location_on</span> Main Canvas Board
-                            </span>
-                          </div>
-                          <div className="mt-4 flex items-center">
-                            <div className="flex -space-x-2 mr-4">
-                              <img
-                                alt="Participant"
-                                className="w-8 h-8 rounded-full border-2 border-[#1a242f]"
-                                src="https://lh3.googleusercontent.com/aida-public/AB6AXuDqTfywyR1V-K_AIjWqiOpMkL5HqSbth_mGsQcF68NS0z93K1S6BUVP0lqSnWROCkio9XUfSI18giEkbkPLo_W23mJ-k0X_w7EkGW1Dew_eQHHSfMx0u2oiT5gHyh97czYjZXFtmWtQT6X_d6vDduce1MqiC3odtK22ShLDLaA6q4FsSZERi21w-kCoM-xTt9Q99dhAqT4ybTq_zUr_E4KiMaI5GvwJSfk2i0xNPBWytcC0AuTgUvcRChDtHaKevbzhcFlp0dPNyiU"
-                              />
-                              <img
-                                alt="Participant"
-                                className="w-8 h-8 rounded-full border-2 border-[#1a242f]"
-                                src="https://lh3.googleusercontent.com/aida-public/AB6AXuBP3Jffw2Ed86qLcQBO1a05mSUUVVKiWWIFMs5eaQUtbgZZ4WJ_YsRgPDXetsYBMgE5cwexXnXHnLy5tzdCTEB8Lm88P7PDk6cb1yiWobJMGU54wKA656FbzmD0HUDm-twu2t2QlQzMcGo83A8g14CN7wfS42kaCoMq3HghIJpfzsIxlw9F0-qfuyjFhl4rn7v7NuVj2swvt3ceKSi_dsi9dsHo3-V702VS9fDUJNATljFvadY7ZQRFxGEH2hKU4YrnGYmKET_jfD0"
-                              />
-                              <img
-                                alt="Participant"
-                                className="w-8 h-8 rounded-full border-2 border-[#1a242f]"
-                                src="https://lh3.googleusercontent.com/aida-public/AB6AXuAkXpCRHQ-UPXaJsLlUZdtA6naCVhm0E8mn-XUR7zD0CADV8MeTxlg3Sql9v9OO0nscMWorf4ji5EI3pTGy1cVGzp_Wgsiry-KXMPTfgYObiKvsGsQT-RCjJkMFW1uBj-Nuh18F_QMrwQdzlR1Bl7tHY75q8SFQqD0SQ51kQ1UqTmvj_Dh8MS9rcL_eVXqf71_OGa0SgNL4FInMVAT5e5O6xC_4aAVzE0p7A6fiU9GmIy3kJuv0EZ_e3seFc1wufAg-HHOwdxWs9e8"
-                              />
-                              <div className="w-8 h-8 rounded-full bg-slate-700 border-2 border-[#1a242f] flex items-center justify-center text-[10px] font-bold text-white">
-                                +5
+                    ) : [...liveMeetings, ...pendingMeetings].length === 0 ? (
+                      <div className="text-center py-12">
+                        <span className="material-icons text-slate-600 text-5xl block mb-3">event_busy</span>
+                        <p className="text-slate-400 text-lg font-medium">No active or upcoming meetings</p>
+                        <p className="text-slate-500 text-sm mt-1">Create or schedule a meeting to get started</p>
+                      </div>
+                    ) : (
+                      [...liveMeetings, ...pendingMeetings].map((meeting) => (
+                        meeting.status === 'live' ? (
+                          <div key={meeting._id} className="relative group p-6 bg-[#1a242f] border-l-4 border-primary rounded-xl border border-[#2d3a4b]">
+                            <div className="absolute top-6 right-6 flex items-center bg-emerald-500/10 text-emerald-400 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider">
+                              <span className="relative flex h-2 w-2 mr-2">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                              </span>
+                              Live Now
+                            </div>
+                            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+                              <div className="flex-1">
+                                <h4 className="text-xl font-bold mb-2 text-start">{meeting.name}</h4>
+                                <div className="flex items-center text-slate-400 text-sm space-x-4">
+                                  <span className="flex items-center">
+                                    <span className="material-symbols-outlined text-sm mr-1">schedule</span>
+                                    {meeting.startTime ? new Date(meeting.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'In Progress'}
+                                  </span>
+                                  <span className="flex items-center">
+                                    <span className="material-symbols-outlined text-sm mr-1">tag</span>
+                                    {meeting.meetingId}
+                                  </span>
+                                </div>
+                                <div className="mt-4 flex items-center">
+                                  <span className="text-xs text-slate-500">
+                                    <span className="material-icons text-sm mr-1 align-middle">group</span>
+                                    {meeting.participants?.length || 0} Participants
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="flex-shrink-0">
+                                <button
+                                  className="w-full md:w-auto px-8 py-4 bg-primary text-white font-bold rounded-xl hover:scale-105 transition-all shadow-xl shadow-primary/30 flex items-center justify-center"
+                                  type="button"
+                                  onClick={() => navigate(`/meeting/${meeting.meetingId}`)}
+                                >
+                                  <span className="material-icons mr-2">videocam</span>
+                                  Join Now
+                                </button>
                               </div>
                             </div>
-                            <span className="text-xs text-slate-500">8 Participants joined</span>
                           </div>
-                        </div>
-                        <div className="flex-shrink-0">
-                          <button className="w-full md:w-auto px-8 py-4 bg-primary text-white font-bold rounded-xl hover:scale-105 transition-all shadow-xl shadow-primary/30 flex items-center justify-center" type="button">
-                            <span className="material-icons mr-2">videocam</span>
-                            Join Now
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="p-6 bg-[#1a242f] rounded-xl border border-[#2d3a4b] hover:border-slate-600 transition-all">
-                      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
-                        <div className="flex-1">
-                          <div className="flex items-center mb-1">
-                            <span className="text-[10px] font-bold text-primary uppercase tracking-widest mr-3">Coming Up Next</span>
-                            <div className="h-px flex-1 bg-[#2d3a4b]"></div>
-                          </div>
-                          <h4 className="text-xl font-bold mb-2 text-start">Frontend Engineering Sync</h4>
-                          <div className="flex items-center text-slate-400 text-sm space-x-4">
-                            <span className="flex items-center">
-                              <span className="material-symbols-outlined text-sm mr-1">schedule</span> 02:00 PM - 03:00 PM
-                            </span>
-                            <span className="flex items-center">
-                              <span className="material-symbols-outlined text-sm mr-1">groups</span> Engineering Team
-                            </span>
-                          </div>
-                          <div className="mt-4 flex -space-x-2">
-                            <img
-                              alt="Participant"
-                              className="w-7 h-7 rounded-full border-2 border-[#1a242f]"
-                              src="https://lh3.googleusercontent.com/aida-public/AB6AXuDqTfywyR1V-K_AIjWqiOpMkL5HqSbth_mGsQcF68NS0z93K1S6BUVP0lqSnWROCkio9XUfSI18giEkbkPLo_W23mJ-k0X_w7EkGW1Dew_eQHHSfMx0u2oiT5gHyh97czYjZXFtmWtQT6X_d6vDduce1MqiC3odtK22ShLDLaA6q4FsSZERi21w-kCoM-xTt9Q99dhAqT4ybTq_zUr_E4KiMaI5GvwJSfk2i0xNPBWytcC0AuTgUvcRChDtHaKevbzhcFlp0dPNyiU"
-                            />
-                            <img
-                              alt="Participant"
-                              className="w-7 h-7 rounded-full border-2 border-[#1a242f]"
-                              src="https://lh3.googleusercontent.com/aida-public/AB6AXuBP3Jffw2Ed86qLcQBO1a05mSUUVVKiWWIFMs5eaQUtbgZZ4WJ_YsRgPDXetsYBMgE5cwexXnXHnLy5tzdCTEB8Lm88P7PDk6cb1yiWobJMGU54wKA656FbzmD0HUDm-twu2t2QlQzMcGo83A8g14CN7wfS42kaCoMq3HghIJpfzsIxlw9F0-qfuyjFhl4rn7v7NuVj2swvt3ceKSi_dsi9dsHo3-V702VS9fDUJNATljFvadY7ZQRFxGEH2hKU4YrnGYmKET_jfD0"
-                            />
-                            <div className="w-7 h-7 rounded-full bg-slate-700 border-2 border-[#1a242f] flex items-center justify-center text-[10px] font-bold text-white">
-                              +2
+                        ) : (
+                          <div key={meeting._id} className="p-6 bg-[#1a242f] rounded-xl border border-[#2d3a4b] hover:border-slate-600 transition-all">
+                            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+                              <div className="flex-1">
+                                <div className="flex items-center mb-1">
+                                  <span className="text-[10px] font-bold text-primary uppercase tracking-widest mr-3">Scheduled</span>
+                                  <div className="h-px flex-1 bg-[#2d3a4b]"></div>
+                                </div>
+                                <h4 className="text-xl font-bold mb-2 text-start">{meeting.name}</h4>
+                                <div className="flex items-center text-slate-400 text-sm space-x-4">
+                                  <span className="flex items-center">
+                                    <span className="material-symbols-outlined text-sm mr-1">schedule</span>
+                                    {meeting.startTime ? new Date(meeting.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'TBD'}
+                                  </span>
+                                  <span className="flex items-center">
+                                    <span className="material-symbols-outlined text-sm mr-1">tag</span>
+                                    {meeting.meetingId}
+                                  </span>
+                                </div>
+                                <div className="mt-4 flex items-center">
+                                  <span className="text-xs text-slate-500">
+                                    <span className="material-icons text-sm mr-1 align-middle">group</span>
+                                    {meeting.participants?.length || 0} Participants
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="flex flex-col space-y-2">
+                                <button
+                                  className="px-6 py-2 bg-slate-800 text-white text-xs font-bold rounded-lg border border-[#2d3a4b] hover:bg-slate-700 transition-all"
+                                  type="button"
+                                  onClick={() => navigate(`/meeting/${meeting.meetingId}`)}
+                                >
+                                  Join Meeting
+                                </button>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                        <div className="flex flex-col space-y-2">
-                          <button className="px-6 py-2 bg-slate-800 text-white text-xs font-bold rounded-lg border border-[#2d3a4b] hover:bg-slate-700 transition-all" type="button">
-                            Prepare Canvas
-                          </button>
-                          <button className="px-6 py-2 bg-transparent text-slate-400 text-xs font-bold hover:text-white transition-all" type="button">
-                            View Details
-                          </button>
-                        </div>
-                      </div>
-                    </div>
+                        )
+                      ))
+                    )}
                   </div>
                 </section>
 
+                {/* Completed Meetings */}
                 <section>
-                  <div className="flex items-center mb-6">
-                    <div className="w-2 h-2 rounded-full bg-slate-600 mr-3"></div>
-                    <h3 className="text-sm font-bold uppercase tracking-widest text-slate-500">Tomorrow — October 25</h3>
+                  <div className="flex items-center justify-between mb-6">
+                    <div className="flex items-center">
+                      <div className="w-2 h-2 rounded-full bg-slate-600 mr-3"></div>
+                      <h3 className="text-sm font-bold uppercase tracking-widest text-slate-500">Completed ({endedMeetings.length})</h3>
+                    </div>
+                    <button
+                      className="text-xs text-slate-400 hover:text-primary flex items-center gap-1 transition-colors"
+                      type="button"
+                      onClick={() => { setIsLoadingMeetings(true); doFetchMeetings().finally(() => setIsLoadingMeetings(false)); }}
+                    >
+                      <span className={`material-icons text-sm ${isLoadingMeetings ? 'animate-spin' : ''}`}>refresh</span>
+                      Refresh
+                    </button>
                   </div>
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <div className="p-6 bg-[#1a242f] rounded-xl border border-[#2d3a4b] hover:border-slate-600 transition-all">
-                      <div className="flex items-start justify-between mb-4">
-                        <div className="p-3 bg-purple-500/10 rounded-lg">
-                          <span className="material-symbols-outlined text-purple-400">psychology</span>
-                        </div>
-                        <button className="text-slate-500 hover:text-white" type="button">
-                          <span className="material-icons">more_horiz</span>
-                        </button>
+                    {endedMeetings.length === 0 ? (
+                      <div className="col-span-2 text-center py-8">
+                        <p className="text-slate-500">No completed meetings yet.</p>
                       </div>
-                      <h4 className="text-lg font-bold mb-1">User Experience Brainstorming</h4>
-                      <p className="text-xs text-slate-500 mb-4">Focus on checkout flow improvements</p>
-                      <div className="flex items-center justify-between pt-4 border-t border-[#2d3a4b]">
-                        <div className="flex items-center text-xs text-slate-400">
-                          <span className="material-symbols-outlined text-sm mr-1">schedule</span>
-                          09:30 AM
-                        </div>
-                        <div className="flex -space-x-1">
-                          <img
-                            alt="Participant"
-                            className="w-6 h-6 rounded-full border-2 border-[#1a242f]"
-                            src="https://lh3.googleusercontent.com/aida-public/AB6AXuAkXpCRHQ-UPXaJsLlUZdtA6naCVhm0E8mn-XUR7zD0CADV8MeTxlg3Sql9v9OO0nscMWorf4ji5EI3pTGy1cVGzp_Wgsiry-KXMPTfgYObiKvsGsQT-RCjJkMFW1uBj-Nuh18F_QMrwQdzlR1Bl7tHY75q8SFQqD0SQ51kQ1UqTmvj_Dh8MS9rcL_eVXqf71_OGa0SgNL4FInMVAT5e5O6xC_4aAVzE0p7A6fiU9GmIy3kJuv0EZ_e3seFc1wufAg-HHOwdxWs9e8"
-                          />
-                          <div className="w-6 h-6 rounded-full bg-slate-700 border-2 border-[#1a242f] flex items-center justify-center text-[8px] font-bold">
-                            +4
+                    ) : (
+                      endedMeetings.map((meeting) => (
+                        <div key={meeting._id} className="p-6 bg-[#1a242f] rounded-xl border border-[#2d3a4b] hover:border-slate-600 transition-all">
+                          <div className="flex items-start justify-between mb-4">
+                            <div className="p-3 bg-slate-500/10 rounded-lg">
+                              <span className="material-symbols-outlined text-slate-400">history</span>
+                            </div>
+                            <span className="px-2 py-1 bg-slate-800 text-slate-400 text-[10px] font-bold rounded uppercase">
+                              {meeting.endTime ? new Date(meeting.endTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'Ended'}
+                            </span>
+                          </div>
+                          <h4 className="text-lg font-bold mb-1 text-start">{meeting.name}</h4>
+                          <p className="text-xs text-slate-500 mb-4">Meeting ID: {meeting.meetingId}</p>
+                          <div className="flex items-center justify-between pt-4 border-t border-[#2d3a4b]">
+                            <div className="flex items-center text-xs text-slate-400">
+                              <span className="material-symbols-outlined text-sm mr-1">group</span>
+                              {meeting.participants?.length || 0} participants
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <div className="flex items-center text-xs text-slate-400">
+                                <span className="material-symbols-outlined text-sm mr-1">schedule</span>
+                                {meeting.startTime && meeting.endTime
+                                  ? `${Math.round((new Date(meeting.endTime) - new Date(meeting.startTime)) / 60000)}m`
+                                  : 'N/A'}
+                              </div>
+                              <button
+                                className="text-primary text-xs font-bold hover:underline flex items-center"
+                                type="button"
+                                onClick={() => navigate(`/meeting-notes/${meeting._id}`)}
+                              >
+                                View Notes <span className="material-symbols-outlined text-sm ml-1">description</span>
+                              </button>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    </div>
-
-                    <div className="p-6 bg-[#1a242f] rounded-xl border border-[#2d3a4b] hover:border-slate-600 transition-all">
-                      <div className="flex items-start justify-between mb-4">
-                        <div className="p-3 bg-emerald-500/10 rounded-lg">
-                          <span className="material-symbols-outlined text-emerald-400">rocket_launch</span>
-                        </div>
-                        <button className="text-slate-500 hover:text-white" type="button">
-                          <span className="material-icons">more_horiz</span>
-                        </button>
-                      </div>
-                      <h4 className="text-lg font-bold mb-1">Project Launch Retrospective</h4>
-                      <p className="text-xs text-slate-500 mb-4">Internal team debriefing session</p>
-                      <div className="flex items-center justify-between pt-4 border-t border-[#2d3a4b]">
-                        <div className="flex items-center text-xs text-slate-400">
-                          <span className="material-symbols-outlined text-sm mr-1">schedule</span>
-                          04:00 PM
-                        </div>
-                        <div className="flex -space-x-1">
-                          <img
-                            alt="Participant"
-                            className="w-6 h-6 rounded-full border-2 border-[#1a242f]"
-                            src="https://lh3.googleusercontent.com/aida-public/AB6AXuBP3Jffw2Ed86qLcQBO1a05mSUUVVKiWWIFMs5eaQUtbgZZ4WJ_YsRgPDXetsYBMgE5cwexXnXHnLy5tzdCTEB8Lm88P7PDk6cb1yiWobJMGU54wKA656FbzmD0HUDm-twu2t2QlQzMcGo83A8g14CN7wfS42kaCoMq3HghIJpfzsIxlw9F0-qfuyjFhl4rn7v7NuVj2swvt3ceKSi_dsi9dsHo3-V702VS9fDUJNATljFvadY7ZQRFxGEH2hKU4YrnGYmKET_jfD0"
-                          />
-                          <img
-                            alt="Participant"
-                            className="w-6 h-6 rounded-full border-2 border-[#1a242f]"
-                            src="https://lh3.googleusercontent.com/aida-public/AB6AXuDqTfywyR1V-K_AIjWqiOpMkL5HqSbth_mGsQcF68NS0z93K1S6BUVP0lqSnWROCkio9XUfSI18giEkbkPLo_W23mJ-k0X_w7EkGW1Dew_eQHHSfMx0u2oiT5gHyh97czYjZXFtmWtQT6X_d6vDduce1MqiC3odtK22ShLDLaA6q4FsSZERi21w-kCoM-xTt9Q99dhAqT4ybTq_zUr_E4KiMaI5GvwJSfk2i0xNPBWytcC0AuTgUvcRChDtHaKevbzhcFlp0dPNyiU"
-                          />
-                          <div className="w-6 h-6 rounded-full bg-slate-700 border-2 border-[#1a242f] flex items-center justify-center text-[8px] font-bold">
-                            +12
-                          </div>
-                        </div>
-                      </div>
-                    </div>
+                      ))
+                    )}
                   </div>
                 </section>
               </>
@@ -1724,113 +1987,56 @@ export default function Dashboard() {
               </>
             ) : activeView === 'activity' ? (
               <>
-                <div className="max-w-4xl mx-auto">
+                <div className="max-w-2xl mx-auto">
                   <div className="flex items-center justify-between mb-8">
                     <div>
                       <h3 className="text-lg font-bold text-start">Recent Actions</h3>
                       <p className="text-sm text-slate-500">Chronological track of your platform interactions</p>
                     </div>
-                    <button className="text-xs text-primary font-bold hover:underline" type="button">
-                      Mark all as seen
-                    </button>
                   </div>
-                  <div className="space-y-0">
-                    <div className="activity-item relative flex items-start pb-12 activity-line">
-                      <div className="z-10 w-12 h-12 flex-shrink-0 bg-blue-500/10 border border-blue-500/20 rounded-xl flex items-center justify-center mr-6">
-                        <span className="material-symbols-outlined text-blue-400">login</span>
-                      </div>
-                      <div className="flex-1 pt-1 text-start">
-                        <div className="flex items-center justify-between mb-2">
-                          <h4 className="font-bold text-slate-100 ">Login</h4>
-                          <span className="text-xs text-slate-500">Today, 10:42 AM</span>
+                  {isLoadingActivity ? (
+                    <div className="space-y-3">
+                      {[...Array(5)].map((_, i) => (
+                        <div key={i} className="flex items-center gap-4 p-3 animate-pulse">
+                          <div className="w-9 h-9 rounded-lg bg-slate-800" />
+                          <div className="flex-1 space-y-2">
+                            <div className="h-3 bg-slate-800 rounded w-1/3" />
+                          </div>
+                          <div className="h-3 bg-slate-800 rounded w-20" />
                         </div>
-                        <p className="text-sm text-slate-400 mb-2">Session started from Chrome on macOS (IP: 192.168.1.45)</p>
-                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest bg-slate-800 px-2 py-0.5 rounded">
-                          1 hour ago
-                        </span>
-                      </div>
+                      ))}
                     </div>
-
-                    <div className="activity-item relative flex items-start pb-12 activity-line">
-                      <div className="z-10 w-12 h-12 flex-shrink-0 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-center justify-center mr-6">
-                        <span className="material-symbols-outlined text-emerald-400">add_to_photos</span>
-                      </div>
-                      <div className="flex-1 pt-1 text-start">
-                        <div className="flex items-center justify-between mb-2">
-                          <h4 className="font-bold text-slate-100">Created "Website Redesign" Canvas</h4>
-                          <span className="text-xs text-slate-500">Today, 08:15 AM</span>
-                        </div>
-                        <p className="text-sm text-slate-400 mb-2">A new collaborative workspace was initialized in the "Marketing" folder.</p>
-                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest bg-slate-800 px-2 py-0.5 rounded">
-                          3 hours ago
-                        </span>
-                      </div>
+                  ) : activityLogs.length === 0 ? (
+                    <div className="text-center py-16">
+                      <span className="material-symbols-outlined text-5xl text-slate-700 mb-4 block">history</span>
+                      <p className="text-slate-400 text-lg font-medium">No activity yet</p>
+                      <p className="text-slate-600 text-sm mt-1">Your actions will appear here</p>
                     </div>
-
-                    <div className="activity-item relative flex items-start pb-12 activity-line">
-                      <div className="z-10 w-12 h-12 flex-shrink-0 bg-purple-500/10 border border-purple-500/20 rounded-xl flex items-center justify-center mr-6">
-                        <span className="material-symbols-outlined text-purple-400">video_chat</span>
-                      </div>
-                      <div className="flex-1 pt-1 text-start">
-                        <div className="flex items-center justify-between mb-2">
-                          <h4 className="font-bold text-slate-100">Joined "Weekly Sync" Meeting</h4>
-                          <span className="text-xs text-slate-500">Yesterday, 02:00 PM</span>
-                        </div>
-                        <p className="text-sm text-slate-400 mb-2">Attended session with 12 other participants. Duration: 45 minutes.</p>
-                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest bg-slate-800 px-2 py-0.5 rounded">
-                          Yesterday
-                        </span>
-                      </div>
+                  ) : (
+                    <div className="space-y-1">
+                      {activityLogs.map((log, idx) => {
+                        const config = ACTIVITY_ICON_MAP[log.action] || { icon: 'info', color: 'text-slate-400', border: 'border-slate-500/20', bg: 'bg-slate-500/10' };
+                        const label = ACTIVITY_LABELS[log.action] || log.action;
+                        const isLast = idx === activityLogs.length - 1;
+                        return (
+                          <div key={log._id || idx} className={`activity-item relative flex items-center py-4 ${isLast ? '' : 'activity-line'}`}>
+                            <div className={`z-10 w-11 h-11 flex-shrink-0 ${config.bg} border ${config.border} rounded-xl flex items-center justify-center mr-4`}>
+                              <span className={`material-symbols-outlined text-2xl ${config.color}`}>{config.icon}</span>
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex flex-col items-start">
+                                <span className="text-[15px] font-semibold text-slate-100 truncate block">{label}</span>
+                                <span className="text-xs text-slate-500 mt-0.5">{timeAgo(log.timestamp)}</span>
+                              </div>
+                            </div>
+                            <div className="ml-auto flex-shrink-0 pl-4">
+                              <span className="text-sm text-slate-500">{formatTimestamp(log.timestamp)}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
-
-                    <div className="activity-item relative flex items-start pb-12 activity-line">
-                      <div className="z-10 w-12 h-12 flex-shrink-0 bg-rose-500/10 border border-rose-500/20 rounded-xl flex items-center justify-center mr-6">
-                        <span className="material-symbols-outlined text-rose-400">delete_forever</span>
-                      </div>
-                      <div className="flex-1 pt-1 text-start">
-                        <div className="flex items-center justify-between mb-2">
-                          <h4 className="font-bold text-slate-100">Deleted "Old Draft" Canvas</h4>
-                          <span className="text-xs text-slate-500">Yesterday, 11:30 AM</span>
-                        </div>
-                        <p className="text-sm text-slate-400 mb-2">Workspace removed from "Personal" collection. Available in trash for 30 days.</p>
-                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest bg-slate-800 px-2 py-0.5 rounded">
-                          Yesterday
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="activity-item relative flex items-start pb-12 activity-line">
-                      <div className="z-10 w-12 h-12 flex-shrink-0 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-center justify-center mr-6">
-                        <span className="material-symbols-outlined text-amber-400">account_circle</span>
-                      </div>
-                      <div className="flex-1 pt-1 text-start">
-                        <div className="flex items-center justify-between mb-2">
-                          <h4 className="font-bold text-slate-100">Updated Profile Picture</h4>
-                          <span className="text-xs text-slate-500">Oct 22, 2023, 04:12 PM</span>
-                        </div>
-                        <p className="text-sm text-slate-400 mb-2">Changed user avatar in Account Settings.</p>
-                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest bg-slate-800 px-2 py-0.5 rounded">
-                          2 days ago
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="activity-item relative flex items-start">
-                      <div className="z-10 w-12 h-12 flex-shrink-0 bg-slate-500/10 border border-slate-500/20 rounded-xl flex items-center justify-center mr-6">
-                        <span className="material-symbols-outlined text-slate-400">logout</span>
-                      </div>
-                      <div className="flex-1 pt-1 text-start">
-                        <div className="flex items-center justify-between mb-2">
-                          <h4 className="font-bold text-slate-100">Log out</h4>
-                          <span className="text-xs text-slate-500">Oct 21, 2023, 09:05 PM</span>
-                        </div>
-                        <p className="text-sm text-slate-400 mb-2">Manual session termination from desktop client.</p>
-                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest bg-slate-800 px-2 py-0.5 rounded">
-                          3 days ago
-                        </span>
-                      </div>
-                    </div>
-                  </div>
+                  )}
                 </div>
               </>
             ) : activeView === 'settings' ? (
@@ -2032,14 +2238,14 @@ export default function Dashboard() {
                           Recent
                         </button>
                         <button
-                          className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${canvasFilter === 'shared'
-                            ? 'bg-primary text-white'
+                          className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${canvasFilter === 'meeting'
+                            ? 'bg-amber-500 text-white'
                             : 'text-slate-400 hover:text-white hover:bg-[#101922]'
                             }`}
-                          onClick={() => setCanvasFilter('shared')}
+                          onClick={() => setCanvasFilter('meeting')}
                           type="button"
                         >
-                          Shared
+                          Meeting
                         </button>
                         <button
                           className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${canvasFilter === 'private'
@@ -2086,7 +2292,11 @@ export default function Dashboard() {
                           <div className="flex-1 bg-[#101922] relative overflow-hidden rounded-t-xl">
                             <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent"></div>
                             <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-[#101922]/60 backdrop-blur-sm z-20">
-                              <button className="px-4 py-2 bg-primary text-white text-xs font-bold rounded-lg shadow-lg" type="button">
+                              <button
+                                className="px-4 py-2 bg-primary text-white text-xs font-bold rounded-lg shadow-lg"
+                                type="button"
+                                onClick={() => navigate(canvas.isMeetingCanvas ? `/meeting-canvas/${canvas.id}` : `/paint/${canvas.id}`)}
+                              >
                                 Open Editor
                               </button>
                             </div>
@@ -2097,9 +2307,11 @@ export default function Dashboard() {
                             />
                             <div className="absolute top-3 right-3 z-10">
                               <span
-                                className={`px-2 py-1 bg-[#101922]/80 text-[10px] font-bold rounded border uppercase ${canvas.tagColor === 'emerald'
-                                  ? 'text-emerald-400 border-emerald-400/30'
-                                  : 'text-primary border-primary/30'
+                                className={`px-2 py-1 bg-[#101922]/80 text-[10px] font-bold rounded border uppercase ${canvas.tagColor === 'amber'
+                                  ? 'text-amber-400 border-amber-400/30'
+                                  : canvas.tagColor === 'emerald'
+                                    ? 'text-emerald-400 border-emerald-400/30'
+                                    : 'text-primary border-primary/30'
                                   }`}
                               >
                                 {canvas.tag}
@@ -2306,14 +2518,14 @@ export default function Dashboard() {
                           Recent
                         </button>
                         <button
-                          className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${canvasFilter === 'shared'
-                            ? 'bg-primary text-white'
+                          className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${canvasFilter === 'meeting'
+                            ? 'bg-amber-500 text-white'
                             : 'text-slate-400 hover:text-white hover:bg-[#101922]'
                             }`}
-                          onClick={() => setCanvasFilter('shared')}
+                          onClick={() => setCanvasFilter('meeting')}
                           type="button"
                         >
-                          Shared
+                          Meeting
                         </button>
                         <button
                           className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${canvasFilter === 'private'
@@ -2362,7 +2574,7 @@ export default function Dashboard() {
                             <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-[#101922]/60 backdrop-blur-sm z-20">
                               <button
                                 className="px-4 py-2 bg-primary text-white text-xs font-bold rounded-lg shadow-lg"
-                                onClick={() => navigate(`/paint/${canvas.id}`)}
+                                onClick={() => navigate(canvas.isMeetingCanvas ? `/meeting-canvas/${canvas.id}` : `/paint/${canvas.id}`)}
                                 type="button"
                               >
                                 Open Editor
@@ -2375,9 +2587,11 @@ export default function Dashboard() {
                             />
                             <div className="absolute top-3 right-3 z-10">
                               <span
-                                className={`px-2 py-1 bg-[#101922]/80 text-[10px] font-bold rounded border uppercase ${canvas.tagColor === 'emerald'
-                                  ? 'text-emerald-400 border-emerald-400/30'
-                                  : 'text-primary border-primary/30'
+                                className={`px-2 py-1 bg-[#101922]/80 text-[10px] font-bold rounded border uppercase ${canvas.tagColor === 'amber'
+                                  ? 'text-amber-400 border-amber-400/30'
+                                  : canvas.tagColor === 'emerald'
+                                    ? 'text-emerald-400 border-emerald-400/30'
+                                    : 'text-primary border-primary/30'
                                   }`}
                               >
                                 {canvas.tag}
@@ -2576,6 +2790,18 @@ export default function Dashboard() {
                 {createMeetingFlash}
               </div>
             )}
+
+            <div className="mb-6">
+              <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Meeting Name</label>
+              <input
+                type="text"
+                value={meetingName}
+                onChange={(e) => setMeetingName(e.target.value)}
+                placeholder="Enter meeting name..."
+                className="w-full px-4 py-3 rounded-lg premium-input text-white text-sm"
+                maxLength={100}
+              />
+            </div>
 
             <div className="mb-6 flex gap-3">
               <button
@@ -3053,29 +3279,23 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Floating AI & Help Options */}
-      <HelpOptionsButton
-        onBotClick={() => setIsBotOpen(true)}
-        onWalkthroughClick={() => {
-          setWalkthroughStep(0);
-          setShowWalkthrough(true);
-        }}
-      />
-
-      {/* AI Bot Widget */}
-      {isBotOpen && (
-        <BotWidget
-          onClose={() => setIsBotOpen(false)}
-          contextSnapshot={{
-            view: activeView,
-            tab: activeTab,
-            totalCanvases: savedCanvases.length,
-            totalFolders: folders.length
+      {/* ─── Help Options Button (Bot + Walkthrough) ─── */}
+      {!isBotOpen && (
+        <HelpOptionsButton
+          onBotClick={() => setIsBotOpen(true)}
+          onWalkthroughClick={() => {
+            setWalkthroughStep(0);
+            setShowWalkthrough(true);
           }}
         />
       )}
 
-      {/* Walkthrough Overlay */}
+      {/* ─── Bot Widget ─── */}
+      {isBotOpen && (
+        <BotWidget onClose={() => setIsBotOpen(false)} />
+      )}
+
+      {/* ─── Walkthrough Overlay ─── */}
       {showWalkthrough && (
         <DashboardWalkthroughOverlay
           step={walkthroughStep}
@@ -3086,232 +3306,3 @@ export default function Dashboard() {
     </div>
   );
 }
-
-/* ─── Walkthrough tooltip card (reusable) ─── */
-const WalkthroughCard = ({ step, totalSteps, title, description, onBack, onNext, onClose, isLast }) => (
-  <div
-    style={{
-      background: 'linear-gradient(135deg, #101922 0%, #1a242f 100%)',
-      backdropFilter: 'blur(24px)',
-      WebkitBackdropFilter: 'blur(24px)',
-      boxShadow: '0 25px 60px -12px rgba(0,0,0,0.55), 0 0 0 1px rgba(19,127,236,0.12)',
-    }}
-    className="rounded-2xl overflow-hidden w-[370px] border border-[#2d3a4b]/60 wt-step-enter"
-  >
-    {/* Header */}
-    <div className="flex items-center justify-between px-6 pt-5 pb-3">
-      <div className="flex items-center gap-3">
-        <div
-          className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-black flex-shrink-0"
-          style={{
-            background: 'linear-gradient(135deg, #137fec 0%, #1065c0 100%)',
-            boxShadow: '0 4px 14px rgba(19,127,236,0.45)',
-          }}
-        >
-          {step + 1}
-        </div>
-        <h3 className="text-[15px] font-bold text-white leading-tight tracking-tight">{title}</h3>
-      </div>
-      <button
-        onClick={(e) => { e.stopPropagation(); onClose(); }}
-        className="w-7 h-7 rounded-lg flex items-center justify-center text-white/40 hover:text-white hover:bg-white/10 transition-all duration-200 ml-2 flex-shrink-0"
-      >
-        <span className="material-icons text-[18px]">close</span>
-      </button>
-    </div>
-
-    {/* Body */}
-    <div className="px-6 pb-4 pt-1">
-      <p className="text-[13.5px] text-white/60 leading-relaxed text-center">{description}</p>
-    </div>
-
-    {/* Footer */}
-    <div className="flex items-center justify-between px-6 pb-5">
-      {/* Progress dots */}
-      <div className="flex gap-[6px] items-center">
-        {Array.from({ length: totalSteps }).map((_, i) => (
-          <div
-            key={i}
-            className="rounded-full"
-            style={{
-              width: i === step ? 20 : 7,
-              height: 7,
-              background: i === step
-                ? 'linear-gradient(90deg, #137fec, #3b9af5)'
-                : 'rgba(255,255,255,0.15)',
-              transition: 'width 0.3s ease, background 0.3s ease',
-            }}
-          />
-        ))}
-      </div>
-
-      {/* Action buttons */}
-      <div className="flex items-center gap-2">
-        {step > 0 && (
-          <button
-            onClick={(e) => { e.stopPropagation(); onBack(); }}
-            className="flex items-center gap-1 px-4 py-[7px] text-[13px] font-semibold text-white/60 hover:text-white border border-[#2d3a4b] hover:border-white/25 rounded-lg transition-all duration-200"
-          >
-            <span className="material-icons text-[16px]">chevron_left</span>
-            Back
-          </button>
-        )}
-        {isLast ? (
-          <button
-            onClick={(e) => { e.stopPropagation(); onClose(); }}
-            className="flex items-center gap-[6px] px-5 py-[7px] text-[13px] font-bold text-white rounded-lg transition-all duration-200 hover:brightness-110"
-            style={{
-              background: 'linear-gradient(135deg, #137fec 0%, #1065c0 100%)',
-              boxShadow: '0 4px 14px rgba(19,127,236,0.35)',
-            }}
-          >
-            🚀 Finish
-          </button>
-        ) : (
-          <button
-            onClick={(e) => { e.stopPropagation(); onNext(); }}
-            className="flex items-center gap-1 px-5 py-[7px] text-[13px] font-bold text-white rounded-lg transition-all duration-200 hover:brightness-110"
-            style={{
-              background: 'linear-gradient(135deg, #137fec 0%, #1065c0 100%)',
-              boxShadow: '0 4px 14px rgba(19,127,236,0.35)',
-            }}
-          >
-            Next
-            <span className="material-icons text-[16px]">chevron_right</span>
-          </button>
-        )}
-      </div>
-    </div>
-  </div>
-);
-
-const DashboardWalkthroughOverlay = ({ step, setStep, onClose }) => {
-  const [rect, setRect] = useState(null);
-
-  const steps = [
-    {
-      title: "Sidebar Navigation",
-      description: "Use these tabs to switch between recent canvases, meetings, notifications, and settings.",
-      elementId: "dashboard-sidebar-nav"
-    },
-    {
-      title: "Global Search",
-      description: "Quickly find canvases, meetings, or templates by typing here. (Shortcut: Ctrl+K)",
-      elementId: "dashboard-search"
-    },
-    {
-      title: "Quick Actions",
-      description: "Create new canvases, organize them into folders, and start or join meetings.",
-      elementId: "dashboard-quickactions"
-    },
-    {
-      title: "Recent Files",
-      description: "Your recently opened files will appear here so you can pick up right where you left off.",
-      elementId: "dashboard-canvases"
-    },
-    {
-      title: "Ready to go! 🚀",
-      description: "You're all set to use the dashboard. Click the Help icon at any time to re-run this guide.",
-      elementId: null
-    }
-  ];
-
-  const currentStep = steps[step];
-  const hasElement = !!currentStep.elementId;
-
-  useEffect(() => {
-    setRect(null);
-    if (!currentStep.elementId) return;
-
-    const updateRect = () => {
-      const el = document.getElementById(currentStep.elementId);
-      if (el) {
-        const bounds = el.getBoundingClientRect();
-        setRect({
-          top: bounds.top,
-          left: bounds.left,
-          width: bounds.width,
-          height: bounds.height
-        });
-      }
-    };
-
-    updateRect();
-    const timer = setTimeout(updateRect, 80);
-    window.addEventListener('resize', updateRect);
-    return () => {
-      window.removeEventListener('resize', updateRect);
-      clearTimeout(timer);
-    };
-  }, [step]);
-
-  // ── Final step (no element): centered floating card ──
-  if (!hasElement) {
-    return (
-      <div className="fixed inset-0 z-[100] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}>
-        <WalkthroughCard
-          key={step}
-          step={step}
-          totalSteps={steps.length}
-          title={currentStep.title}
-          description={currentStep.description}
-          onBack={() => setStep(step - 1)}
-          onNext={() => {}}
-          onClose={onClose}
-          isLast={true}
-        />
-      </div>
-    );
-  }
-
-  // ── Waiting for rect ──
-  if (!rect) {
-    return <div className="fixed inset-0 z-[100] bg-black/70 pointer-events-auto" />;
-  }
-
-  // ── Position tooltip below or above the element ──
-  const TOOLTIP_H = 230;
-  const GAP = 16;
-  const fitsBelow = rect.top + rect.height + GAP + TOOLTIP_H <= window.innerHeight;
-  const rawTop = fitsBelow ? rect.top + rect.height + GAP : rect.top - TOOLTIP_H - GAP;
-  const tooltipTop = Math.max(12, Math.min(window.innerHeight - TOOLTIP_H - 12, rawTop));
-  const tooltipLeft = Math.max(12, Math.min(window.innerWidth - 386, rect.left + rect.width / 2 - 185));
-
-  const PAD = 8;
-
-  return (
-    <div className="fixed inset-0 z-[100] pointer-events-none">
-      {/* Spotlight cutout with purple glow border */}
-      <div
-        className="absolute rounded-xl"
-        style={{
-          top: rect.top - PAD,
-          left: rect.left - PAD,
-          width: rect.width + PAD * 2,
-          height: rect.height + PAD * 2,
-          border: '2px solid rgba(19,127,236,0.6)',
-          boxShadow: '0 0 0 9999px rgba(0,0,0,0.7), 0 0 30px 4px rgba(19,127,236,0.25), inset 0 0 20px 2px rgba(19,127,236,0.08)',
-          borderRadius: 14,
-        }}
-      />
-
-      {/* Tooltip card */}
-      <div
-        className="absolute pointer-events-auto"
-        style={{ top: tooltipTop, left: tooltipLeft }}
-      >
-        <WalkthroughCard
-          key={step}
-          step={step}
-          totalSteps={steps.length}
-          title={currentStep.title}
-          description={currentStep.description}
-          onBack={() => setStep(step - 1)}
-          onNext={() => setStep(step + 1)}
-          onClose={onClose}
-          isLast={false}
-        />
-      </div>
-    </div>
-  );
-};
