@@ -113,6 +113,7 @@ const PaintWalkthroughCard = ({ step, totalSteps, title, description, onBack, on
 
 const PaintWalkthroughOverlay = ({ step, setStep, onClose }) => {
   const [rect, setRect] = useState(null);
+  const [cardVisible, setCardVisible] = useState(true);
 
   const steps = [
     {
@@ -145,8 +146,14 @@ const PaintWalkthroughOverlay = ({ step, setStep, onClose }) => {
   const currentStep = steps[step];
   const hasElement = !!currentStep.elementId;
 
+  // Animate card in on step change
   useEffect(() => {
-    setRect(null);
+    setCardVisible(false);
+    const t = setTimeout(() => setCardVisible(true), 60);
+    return () => clearTimeout(t);
+  }, [step]);
+
+  useEffect(() => {
     if (!currentStep.elementId) return;
 
     const updateRect = () => {
@@ -166,43 +173,50 @@ const PaintWalkthroughOverlay = ({ step, setStep, onClose }) => {
     };
   }, [step]);
 
+  const cardStyle = {
+    opacity: cardVisible ? 1 : 0,
+    transform: cardVisible ? 'translateY(0)' : 'translateY(12px)',
+    transition: 'opacity 0.35s ease, transform 0.35s ease',
+  };
+
   // ── Final step: centered floating card ──
   if (!hasElement) {
     return (
-      <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}>
-        <PaintWalkthroughCard
-          key={step}
-          step={step}
-          totalSteps={steps.length}
-          title={currentStep.title}
-          description={currentStep.description}
-          onBack={() => setStep(step - 1)}
-          onNext={() => {}}
-          onClose={onClose}
-          isLast={true}
-        />
+      <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', transition: 'background 0.4s ease' }}>
+        <div style={cardStyle}>
+          <PaintWalkthroughCard
+            key={step}
+            step={step}
+            totalSteps={steps.length}
+            title={currentStep.title}
+            description={currentStep.description}
+            onBack={() => setStep(step - 1)}
+            onNext={() => { }}
+            onClose={onClose}
+            isLast={true}
+          />
+        </div>
       </div>
     );
   }
 
   // ── Waiting for rect ──
   if (!rect) {
-    return <div className="fixed inset-0 z-[200] bg-black/70 pointer-events-auto" />;
+    return <div className="fixed inset-0 z-[200] bg-black/70 pointer-events-auto" style={{ transition: 'background 0.4s ease' }} />;
   }
 
   // ── Position tooltip ──
   const TOOLTIP_H = 230;
   const GAP = 16;
+  const PAD = 8;
   const fitsBelow = rect.top + rect.height + GAP + TOOLTIP_H <= window.innerHeight;
   const rawTop = fitsBelow ? rect.top + rect.height + GAP : rect.top - TOOLTIP_H - GAP;
   const tooltipTop = Math.max(12, Math.min(window.innerHeight - TOOLTIP_H - 12, rawTop));
   const tooltipLeft = Math.max(12, Math.min(window.innerWidth - 386, rect.left + rect.width / 2 - 185));
 
-  const PAD = 8;
-
   return (
     <div className="fixed inset-0 z-[200] pointer-events-none">
-      {/* Spotlight cutout with purple glow border */}
+      {/* Spotlight — smoothly moves between elements */}
       <div
         className="absolute rounded-xl"
         style={{
@@ -213,25 +227,31 @@ const PaintWalkthroughOverlay = ({ step, setStep, onClose }) => {
           border: '2px solid rgba(19,127,236,0.6)',
           boxShadow: '0 0 0 9999px rgba(0,0,0,0.7), 0 0 30px 4px rgba(19,127,236,0.25), inset 0 0 20px 2px rgba(19,127,236,0.08)',
           borderRadius: 14,
+          transition: 'top 0.45s cubic-bezier(.4,0,.2,1), left 0.45s cubic-bezier(.4,0,.2,1), width 0.45s cubic-bezier(.4,0,.2,1), height 0.45s cubic-bezier(.4,0,.2,1)',
         }}
       />
 
-      {/* Tooltip card */}
+      {/* Tooltip card — fades in smoothly */}
       <div
         className="absolute pointer-events-auto"
-        style={{ top: tooltipTop, left: tooltipLeft }}
+        style={{
+          top: tooltipTop, left: tooltipLeft,
+          transition: 'top 0.4s cubic-bezier(.4,0,.2,1), left 0.4s cubic-bezier(.4,0,.2,1)',
+        }}
       >
-        <PaintWalkthroughCard
-          key={step}
-          step={step}
-          totalSteps={steps.length}
-          title={currentStep.title}
-          description={currentStep.description}
-          onBack={() => setStep(step - 1)}
-          onNext={() => setStep(step + 1)}
-          onClose={onClose}
-          isLast={false}
-        />
+        <div style={cardStyle}>
+          <PaintWalkthroughCard
+            key={step}
+            step={step}
+            totalSteps={steps.length}
+            title={currentStep.title}
+            description={currentStep.description}
+            onBack={() => setStep(step - 1)}
+            onNext={() => setStep(step + 1)}
+            onClose={onClose}
+            isLast={false}
+          />
+        </div>
       </div>
     </div>
   );
@@ -322,21 +342,21 @@ const PaintApp = () => {
   const handleBotAction = useCallback((action) => {
     // Map bot JSON → canvas element schema: w/h/color/fill(bool)/opacity
     const buildShape = (s, idOffset = 0) => {
-      const hasFill    = s.fill && s.fill !== 'transparent';
-      const fillHex    = hasFill ? s.fill : null;
-      const strokeHex  = s.stroke || null;
+      const hasFill = s.fill && s.fill !== 'transparent';
+      const fillHex = hasFill ? s.fill : null;
+      const strokeHex = s.stroke || null;
       // fillColor/strokeColor are separate fields for dual-color rendering
       return {
         id: Date.now() + idOffset + Math.floor(Math.random() * 1000),
         type: s.shape || s.type || 'rect',
         x: s.x ?? 700,
         y: s.y ?? 300,
-        w: s.width  ?? s.w ?? 160,
+        w: s.width ?? s.w ?? 160,
         h: s.height ?? s.h ?? 120,
-        color:       fillHex || strokeHex || color, // legacy fallback
-        fillColor:   fillHex   || undefined,        // interior color (undefined = use color)
+        color: fillHex || strokeHex || color, // legacy fallback
+        fillColor: fillHex || undefined,        // interior color (undefined = use color)
         strokeColor: strokeHex || undefined,        // border color (undefined = use color)
-        fill:  hasFill,                             // boolean: true = filled shape
+        fill: hasFill,                             // boolean: true = filled shape
         strokeWidth: s.strokeWidth ?? strokeWidth,
         opacity: s.opacity ?? 1,
         rotation: s.rotation ?? 0,
@@ -349,7 +369,7 @@ const PaintApp = () => {
       text: s.text || 'Text',
       x: s.x ?? 700,
       y: s.y ?? 300,
-      w: s.width  ?? s.w ?? 300,
+      w: s.width ?? s.w ?? 300,
       h: s.height ?? s.h ?? 60,
       color: s.color || s.fill || color,
       font: s.fontFamily || s.font || 'Arial',
@@ -439,9 +459,11 @@ const PaintApp = () => {
         if (selectedId) {
           const next = elements.map(e =>
             e.id === selectedId
-              ? { ...e,
-                  w: action.width  ?? e.w,
-                  h: action.height ?? e.h }
+              ? {
+                ...e,
+                w: action.width ?? e.w,
+                h: action.height ?? e.h
+              }
               : e
           );
           setElements(next); saveState(next);
@@ -452,9 +474,11 @@ const PaintApp = () => {
         if (selectedId) {
           const orig = elements.find(e => e.id === selectedId);
           if (orig) {
-            const dup = { ...orig, id: Date.now(),
+            const dup = {
+              ...orig, id: Date.now(),
               x: orig.x + (action.offsetX ?? 30),
-              y: orig.y + (action.offsetY ?? 30) };
+              y: orig.y + (action.offsetY ?? 30)
+            };
             const next = [...elements, dup];
             setElements(next); setSelectedId(dup.id); saveState(next);
           }
@@ -494,9 +518,9 @@ const PaintApp = () => {
               x: x + c * (width + colSpacing),
               y: y + r * (height + rowSpacing),
               w: width, h: height,
-              color:       fillHex || stroke || color,
-              fillColor:   fillHex   || undefined,
-              strokeColor: stroke    || undefined,
+              color: fillHex || stroke || color,
+              fillColor: fillHex || undefined,
+              strokeColor: stroke || undefined,
               fill: hasFill,
               strokeWidth: sw ?? strokeWidth,
               opacity: 1, rotation: 0,
@@ -518,9 +542,9 @@ const PaintApp = () => {
         console.warn('Unknown bot action:', action.type);
     }
   }, [elements, color, strokeWidth, fillMode, selectedId, canvasSize,
-      handleToolChange, baseUpdateColor, saveState,
-      setStrokeWidth, setFillMode, setZoom, setSelectedId,
-      baseUndo, baseRedo, contextRef, setEditingId]);
+    handleToolChange, baseUpdateColor, saveState,
+    setStrokeWidth, setFillMode, setZoom, setSelectedId,
+    baseUndo, baseRedo, contextRef, setEditingId]);
 
   useEffect(() => {
     if (editingId && textAreaRef.current) {
@@ -1030,15 +1054,15 @@ const PaintApp = () => {
             elementsCount: elements.length,
             selectedElementId: selectedId,
             elements: elements.slice(-15).map(e => ({
-              type:   e.type,
-              id:     e.id,
-              x:      Math.round(e.x),
-              y:      Math.round(e.y),
-              w:      Math.round(e.w  || 0),
-              h:      Math.round(e.h  || 0),
-              color:  e.color,          // single color field (hex)
+              type: e.type,
+              id: e.id,
+              x: Math.round(e.x),
+              y: Math.round(e.y),
+              w: Math.round(e.w || 0),
+              h: Math.round(e.h || 0),
+              color: e.color,          // single color field (hex)
               filled: e.fill,           // boolean: true = filled shape
-              text:   e.text,
+              text: e.text,
             })),
           }}
         />

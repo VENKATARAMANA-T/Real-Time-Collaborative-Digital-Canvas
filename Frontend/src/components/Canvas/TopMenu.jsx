@@ -48,7 +48,7 @@ const TopMenu = ({
         <ArrowLeft size={16} />
         <span className="text-sm font-medium">Back to Dashboard</span>
       </button>
-      
+
       <div className="flex gap-1 relative">
         {/* File Menu */}
         <button
@@ -178,14 +178,14 @@ const TopMenu = ({
           </div>
         )}
       </div>
-      
+
       <div className="flex-1" />
-      
+
       <div className="flex items-center gap-3">
-        <IconButton icon={Undo} disabled={historyStep <= 0} onClick={undo} title="Undo (Ctrl+Z)" />
-        <IconButton icon={Redo} disabled={historyStep >= historyLength - 1} onClick={redo} title="Redo (Ctrl+Y)" />
+        <IconButton icon={Undo} disabled={historyStep <= 0} onClick={undo} title="Undo (Ctrl+Z)" tooltipAlign="right" />
+        <IconButton icon={Redo} disabled={historyStep >= historyLength - 1} onClick={redo} title="Redo (Ctrl+Y)" tooltipAlign="right" />
         <div className="w-[1px] h-4 bg-zinc-800 mx-1" />
-        <IconButton icon={Save} onClick={handleSave} title="Save (Download)" />
+        <IconButton icon={Save} onClick={handleSave} title="Save (Download)" tooltipAlign="right" />
       </div>
     </nav>
   );

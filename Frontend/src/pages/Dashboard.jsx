@@ -3,31 +3,33 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import { userAPI, canvasAPI, meetingAPI, folderAPI } from '../services/api';
 import { useSocket } from '../hooks/useSocket.js';
+import BotWidget from '../components/Bot/BotWidget';
+import HelpOptionsButton from '../components/shared/HelpOptionsButton';
 
 const ACTIVITY_ICON_MAP = {
-  REGISTER_USER:         { icon: 'person_add',         color: 'text-green-400',   border: 'border-green-500/20', bg: 'bg-green-500/10' },
-  LOGIN_SUCCESS:         { icon: 'login',              color: 'text-blue-400',    border: 'border-blue-500/20',  bg: 'bg-blue-500/10' },
-  LOGOUT:                { icon: 'logout',             color: 'text-slate-400',   border: 'border-slate-500/20', bg: 'bg-slate-500/10' },
-  PASSWORD_RESET_REQUEST:{ icon: 'key',                color: 'text-yellow-400',  border: 'border-yellow-500/20',bg: 'bg-yellow-500/10' },
-  PASSWORD_RESET_SUCCESS:{ icon: 'shield',             color: 'text-emerald-400', border: 'border-emerald-500/20',bg: 'bg-emerald-500/10' },
-  UPDATE_PROFILE:        { icon: 'manage_accounts',    color: 'text-purple-400',  border: 'border-purple-500/20',bg: 'bg-purple-500/10' },
-  CREATE_CANVAS:         { icon: 'note_add',           color: 'text-cyan-400',    border: 'border-cyan-500/20',  bg: 'bg-cyan-500/10' },
-  DELETE_CANVAS:         { icon: 'delete_forever',     color: 'text-red-400',     border: 'border-red-500/20',   bg: 'bg-red-500/10' },
-  RENAME_CANVAS:         { icon: 'edit_note',          color: 'text-orange-400',  border: 'border-orange-500/20',bg: 'bg-orange-500/10' },
-  UPDATE_CANVAS:         { icon: 'save',               color: 'text-sky-400',     border: 'border-sky-500/20',   bg: 'bg-sky-500/10' },
-  DUPLICATE_CANVAS:      { icon: 'content_copy',       color: 'text-indigo-400',  border: 'border-indigo-500/20',bg: 'bg-indigo-500/10' },
-  IMPORT_CANVAS:         { icon: 'upload_file',        color: 'text-violet-400',  border: 'border-violet-500/20',bg: 'bg-violet-500/10' },
-  CREATE_FOLDER:         { icon: 'create_new_folder',  color: 'text-emerald-400', border: 'border-emerald-500/20',bg: 'bg-emerald-500/10' },
-  DELETE_FOLDER:         { icon: 'folder_delete',      color: 'text-red-400',     border: 'border-red-500/20',   bg: 'bg-red-500/10' },
-  TOGGLE_FAVORITE:       { icon: 'star',               color: 'text-yellow-400',  border: 'border-yellow-500/20',bg: 'bg-yellow-500/10' },
-  EXPORT_CANVAS:         { icon: 'download',           color: 'text-teal-400',    border: 'border-teal-500/20',  bg: 'bg-teal-500/10' },
-  RESTORE_VERSION:       { icon: 'history',            color: 'text-amber-400',   border: 'border-amber-500/20', bg: 'bg-amber-500/10' },
-  JOIN_ROOM:             { icon: 'group_add',          color: 'text-green-400',   border: 'border-green-500/20', bg: 'bg-green-500/10' },
-  LEAVE_ROOM:            { icon: 'group_remove',       color: 'text-slate-400',   border: 'border-slate-500/20', bg: 'bg-slate-500/10' },
-  TOGGLE_THEME:          { icon: 'palette',            color: 'text-pink-400',    border: 'border-pink-500/20',  bg: 'bg-pink-500/10' },
-  VIEW_WALKTHROUGH:      { icon: 'menu_book',          color: 'text-blue-300',    border: 'border-blue-300/20',  bg: 'bg-blue-300/10' },
-  SEARCH_HELP:           { icon: 'search',             color: 'text-slate-300',   border: 'border-slate-300/20', bg: 'bg-slate-300/10' },
-  SUBMIT_FEEDBACK:       { icon: 'chat',               color: 'text-purple-400',  border: 'border-purple-500/20',bg: 'bg-purple-500/10' },
+  REGISTER_USER: { icon: 'person_add', color: 'text-green-400', border: 'border-green-500/20', bg: 'bg-green-500/10' },
+  LOGIN_SUCCESS: { icon: 'login', color: 'text-blue-400', border: 'border-blue-500/20', bg: 'bg-blue-500/10' },
+  LOGOUT: { icon: 'logout', color: 'text-slate-400', border: 'border-slate-500/20', bg: 'bg-slate-500/10' },
+  PASSWORD_RESET_REQUEST: { icon: 'key', color: 'text-yellow-400', border: 'border-yellow-500/20', bg: 'bg-yellow-500/10' },
+  PASSWORD_RESET_SUCCESS: { icon: 'shield', color: 'text-emerald-400', border: 'border-emerald-500/20', bg: 'bg-emerald-500/10' },
+  UPDATE_PROFILE: { icon: 'manage_accounts', color: 'text-purple-400', border: 'border-purple-500/20', bg: 'bg-purple-500/10' },
+  CREATE_CANVAS: { icon: 'note_add', color: 'text-cyan-400', border: 'border-cyan-500/20', bg: 'bg-cyan-500/10' },
+  DELETE_CANVAS: { icon: 'delete_forever', color: 'text-red-400', border: 'border-red-500/20', bg: 'bg-red-500/10' },
+  RENAME_CANVAS: { icon: 'edit_note', color: 'text-orange-400', border: 'border-orange-500/20', bg: 'bg-orange-500/10' },
+  UPDATE_CANVAS: { icon: 'save', color: 'text-sky-400', border: 'border-sky-500/20', bg: 'bg-sky-500/10' },
+  DUPLICATE_CANVAS: { icon: 'content_copy', color: 'text-indigo-400', border: 'border-indigo-500/20', bg: 'bg-indigo-500/10' },
+  IMPORT_CANVAS: { icon: 'upload_file', color: 'text-violet-400', border: 'border-violet-500/20', bg: 'bg-violet-500/10' },
+  CREATE_FOLDER: { icon: 'create_new_folder', color: 'text-emerald-400', border: 'border-emerald-500/20', bg: 'bg-emerald-500/10' },
+  DELETE_FOLDER: { icon: 'folder_delete', color: 'text-red-400', border: 'border-red-500/20', bg: 'bg-red-500/10' },
+  TOGGLE_FAVORITE: { icon: 'star', color: 'text-yellow-400', border: 'border-yellow-500/20', bg: 'bg-yellow-500/10' },
+  EXPORT_CANVAS: { icon: 'download', color: 'text-teal-400', border: 'border-teal-500/20', bg: 'bg-teal-500/10' },
+  RESTORE_VERSION: { icon: 'history', color: 'text-amber-400', border: 'border-amber-500/20', bg: 'bg-amber-500/10' },
+  JOIN_ROOM: { icon: 'group_add', color: 'text-green-400', border: 'border-green-500/20', bg: 'bg-green-500/10' },
+  LEAVE_ROOM: { icon: 'group_remove', color: 'text-slate-400', border: 'border-slate-500/20', bg: 'bg-slate-500/10' },
+  TOGGLE_THEME: { icon: 'palette', color: 'text-pink-400', border: 'border-pink-500/20', bg: 'bg-pink-500/10' },
+  VIEW_WALKTHROUGH: { icon: 'menu_book', color: 'text-blue-300', border: 'border-blue-300/20', bg: 'bg-blue-300/10' },
+  SEARCH_HELP: { icon: 'search', color: 'text-slate-300', border: 'border-slate-300/20', bg: 'bg-slate-300/10' },
+  SUBMIT_FEEDBACK: { icon: 'chat', color: 'text-purple-400', border: 'border-purple-500/20', bg: 'bg-purple-500/10' },
 };
 
 const ACTIVITY_LABELS = {
@@ -80,10 +82,162 @@ const formatTimestamp = (date) => {
   });
 };
 
+/* ─── Walkthrough tooltip card (reusable, same style as PaintApp) ─── */
+const DashboardWalkthroughCard = ({ step, totalSteps, title, description, onBack, onNext, onClose, isLast }) => (
+  <div
+    data-walkthrough-card
+    style={{
+      background: 'linear-gradient(135deg, #101922 0%, #1a242f 100%)',
+      backdropFilter: 'blur(24px)',
+      WebkitBackdropFilter: 'blur(24px)',
+      boxShadow: '0 25px 60px -12px rgba(0,0,0,0.55), 0 0 0 1px rgba(19,127,236,0.12)',
+    }}
+    className="rounded-2xl overflow-hidden w-[370px] border border-[#2d3a4b]/60 wt-step-enter"
+  >
+    <div className="flex items-center justify-between px-6 pt-5 pb-3">
+      <div className="flex items-center gap-3">
+        <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-black flex-shrink-0"
+          style={{ background: 'linear-gradient(135deg, #137fec 0%, #1065c0 100%)', boxShadow: '0 4px 14px rgba(19,127,236,0.45)' }}>
+          {step + 1}
+        </div>
+        <h3 className="text-[15px] font-bold text-white leading-tight tracking-tight">{title}</h3>
+      </div>
+      <button onClick={(e) => { e.stopPropagation(); onClose(); }}
+        className="w-7 h-7 rounded-lg flex items-center justify-center text-white/40 hover:text-white hover:bg-white/10 transition-all duration-200 ml-2 flex-shrink-0">
+        <span className="material-icons text-[18px]">close</span>
+      </button>
+    </div>
+    <div className="px-6 pb-4 pt-1">
+      <p className="text-[13.5px] text-white/60 leading-relaxed text-center">{description}</p>
+    </div>
+    <div className="flex items-center justify-between px-6 pb-5">
+      <div className="flex gap-[6px] items-center">
+        {Array.from({ length: totalSteps }).map((_, i) => (
+          <div key={i} className="rounded-full" style={{
+            width: i === step ? 20 : 7, height: 7,
+            background: i === step ? 'linear-gradient(90deg, #137fec, #3b9af5)' : 'rgba(255,255,255,0.15)',
+            transition: 'width 0.3s ease, background 0.3s ease',
+          }} />
+        ))}
+      </div>
+      <div className="flex items-center gap-2">
+        {step > 0 && (
+          <button onClick={(e) => { e.stopPropagation(); onBack(); }}
+            className="flex items-center gap-1 px-4 py-[7px] text-[13px] font-semibold text-white/60 hover:text-white border border-[#2d3a4b] hover:border-white/25 rounded-lg transition-all duration-200">
+            <span className="material-icons text-[16px]">chevron_left</span> Back
+          </button>
+        )}
+        {isLast ? (
+          <button onClick={(e) => { e.stopPropagation(); onClose(); }}
+            className="flex items-center gap-[6px] px-5 py-[7px] text-[13px] font-bold text-white rounded-lg transition-all duration-200 hover:brightness-110"
+            style={{ background: 'linear-gradient(135deg, #137fec 0%, #1065c0 100%)', boxShadow: '0 4px 14px rgba(19,127,236,0.35)' }}>
+            🎉 Finish
+          </button>
+        ) : (
+          <button onClick={(e) => { e.stopPropagation(); onNext(); }}
+            className="flex items-center gap-1 px-5 py-[7px] text-[13px] font-bold text-white rounded-lg transition-all duration-200 hover:brightness-110"
+            style={{ background: 'linear-gradient(135deg, #137fec 0%, #1065c0 100%)', boxShadow: '0 4px 14px rgba(19,127,236,0.35)' }}>
+            Next <span className="material-icons text-[16px]">chevron_right</span>
+          </button>
+        )}
+      </div>
+    </div>
+  </div>
+);
+
+/* ─── Dashboard Walkthrough Overlay (smooth transitions) ─── */
+const DashboardWalkthroughOverlay = ({ step, setStep, onClose }) => {
+  const [rect, setRect] = useState(null);
+  const [cardVisible, setCardVisible] = useState(true);
+
+  const steps = [
+    { title: "Sidebar Navigation", description: "Switch between Home, Canvases, Meetings, and Settings views from the sidebar.", elementId: "dashboard-sidebar-nav" },
+    { title: "Search Bar", description: "Quickly find canvases, meetings, or templates by typing keywords here.", elementId: "dashboard-searchbar" },
+    { title: "Quick Actions", description: "Create a new canvas, join or host a meeting from these quick action cards.", elementId: "dashboard-quickactions" },
+    { title: "Your Canvases", description: "Browse, filter, rename, duplicate, or delete your saved canvases here.", elementId: "dashboard-card-canvases" },
+    { title: "Ready to go! \ud83d\ude80", description: "You're all set to use the dashboard. Click the Help icon at any time to re-run this guide.", elementId: null }
+  ];
+
+  const currentStep = steps[step];
+  const hasElement = !!currentStep.elementId;
+
+  // Animate card in on step change
+  useEffect(() => {
+    setCardVisible(false);
+    const t = setTimeout(() => setCardVisible(true), 60);
+    return () => clearTimeout(t);
+  }, [step]);
+
+  useEffect(() => {
+    if (!currentStep.elementId) return;
+    const updateRect = () => {
+      const el = document.getElementById(currentStep.elementId);
+      if (el) {
+        const bounds = el.getBoundingClientRect();
+        setRect({ top: bounds.top, left: bounds.left, width: bounds.width, height: bounds.height });
+      }
+    };
+    updateRect();
+    const timer = setTimeout(updateRect, 80);
+    window.addEventListener('resize', updateRect);
+    return () => { window.removeEventListener('resize', updateRect); clearTimeout(timer); };
+  }, [step]);
+
+  const cardStyle = {
+    opacity: cardVisible ? 1 : 0,
+    transform: cardVisible ? 'translateY(0)' : 'translateY(12px)',
+    transition: 'opacity 0.35s ease, transform 0.35s ease',
+  };
+
+  if (!hasElement) {
+    return (
+      <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', transition: 'background 0.4s ease' }}>
+        <div style={cardStyle}>
+          <DashboardWalkthroughCard key={step} step={step} totalSteps={steps.length}
+            title={currentStep.title} description={currentStep.description}
+            onBack={() => setStep(step - 1)} onNext={() => { }} onClose={onClose} isLast={true} />
+        </div>
+      </div>
+    );
+  }
+
+  if (!rect) return <div className="fixed inset-0 z-[200] bg-black/70 pointer-events-auto" style={{ transition: 'background 0.4s ease' }} />;
+
+  const TOOLTIP_H = 230, GAP = 16, PAD = 8;
+  const fitsBelow = rect.top + rect.height + GAP + TOOLTIP_H <= window.innerHeight;
+  const rawTop = fitsBelow ? rect.top + rect.height + GAP : rect.top - TOOLTIP_H - GAP;
+  const tooltipTop = Math.max(12, Math.min(window.innerHeight - TOOLTIP_H - 12, rawTop));
+  const tooltipLeft = Math.max(12, Math.min(window.innerWidth - 386, rect.left + rect.width / 2 - 185));
+
+  return (
+    <div className="fixed inset-0 z-[200] pointer-events-none">
+      {/* Spotlight — smoothly moves between elements */}
+      <div className="absolute rounded-xl" style={{
+        top: rect.top - PAD, left: rect.left - PAD, width: rect.width + PAD * 2, height: rect.height + PAD * 2,
+        border: '2px solid rgba(19,127,236,0.6)',
+        boxShadow: '0 0 0 9999px rgba(0,0,0,0.7), 0 0 30px 4px rgba(19,127,236,0.25), inset 0 0 20px 2px rgba(19,127,236,0.08)',
+        borderRadius: 14,
+        transition: 'top 0.45s cubic-bezier(.4,0,.2,1), left 0.45s cubic-bezier(.4,0,.2,1), width 0.45s cubic-bezier(.4,0,.2,1), height 0.45s cubic-bezier(.4,0,.2,1)',
+      }} />
+      {/* Tooltip card — fades in */}
+      <div className="absolute pointer-events-auto" style={{
+        top: tooltipTop, left: tooltipLeft,
+        transition: 'top 0.4s cubic-bezier(.4,0,.2,1), left 0.4s cubic-bezier(.4,0,.2,1)',
+      }}>
+        <div style={cardStyle}>
+          <DashboardWalkthroughCard key={step} step={step} totalSteps={steps.length}
+            title={currentStep.title} description={currentStep.description}
+            onBack={() => setStep(step - 1)} onNext={() => setStep(step + 1)} onClose={onClose} isLast={false} />
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export default function Dashboard() {
-    const { user, updateUser, logout } = useAuth();
-    // Setup socket for activity updates
-    const socket = useSocket({ userId: user?._id || user?.id, username: user?.username });
+  const { user, updateUser, logout } = useAuth();
+  // Setup socket for activity updates
+  const socket = useSocket({ userId: user?._id || user?.id, username: user?.username });
   const navigate = useNavigate();
   const location = useLocation();
   const [activeTab, setActiveTab] = useState('recent');
@@ -149,9 +303,24 @@ export default function Dashboard() {
   const [renameFolderId, setRenameFolderId] = useState(null);
   const [isOperatingFolder, setIsOperatingFolder] = useState(false);
 
+  // Bot & Walkthrough state
+  const [isBotOpen, setIsBotOpen] = useState(false);
+  const [showWalkthrough, setShowWalkthrough] = useState(false);
+  const [walkthroughStep, setWalkthroughStep] = useState(0);
+
   // Activity logs state
   const [activityLogs, setActivityLogs] = useState([]);
   const [isLoadingActivity, setIsLoadingActivity] = useState(false);
+
+  // Listen for walkthrough start event
+  useEffect(() => {
+    const handleStartWalkthrough = () => {
+      setWalkthroughStep(0);
+      setShowWalkthrough(true);
+    };
+    window.addEventListener('start-walkthrough', handleStartWalkthrough);
+    return () => window.removeEventListener('start-walkthrough', handleStartWalkthrough);
+  }, []);
 
   useEffect(() => {
     if (user) {
@@ -309,14 +478,14 @@ export default function Dashboard() {
       setIsLoadingFolders(true);
       try {
         let allFolders = await folderAPI.getAll();
-        
+
         // Check if "Personal Sketches" default folder exists
         let personalFolder = allFolders.find(f => f.name === 'Personal Sketches' && f.isDefault);
         // Fallback: match by name alone (for users registered before isDefault was added)
         if (!personalFolder) {
           personalFolder = allFolders.find(f => f.name === 'Personal Sketches');
         }
-        
+
         // If not, create it (handle race condition if already created)
         if (!personalFolder) {
           try {
@@ -328,7 +497,7 @@ export default function Dashboard() {
           }
           allFolders = await folderAPI.getAll();
         }
-        
+
         setFolders(allFolders || []);
         if (personalFolder) setDefaultFolderId(personalFolder._id);
       } catch (error) {
@@ -347,24 +516,24 @@ export default function Dashboard() {
       const canvasButtons = document.querySelectorAll('[data-canvas-menu-button]');
       const folderMenus = document.querySelectorAll('[data-folder-menu]');
       const folderButtons = document.querySelectorAll('[data-folder-menu-button]');
-      
+
       let clickedOutsideCanvas = true;
       let clickedOutsideFolder = true;
-      
+
       canvasMenus.forEach(menu => {
         if (menu.contains(e.target)) clickedOutsideCanvas = false;
       });
       canvasButtons.forEach(btn => {
         if (btn.contains(e.target)) clickedOutsideCanvas = false;
       });
-      
+
       folderMenus.forEach(menu => {
         if (menu.contains(e.target)) clickedOutsideFolder = false;
       });
       folderButtons.forEach(btn => {
         if (btn.contains(e.target)) clickedOutsideFolder = false;
       });
-      
+
       if (clickedOutsideCanvas) {
         setCurrentMenuCanvasId(null);
       }
@@ -372,7 +541,7 @@ export default function Dashboard() {
         setCurrentMenuFolderId(null);
       }
     };
-    
+
     if (currentMenuCanvasId || currentMenuFolderId) {
       document.addEventListener('click', handleClickOutside);
       return () => document.removeEventListener('click', handleClickOutside);
@@ -446,10 +615,10 @@ export default function Dashboard() {
   const accountCreatedAt = user?.createdAt || user?.createAt;
   const accountCreatedLabel = accountCreatedAt
     ? new Date(accountCreatedAt).toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-      })
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    })
     : 'Unknown';
 
   const showFlash = (type, message, scope = 'general') => {
@@ -515,23 +684,23 @@ export default function Dashboard() {
 
   const navigateToMeeting = (meetingData, mediaState) => {
     // Handle both object and string formats for meetingData
-    const meetingId = typeof meetingData === 'string' 
-      ? meetingData 
+    const meetingId = typeof meetingData === 'string'
+      ? meetingData
       : (meetingData?.id || meetingData?.meetingId || '');
-    
+
     const trimmedId = meetingId?.trim?.() || meetingId;
     const path = trimmedId ? `/meeting/${trimmedId}` : '/meeting';
-    
+
     // Build state with proper password handling
     const state = {
       ...mediaState,
       meetingId: meetingId,
       // Priority: meetingData object password > mediaState password
-      meetingPassword: (typeof meetingData === 'object' && meetingData?.password) 
-        ? meetingData.password 
+      meetingPassword: (typeof meetingData === 'object' && meetingData?.password)
+        ? meetingData.password
         : mediaState?.meetingPassword
     };
-    
+
     navigate(path, { state });
   };
 
@@ -618,7 +787,7 @@ export default function Dashboard() {
       return;
     }
     setIsInstantGenerating(true);
-    
+
     try {
       // If credentials exist but not in DB, create the meeting
       if (instantMeetingDetails && !instantMeetingDetails?.meetingDbId) {
@@ -637,7 +806,7 @@ export default function Dashboard() {
           status: data.status
         };
         setInstantMeetingDetails(meetingData);
-        
+
         // Enter the meeting
         setShowCreateMeeting(false);
         startMeetingTransition('Entering meeting...', () =>
@@ -830,11 +999,11 @@ export default function Dashboard() {
     try {
       setIsOperatingFolder(true);
       await folderAPI.update(folderId, { name: newName.trim() });
-      
+
       // Refresh folders list
       const updatedFolders = await folderAPI.getAll();
       setFolders(updatedFolders || []);
-      
+
       setShowRenameFolderModal(false);
       setRenameFolderId(null);
       setNewFolderName('');
@@ -858,20 +1027,20 @@ export default function Dashboard() {
     try {
       setIsOperatingFolder(true);
       await folderAPI.delete(folderId);
-      
+
       // Refresh folders list
       const updatedFolders = await folderAPI.getAll();
       setFolders(updatedFolders || []);
-      
+
       // Refresh canvases list since canvases in the folder are also deleted
       const canvases = await canvasAPI.getAll();
       setSavedCanvases(canvases || []);
-      
+
       // If we're viewing the deleted folder, go back to main view
       if (activeFolderId === folderId) {
         setActiveFolderId(null);
       }
-      
+
       setCurrentMenuFolderId(null);
       showFlash('success', 'Folder and its contents deleted successfully');
     } catch (error) {
@@ -891,11 +1060,11 @@ export default function Dashboard() {
     try {
       setIsOperating(true);
       await canvasAPI.update(canvasId, { title: newName.trim() });
-      
+
       // Refresh the canvases list
       const canvases = await canvasAPI.getAll();
       setSavedCanvases(canvases || []);
-      
+
       setShowRenameModal(false);
       setRenameCanvasId(null);
       setNewCanvasName('');
@@ -913,11 +1082,11 @@ export default function Dashboard() {
     try {
       setIsOperating(true);
       await canvasAPI.delete(canvasId);
-      
+
       // Refresh the canvases list
       const canvases = await canvasAPI.getAll();
       setSavedCanvases(canvases || []);
-      
+
       setCurrentMenuCanvasId(null);
       showFlash('success', 'Canvas deleted successfully');
     } catch (error) {
@@ -932,11 +1101,11 @@ export default function Dashboard() {
     try {
       setIsOperating(true);
       await canvasAPI.duplicate(canvasId);
-      
+
       // Refresh the canvases list
       const canvases = await canvasAPI.getAll();
       setSavedCanvases(canvases || []);
-      
+
       setCurrentMenuCanvasId(null);
       showFlash('success', 'Canvas duplicated successfully');
     } catch (error) {
@@ -969,11 +1138,10 @@ export default function Dashboard() {
             </div>
             <span className="text-xl font-extrabold tracking-tight">CollabCanvas</span>
           </div>
-          <nav className="flex-1 px-4 space-y-1 mt-4">
+          <nav id="dashboard-sidebar-nav" className="flex-1 px-4 space-y-1 mt-4">
             <button
-              className={`w-full flex items-center px-4 py-3 text-sm font-semibold rounded-xl transition-all ${
-                activeView === 'home' ? 'bg-[#1a2b4a] text-white' : 'text-slate-400 hover:bg-[#1a2b4a] hover:text-white'
-              }`}
+              className={`w-full flex items-center px-4 py-3 text-sm font-semibold rounded-xl transition-all ${activeView === 'home' ? 'bg-[#1a2b4a] text-white' : 'text-slate-400 hover:bg-[#1a2b4a] hover:text-white'
+                }`}
               onClick={() => setActiveView('home')}
               type="button"
             >
@@ -981,11 +1149,10 @@ export default function Dashboard() {
               Home
             </button>
             <button
-              className={`w-full flex items-center px-4 py-3 text-sm font-semibold rounded-xl transition-all ${
-                activeView === 'canvases'
-                  ? 'bg-[#1a2b4a] hover:text-white'
-                  : 'text-slate-400 hover:bg-[#1a2b4a] hover:text-white'
-              }`}
+              className={`w-full flex items-center px-4 py-3 text-sm font-semibold rounded-xl transition-all ${activeView === 'canvases'
+                ? 'bg-[#1a2b4a] hover:text-white'
+                : 'text-slate-400 hover:bg-[#1a2b4a] hover:text-white'
+                }`}
               onClick={() => setActiveView('canvases')}
               type="button"
             >
@@ -993,11 +1160,10 @@ export default function Dashboard() {
               My Canvases
             </button>
             <button
-              className={`w-full flex items-center px-4 py-3 text-sm font-semibold rounded-xl transition-all ${
-                activeView === 'meetings'
-                  ? 'bg-[#1a2b4a] hover:text-white'
-                  : 'text-slate-400 hover:bg-[#1a2b4a] hover:text-white'
-              }`}
+              className={`w-full flex items-center px-4 py-3 text-sm font-semibold rounded-xl transition-all ${activeView === 'meetings'
+                ? 'bg-[#1a2b4a] hover:text-white'
+                : 'text-slate-400 hover:bg-[#1a2b4a] hover:text-white'
+                }`}
               onClick={() => setActiveView('meetings')}
               type="button"
             >
@@ -1005,11 +1171,10 @@ export default function Dashboard() {
               Meetings
             </button>
             <button
-              className={`w-full flex items-center px-4 py-3 text-sm font-semibold rounded-xl transition-all ${
-                activeView === 'notifications'
-                  ? 'bg-[#1a2b4a] hover:text-white'
-                  : 'text-slate-400 hover:bg-[#1a2b4a] hover:text-white'
-              }`}
+              className={`w-full flex items-center px-4 py-3 text-sm font-semibold rounded-xl transition-all ${activeView === 'notifications'
+                ? 'bg-[#1a2b4a] hover:text-white'
+                : 'text-slate-400 hover:bg-[#1a2b4a] hover:text-white'
+                }`}
               onClick={() => setActiveView('notifications')}
               type="button"
             >
@@ -1017,11 +1182,10 @@ export default function Dashboard() {
               Notifications
             </button>
             <button
-              className={`w-full flex items-center px-4 py-3 text-sm font-semibold rounded-xl transition-all ${
-                activeView === 'activity'
-                  ? 'bg-[#1a2b4a] hover:text-white'
-                  : 'text-slate-400 hover:bg-[#1a2b4a] hover:text-white'
-              }`}
+              className={`w-full flex items-center px-4 py-3 text-sm font-semibold rounded-xl transition-all ${activeView === 'activity'
+                ? 'bg-[#1a2b4a] hover:text-white'
+                : 'text-slate-400 hover:bg-[#1a2b4a] hover:text-white'
+                }`}
               onClick={() => setActiveView('activity')}
               type="button"
             >
@@ -1029,11 +1193,10 @@ export default function Dashboard() {
               Activity
             </button>
             <button
-              className={`w-full flex items-center px-4 py-3 text-sm font-semibold rounded-xl transition-all ${
-                activeView === 'settings'
-                  ? 'bg-[#1a2b4a] hover:text-white'
-                  : 'text-slate-400 hover:bg-[#1a2b4a] hover:text-white'
-              }`}
+              className={`w-full flex items-center px-4 py-3 text-sm font-semibold rounded-xl transition-all ${activeView === 'settings'
+                ? 'bg-[#1a2b4a] hover:text-white'
+                : 'text-slate-400 hover:bg-[#1a2b4a] hover:text-white'
+                }`}
               onClick={() => setActiveView('settings')}
               type="button"
             >
@@ -1068,7 +1231,7 @@ export default function Dashboard() {
         <main className="flex-1 flex flex-col overflow-hidden">
           {activeView === 'home' ? (
             <header className="h-16 flex-shrink-0 flex items-center justify-between px-8 bg-[#0f172a] border-b border-[#1f2a3b]">
-              <div className="flex-1 max-w-xl">
+              <div id="dashboard-searchbar" className="flex-1 max-w-xl">
                 <div className="relative group">
                   <span className="material-icons absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors">search</span>
                   <input
@@ -1162,11 +1325,10 @@ export default function Dashboard() {
             )}
             {shouldShowFlash && (
               <div
-                className={`mb-6 flex items-center justify-between gap-4 rounded-xl border px-4 py-3 text-sm ${
-                  flash.type === 'success'
-                    ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
-                    : 'border-rose-500/30 bg-rose-500/10 text-rose-200'
-                }`}
+                className={`mb-6 flex items-center justify-between gap-4 rounded-xl border px-4 py-3 text-sm ${flash.type === 'success'
+                  ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
+                  : 'border-rose-500/30 bg-rose-500/10 text-rose-200'
+                  }`}
               >
                 <span>{flash.message}</span>
                 <button
@@ -1185,350 +1347,347 @@ export default function Dashboard() {
                   <p className="text-slate-400">Ready to visualize your next big idea?</p>
                 </section>
 
-                <section className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-              <button
-                className="group relative overflow-hidden p-6 bg-[#1d7ff2] rounded-xl text-left transition-all hover:scale-[1.02] hover:shadow-xl hover:shadow-blue-500/30"
-                onClick={handleNewCanvas}
-                type="button"
-              >
-                <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
-                  <span className="material-icons text-8xl text-white">add_box</span>
-                </div>
-                <div className="relative z-10">
-                  <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center mb-4">
-                    <span className="material-icons text-white">add</span>
-                  </div>
-                  <h3 className="text-xl font-bold text-white mb-1">New Canvas</h3>
-                  <p className="text-white/70 text-sm">Start a blank project from scratch</p>
-                  {createCanvasCardMessage && (
-                    <p className="mt-3 text-xs font-semibold text-rose-100/90 bg-rose-500/30 inline-flex px-2 py-1 rounded">
-                      {createCanvasCardMessage}
-                    </p>
-                  )}
-                </div>
-              </button>
-              <button
-                className="group relative overflow-hidden p-6 bg-[#5450dd] rounded-xl text-left transition-all hover:scale-[1.02] hover:shadow-xl hover:shadow-indigo-500/30"
-                onClick={handleOpenCreateMeeting}
-                type="button"
-              >
-                <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
-                  <span className="material-icons text-8xl text-white">video_call</span>
-                </div>
-                <div className="relative z-10">
-                  <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center mb-4">
-                    <span className="material-icons text-white">groups</span>
-                  </div>
-                  <h3 className="text-xl font-bold text-white mb-1">Create Meeting</h3>
-                  <p className="text-white/70 text-sm">Instant collaboration with your team</p>
-                </div>
-              </button>
-              <button
-                className="group relative overflow-hidden p-6 bg-[#15938c] rounded-xl text-left transition-all hover:scale-[1.02] hover:shadow-xl hover:shadow-emerald-500/30"
-                onClick={handleOpenJoinMeeting}
-                type="button"
-              >
-                <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
-                  <span className="material-icons text-8xl text-white">login</span>
-                </div>
-                <div className="relative z-10">
-                  <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center mb-4">
-                    <span className="material-icons text-white">sensors</span>
-                  </div>
-                  <h3 className="text-xl font-bold text-white mb-1">Join Meeting</h3>
-                  <p className="text-white/70 text-sm">Enter a room code or invite link</p>
-                </div>
-              </button>
-            </section>
-
-            <section>
-              <div className="flex items-center space-x-8 mb-6 border-b border-[#1f2a3b]">
-                <button
-                  className={`pb-4 text-sm font-bold border-b-2 transition-all ${
-                    activeTab === 'recent'
-                      ? 'border-primary text-primary'
-                      : 'border-transparent text-slate-400 hover:text-white'
-                  }`}
-                  onClick={() => setActiveTab('recent')}
-                  type="button"
-                >
-                  Recent Canvases
-                </button>
-                <button
-                  className={`pb-4 text-sm font-bold border-b-2 transition-all ${
-                    activeTab === 'upcoming'
-                      ? 'border-primary text-primary'
-                      : 'border-transparent text-slate-400 hover:text-white'
-                  }`}
-                  onClick={() => setActiveTab('upcoming')}
-                  type="button"
-                >
-                  Upcoming Meetings
-                </button>
-                <button
-                  className={`pb-4 text-sm font-bold border-b-2 transition-all ${
-                    activeTab === 'completed'
-                      ? 'border-primary text-primary'
-                      : 'border-transparent text-slate-400 hover:text-white'
-                  }`}
-                  onClick={() => setActiveTab('completed')}
-                  type="button"
-                >
-                  Completed
-                </button>
-              </div>
-
-              {activeTab === 'recent' && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                  {savedCanvases.slice(0, 4).map((canvas) => (
-                    <div key={canvas._id} className={`group bg-[#111827] border border-[#1f2a3b] rounded-xl overflow-hidden hover:shadow-lg transition-all border-b-4 ${canvas.isMeetingCanvas ? 'border-b-amber-400/60' : 'border-b-emerald-400/60'}`}>
-                      <div className="h-40 bg-[#0b1220] relative overflow-hidden">
-                        <div className={`absolute inset-0 bg-gradient-to-br ${canvas.isMeetingCanvas ? 'from-amber-500/10' : 'from-emerald-500/10'} to-transparent`}></div>
-                        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 backdrop-blur-sm">
-                          <button
-                            className="px-4 py-2 bg-primary  text-white text-xs font-bold rounded-lg shadow-lg"
-                            onClick={() => navigate(canvas.isMeetingCanvas ? `/meeting-canvas/${canvas._id}` : `/paint/${canvas._id}`)}
-                            type="button"
-                          >
-                            Open Editor
-                          </button>
-                        </div>
-                        <img
-                          alt={`${canvas.title} Preview`}
-                          className="absolute inset-0 w-full h-full object-cover opacity-50 pointer-events-none group-hover:scale-110 transition-transform duration-500"
-                          src={canvas.thumbnail || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='200'%3E%3Crect fill='%23111827' width='400' height='200'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%234b5563' font-family='sans-serif' font-size='16'%3ENo Preview%3C/text%3E%3C/svg%3E"}
-                        />
-                        {canvas.isMeetingCanvas && (
-                          <div className="absolute top-3 right-3 z-10">
-                            <span className="px-2 py-1 bg-[#101922]/80 text-[10px] font-bold rounded border uppercase text-amber-400 border-amber-400/30">
-                              Meeting
-                            </span>
-                          </div>
-                        )}
+                <section id="dashboard-quickactions" className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+                  <button
+                    className="group relative overflow-hidden p-6 bg-[#1d7ff2] rounded-xl text-left transition-all hover:scale-[1.02] hover:shadow-xl hover:shadow-blue-500/30"
+                    onClick={handleNewCanvas}
+                    type="button"
+                  >
+                    <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
+                      <span className="material-icons text-8xl text-white">add_box</span>
+                    </div>
+                    <div className="relative z-10">
+                      <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center mb-4">
+                        <span className="material-icons text-white">add</span>
                       </div>
-                      <div className="p-4">
-                        <div className="flex items-start justify-between mb-2">
-                          <h4 className="font-bold text-sm truncate">{canvas.title || 'Untitled Canvas'}</h4>
-                          <div className="relative">
-                            <button 
-                              className="text-slate-500 hover:text-primary transition-colors"
-                              data-canvas-menu-button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setCurrentMenuCanvasId(currentMenuCanvasId === canvas._id ? null : canvas._id);
-                              }}
-                            >
-                              <span className="material-icons text-lg">more_vert</span>
-                            </button>
-                            {currentMenuCanvasId === canvas._id && (
-                              <div 
-                                className="absolute right-0 top-full mt-2 bg-[#101922] border border-[#2d3a4b] rounded-lg shadow-xl z-50 min-w-[180px] overflow-hidden"
-                                data-canvas-menu
+                      <h3 className="text-xl font-bold text-white mb-1">New Canvas</h3>
+                      <p className="text-white/70 text-sm">Start a blank project from scratch</p>
+                      {createCanvasCardMessage && (
+                        <p className="mt-3 text-xs font-semibold text-rose-100/90 bg-rose-500/30 inline-flex px-2 py-1 rounded">
+                          {createCanvasCardMessage}
+                        </p>
+                      )}
+                    </div>
+                  </button>
+                  <button
+                    className="group relative overflow-hidden p-6 bg-[#5450dd] rounded-xl text-left transition-all hover:scale-[1.02] hover:shadow-xl hover:shadow-indigo-500/30"
+                    onClick={handleOpenCreateMeeting}
+                    type="button"
+                  >
+                    <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
+                      <span className="material-icons text-8xl text-white">video_call</span>
+                    </div>
+                    <div className="relative z-10">
+                      <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center mb-4">
+                        <span className="material-icons text-white">groups</span>
+                      </div>
+                      <h3 className="text-xl font-bold text-white mb-1">Create Meeting</h3>
+                      <p className="text-white/70 text-sm">Instant collaboration with your team</p>
+                    </div>
+                  </button>
+                  <button
+                    className="group relative overflow-hidden p-6 bg-[#15938c] rounded-xl text-left transition-all hover:scale-[1.02] hover:shadow-xl hover:shadow-emerald-500/30"
+                    onClick={handleOpenJoinMeeting}
+                    type="button"
+                  >
+                    <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
+                      <span className="material-icons text-8xl text-white">login</span>
+                    </div>
+                    <div className="relative z-10">
+                      <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center mb-4">
+                        <span className="material-icons text-white">sensors</span>
+                      </div>
+                      <h3 className="text-xl font-bold text-white mb-1">Join Meeting</h3>
+                      <p className="text-white/70 text-sm">Enter a room code or invite link</p>
+                    </div>
+                  </button>
+                </section>
+
+                <section id="dashboard-card-canvases">
+                  <div className="flex items-center space-x-8 mb-6 border-b border-[#1f2a3b]">
+                    <button
+                      className={`pb-4 text-sm font-bold border-b-2 transition-all ${activeTab === 'recent'
+                        ? 'border-primary text-primary'
+                        : 'border-transparent text-slate-400 hover:text-white'
+                        }`}
+                      onClick={() => setActiveTab('recent')}
+                      type="button"
+                    >
+                      Recent Canvases
+                    </button>
+                    <button
+                      className={`pb-4 text-sm font-bold border-b-2 transition-all ${activeTab === 'upcoming'
+                        ? 'border-primary text-primary'
+                        : 'border-transparent text-slate-400 hover:text-white'
+                        }`}
+                      onClick={() => setActiveTab('upcoming')}
+                      type="button"
+                    >
+                      Upcoming Meetings
+                    </button>
+                    <button
+                      className={`pb-4 text-sm font-bold border-b-2 transition-all ${activeTab === 'completed'
+                        ? 'border-primary text-primary'
+                        : 'border-transparent text-slate-400 hover:text-white'
+                        }`}
+                      onClick={() => setActiveTab('completed')}
+                      type="button"
+                    >
+                      Completed
+                    </button>
+                  </div>
+
+                  {activeTab === 'recent' && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                      {savedCanvases.slice(0, 4).map((canvas) => (
+                        <div key={canvas._id} className={`group bg-[#111827] border border-[#1f2a3b] rounded-xl overflow-hidden hover:shadow-lg transition-all border-b-4 ${canvas.isMeetingCanvas ? 'border-b-amber-400/60' : 'border-b-emerald-400/60'}`}>
+                          <div className="h-40 bg-[#0b1220] relative overflow-hidden">
+                            <div className={`absolute inset-0 bg-gradient-to-br ${canvas.isMeetingCanvas ? 'from-amber-500/10' : 'from-emerald-500/10'} to-transparent`}></div>
+                            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 backdrop-blur-sm">
+                              <button
+                                className="px-4 py-2 bg-primary  text-white text-xs font-bold rounded-lg shadow-lg"
+                                onClick={() => navigate(canvas.isMeetingCanvas ? `/meeting-canvas/${canvas._id}` : `/paint/${canvas._id}`)}
+                                type="button"
                               >
-                                <button
-                                  className="w-full text-left px-4 py-3 text-sm text-slate-300 hover:bg-[#1a242f] hover:text-primary flex items-center space-x-3 transition-colors"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setRenameCanvasId(canvas._id);
-                                    setNewCanvasName(canvas.title);
-                                    setShowRenameModal(true);
-                                    setCurrentMenuCanvasId(null);
-                                  }}
-                                >
-                                  <span className="material-icons text-sm">edit</span>
-                                  <span className="font-medium">Rename</span>
-                                </button>
-                                <button
-                                  className="w-full text-left px-4 py-3 text-sm text-slate-300 hover:bg-[#1a242f] hover:text-primary flex items-center space-x-3 transition-colors"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleDuplicateCanvas(canvas._id);
-                                  }}
-                                  disabled={isOperating}
-                                >
-                                  <span className="material-icons text-sm">content_copy</span>
-                                  <span className="font-medium">Duplicate</span>
-                                </button>
-                                <div className="border-t border-[#2d3a4b]"></div>
-                                <button
-                                  className="w-full text-left px-4 py-3 text-sm text-rose-400 hover:bg-[#1a242f] hover:text-rose-300 flex items-center space-x-3 transition-colors"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleDeleteCanvas(canvas._id);
-                                  }}
-                                  disabled={isOperating}
-                                >
-                                  <span className="material-icons text-sm">delete</span>
-                                  <span className="font-medium">Delete</span>
-                                </button>
+                                Open Editor
+                              </button>
+                            </div>
+                            <img
+                              alt={`${canvas.title} Preview`}
+                              className="absolute inset-0 w-full h-full object-cover opacity-50 pointer-events-none group-hover:scale-110 transition-transform duration-500"
+                              src={canvas.thumbnail || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='200'%3E%3Crect fill='%23111827' width='400' height='200'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%234b5563' font-family='sans-serif' font-size='16'%3ENo Preview%3C/text%3E%3C/svg%3E"}
+                            />
+                            {canvas.isMeetingCanvas && (
+                              <div className="absolute top-3 right-3 z-10">
+                                <span className="px-2 py-1 bg-[#101922]/80 text-[10px] font-bold rounded border uppercase text-amber-400 border-amber-400/30">
+                                  Meeting
+                                </span>
                               </div>
                             )}
                           </div>
+                          <div className="p-4">
+                            <div className="flex items-start justify-between mb-2">
+                              <h4 className="font-bold text-sm truncate">{canvas.title || 'Untitled Canvas'}</h4>
+                              <div className="relative">
+                                <button
+                                  className="text-slate-500 hover:text-primary transition-colors"
+                                  data-canvas-menu-button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setCurrentMenuCanvasId(currentMenuCanvasId === canvas._id ? null : canvas._id);
+                                  }}
+                                >
+                                  <span className="material-icons text-lg">more_vert</span>
+                                </button>
+                                {currentMenuCanvasId === canvas._id && (
+                                  <div
+                                    className="absolute right-0 top-full mt-2 bg-[#101922] border border-[#2d3a4b] rounded-lg shadow-xl z-50 min-w-[180px] overflow-hidden"
+                                    data-canvas-menu
+                                  >
+                                    <button
+                                      className="w-full text-left px-4 py-3 text-sm text-slate-300 hover:bg-[#1a242f] hover:text-primary flex items-center space-x-3 transition-colors"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setRenameCanvasId(canvas._id);
+                                        setNewCanvasName(canvas.title);
+                                        setShowRenameModal(true);
+                                        setCurrentMenuCanvasId(null);
+                                      }}
+                                    >
+                                      <span className="material-icons text-sm">edit</span>
+                                      <span className="font-medium">Rename</span>
+                                    </button>
+                                    <button
+                                      className="w-full text-left px-4 py-3 text-sm text-slate-300 hover:bg-[#1a242f] hover:text-primary flex items-center space-x-3 transition-colors"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDuplicateCanvas(canvas._id);
+                                      }}
+                                      disabled={isOperating}
+                                    >
+                                      <span className="material-icons text-sm">content_copy</span>
+                                      <span className="font-medium">Duplicate</span>
+                                    </button>
+                                    <div className="border-t border-[#2d3a4b]"></div>
+                                    <button
+                                      className="w-full text-left px-4 py-3 text-sm text-rose-400 hover:bg-[#1a242f] hover:text-rose-300 flex items-center space-x-3 transition-colors"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDeleteCanvas(canvas._id);
+                                      }}
+                                      disabled={isOperating}
+                                    >
+                                      <span className="material-icons text-sm">delete</span>
+                                      <span className="font-medium">Delete</span>
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex items-center text-xs text-slate-500 space-x-2">
+                              <span className="material-icons text-sm">schedule</span>
+                              <span>{new Date(canvas.updatedAt).toLocaleString()}</span>
+                            </div>
+                          </div>
                         </div>
-                        <div className="flex items-center text-xs text-slate-500 space-x-2">
-                          <span className="material-icons text-sm">schedule</span>
-                          <span>{new Date(canvas.updatedAt).toLocaleString()}</span>
+                      ))}
+                      {savedCanvases.length === 0 && (
+                        <div className="col-span-4 text-center py-12">
+                          <p className="text-slate-500">No canvases yet. Create your first canvas!</p>
                         </div>
-                      </div>
-                    </div>
-                  ))}
-                  {savedCanvases.length === 0 && (
-                    <div className="col-span-4 text-center py-12">
-                      <p className="text-slate-500">No canvases yet. Create your first canvas!</p>
+                      )}
                     </div>
                   )}
-                </div>
-              )}
 
-              {activeTab === 'upcoming' && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {isLoadingMeetings ? (
-                    <div className="col-span-3 text-center py-12">
-                      <span className="material-icons animate-spin text-primary text-3xl">refresh</span>
-                      <p className="text-slate-500 mt-2">Loading meetings...</p>
-                    </div>
-                  ) : [...liveMeetings, ...pendingMeetings].length === 0 ? (
-                    <div className="col-span-3 text-center py-12">
-                      <span className="material-icons text-slate-600 text-4xl block mb-2">event_busy</span>
-                      <p className="text-slate-500">No upcoming meetings. Schedule one to get started!</p>
-                    </div>
-                  ) : (
-                    [...liveMeetings, ...pendingMeetings].map((meeting) => (
-                      <div key={meeting._id} className={`group bg-white dark:bg-surface-dark border border-slate-200 dark:border-border-dark rounded-xl p-5 hover:shadow-lg transition-all border-l-4 ${meeting.status === 'live' ? 'border-l-emerald-500' : 'border-l-primary'}`}>
-                        <div className="flex justify-between items-start mb-4">
-                          <div className={`w-10 h-10 ${meeting.status === 'live' ? 'bg-emerald-500/10' : 'bg-primary/10'} rounded-lg flex items-center justify-center ${meeting.status === 'live' ? 'text-emerald-500' : 'text-primary'}`}>
-                            <span className="material-icons">{meeting.status === 'live' ? 'videocam' : 'event_available'}</span>
-                          </div>
-                          <span className={`px-2 py-1 ${meeting.status === 'live' ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400' : 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'} text-[10px] font-bold rounded uppercase`}>
-                            {meeting.status === 'live' ? 'Live Now' : 'Scheduled'}
-                          </span>
+                  {activeTab === 'upcoming' && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {isLoadingMeetings ? (
+                        <div className="col-span-3 text-center py-12">
+                          <span className="material-icons animate-spin text-primary text-3xl">refresh</span>
+                          <p className="text-slate-500 mt-2">Loading meetings...</p>
                         </div>
-                        <h4 className="font-bold text-base mb-1 text-start">{meeting.name}</h4>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
-                          Meeting ID: {meeting.meetingId}
-                        </p>
-                        <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-border-dark">
-                          <div className="flex items-center text-xs text-slate-500">
-                            <span className="material-icons text-sm mr-1">group</span>
-                            {meeting.participants?.length || 0} participant{(meeting.participants?.length || 0) !== 1 ? 's' : ''}
-                          </div>
-                          <button
-                            className="text-primary text-xs font-bold hover:underline flex items-center"
-                            type="button"
-                            onClick={() => navigate(`/meeting/${meeting.meetingId}`)}
-                          >
-                            {meeting.status === 'live' ? 'Join Now' : 'View Details'} <span className="material-icons text-sm ml-1">arrow_forward</span>
-                          </button>
+                      ) : [...liveMeetings, ...pendingMeetings].length === 0 ? (
+                        <div className="col-span-3 text-center py-12">
+                          <span className="material-icons text-slate-600 text-4xl block mb-2">event_busy</span>
+                          <p className="text-slate-500">No upcoming meetings. Schedule one to get started!</p>
                         </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              )}
-
-              {activeTab === 'completed' && (
-                <>
-                  <div className="flex items-center justify-between mb-4">
-                    <p className="text-xs text-slate-500">{endedMeetings.length} completed meeting{endedMeetings.length !== 1 ? 's' : ''}</p>
-                    <button
-                      className="text-xs text-slate-400 hover:text-primary flex items-center gap-1 transition-colors"
-                      type="button"
-                      onClick={() => { setIsLoadingMeetings(true); doFetchMeetings().finally(() => setIsLoadingMeetings(false)); }}
-                    >
-                      <span className={`material-icons text-sm ${isLoadingMeetings ? 'animate-spin' : ''}`}>refresh</span>
-                      Refresh
-                    </button>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {isLoadingMeetings ? (
-                    <div className="col-span-3 text-center py-12">
-                      <span className="material-icons animate-spin text-primary text-3xl">refresh</span>
-                      <p className="text-slate-500 mt-2">Loading meetings...</p>
-                    </div>
-                  ) : endedMeetings.length === 0 ? (
-                    <div className="col-span-3 text-center py-12">
-                      <span className="material-icons text-slate-600 text-4xl block mb-2">history</span>
-                      <p className="text-slate-500">No completed meetings yet.</p>
-                    </div>
-                  ) : (
-                    endedMeetings.map((meeting) => (
-                      <div key={meeting._id} className="group bg-white dark:bg-surface-dark border border-slate-200 dark:border-border-dark rounded-xl p-5 hover:shadow-lg transition-all">
-                        <div className="flex justify-between items-start mb-4">
-                          <div className="w-10 h-10 bg-slate-100 dark:bg-slate-800 rounded-lg flex items-center justify-center text-slate-500">
-                            <span className="material-icons">history</span>
-                          </div>
-                          <span className="px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-[10px] font-bold rounded uppercase">
-                            {meeting.endTime ? new Date(meeting.endTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'Ended'}
-                            {meeting.startTime && meeting.endTime ? ` · ${Math.round((new Date(meeting.endTime) - new Date(meeting.startTime)) / 60000)}m` : ''}
-                          </span>
-                        </div>
-                        <h4 className="font-bold text-base mb-1 text-start">{meeting.name}</h4>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
-                          Meeting ID: {meeting.meetingId}
-                        </p>
-                        <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-border-dark">
-                          <div className="flex items-center text-xs text-slate-500">
-                            <span className="material-icons text-sm mr-1">group</span>
-                            {meeting.participants?.length || 0} participant{(meeting.participants?.length || 0) !== 1 ? 's' : ''}
-                          </div>
-                          <button
-                            className="text-primary text-xs font-bold hover:underline flex items-center"
-                            type="button"
-                            onClick={() => navigate(`/meeting-notes/${meeting._id}`)}
-                          >
-                            View Notes <span className="material-icons text-sm ml-1">description</span>
-                          </button>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-                </>
-              )}
-
-              <div className="mt-12">
-                <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-lg font-bold">Today's Schedule</h3>
-                  <button className="text-primary text-sm font-bold hover:underline" onClick={() => setActiveView('meetings')}>View All Meetings</button>
-                </div>
-                <div className="space-y-3">
-                  {[...liveMeetings, ...pendingMeetings].length === 0 ? (
-                    <div className="text-center py-8">
-                      <p className="text-slate-500 text-sm">No meetings scheduled.</p>
-                    </div>
-                  ) : (
-                    [...liveMeetings, ...pendingMeetings].slice(0, 3).map((meeting) => (
-                      <div key={meeting._id} className="flex items-center justify-between p-4 bg-[#111827] border border-[#1f2a3b] rounded-xl group hover:border-primary transition-all">
-                        <div className="flex items-center space-x-4">
-                          <div className={`w-12 h-12 ${meeting.status === 'live' ? 'bg-emerald-500/10' : 'bg-primary/10'} rounded-lg flex items-center justify-center ${meeting.status === 'live' ? 'text-emerald-400' : 'text-primary'}`}>
-                            <span className="material-icons text-xl">{meeting.status === 'live' ? 'videocam' : 'event'}</span>
-                          </div>
-                          <div>
-                            <h4 className="font-bold text-sm text-start">{meeting.name}</h4>
-                            <p className="text-xs text-slate-500 text-start">
-                              {meeting.status === 'live' ? 'Live Now' : meeting.startTime ? new Date(meeting.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Scheduled'} · {meeting.participants?.length || 0} participants
+                      ) : (
+                        [...liveMeetings, ...pendingMeetings].map((meeting) => (
+                          <div key={meeting._id} className={`group bg-white dark:bg-surface-dark border border-slate-200 dark:border-border-dark rounded-xl p-5 hover:shadow-lg transition-all border-l-4 ${meeting.status === 'live' ? 'border-l-emerald-500' : 'border-l-primary'}`}>
+                            <div className="flex justify-between items-start mb-4">
+                              <div className={`w-10 h-10 ${meeting.status === 'live' ? 'bg-emerald-500/10' : 'bg-primary/10'} rounded-lg flex items-center justify-center ${meeting.status === 'live' ? 'text-emerald-500' : 'text-primary'}`}>
+                                <span className="material-icons">{meeting.status === 'live' ? 'videocam' : 'event_available'}</span>
+                              </div>
+                              <span className={`px-2 py-1 ${meeting.status === 'live' ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400' : 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'} text-[10px] font-bold rounded uppercase`}>
+                                {meeting.status === 'live' ? 'Live Now' : 'Scheduled'}
+                              </span>
+                            </div>
+                            <h4 className="font-bold text-base mb-1 text-start">{meeting.name}</h4>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
+                              Meeting ID: {meeting.meetingId}
                             </p>
+                            <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-border-dark">
+                              <div className="flex items-center text-xs text-slate-500">
+                                <span className="material-icons text-sm mr-1">group</span>
+                                {meeting.participants?.length || 0} participant{(meeting.participants?.length || 0) !== 1 ? 's' : ''}
+                              </div>
+                              <button
+                                className="text-primary text-xs font-bold hover:underline flex items-center"
+                                type="button"
+                                onClick={() => navigate(`/meeting/${meeting.meetingId}`)}
+                              >
+                                {meeting.status === 'live' ? 'Join Now' : 'View Details'} <span className="material-icons text-sm ml-1">arrow_forward</span>
+                              </button>
+                            </div>
                           </div>
-                        </div>
-                        <div className="flex items-center space-x-3">
-                          {meeting.status === 'live' ? (
-                            <button
-                              className="px-4 py-2 bg-primary text-white text-xs font-bold rounded-lg hover:bg-primary/90 transition-all"
-                              onClick={() => navigate(`/meeting/${meeting.meetingId}`)}
-                            >
-                              Join Now
-                            </button>
-                          ) : (
-                            <button className="px-4 py-2 border border-[#1f2a3b] text-slate-400 text-xs font-bold rounded-lg cursor-not-allowed">
-                              Upcoming
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    ))
+                        ))
+                      )}
+                    </div>
                   )}
-                </div>
-              </div>
+
+                  {activeTab === 'completed' && (
+                    <>
+                      <div className="flex items-center justify-between mb-4">
+                        <p className="text-xs text-slate-500">{endedMeetings.length} completed meeting{endedMeetings.length !== 1 ? 's' : ''}</p>
+                        <button
+                          className="text-xs text-slate-400 hover:text-primary flex items-center gap-1 transition-colors"
+                          type="button"
+                          onClick={() => { setIsLoadingMeetings(true); doFetchMeetings().finally(() => setIsLoadingMeetings(false)); }}
+                        >
+                          <span className={`material-icons text-sm ${isLoadingMeetings ? 'animate-spin' : ''}`}>refresh</span>
+                          Refresh
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {isLoadingMeetings ? (
+                          <div className="col-span-3 text-center py-12">
+                            <span className="material-icons animate-spin text-primary text-3xl">refresh</span>
+                            <p className="text-slate-500 mt-2">Loading meetings...</p>
+                          </div>
+                        ) : endedMeetings.length === 0 ? (
+                          <div className="col-span-3 text-center py-12">
+                            <span className="material-icons text-slate-600 text-4xl block mb-2">history</span>
+                            <p className="text-slate-500">No completed meetings yet.</p>
+                          </div>
+                        ) : (
+                          endedMeetings.map((meeting) => (
+                            <div key={meeting._id} className="group bg-white dark:bg-surface-dark border border-slate-200 dark:border-border-dark rounded-xl p-5 hover:shadow-lg transition-all">
+                              <div className="flex justify-between items-start mb-4">
+                                <div className="w-10 h-10 bg-slate-100 dark:bg-slate-800 rounded-lg flex items-center justify-center text-slate-500">
+                                  <span className="material-icons">history</span>
+                                </div>
+                                <span className="px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-[10px] font-bold rounded uppercase">
+                                  {meeting.endTime ? new Date(meeting.endTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'Ended'}
+                                  {meeting.startTime && meeting.endTime ? ` · ${Math.round((new Date(meeting.endTime) - new Date(meeting.startTime)) / 60000)}m` : ''}
+                                </span>
+                              </div>
+                              <h4 className="font-bold text-base mb-1 text-start">{meeting.name}</h4>
+                              <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
+                                Meeting ID: {meeting.meetingId}
+                              </p>
+                              <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-border-dark">
+                                <div className="flex items-center text-xs text-slate-500">
+                                  <span className="material-icons text-sm mr-1">group</span>
+                                  {meeting.participants?.length || 0} participant{(meeting.participants?.length || 0) !== 1 ? 's' : ''}
+                                </div>
+                                <button
+                                  className="text-primary text-xs font-bold hover:underline flex items-center"
+                                  type="button"
+                                  onClick={() => navigate(`/meeting-notes/${meeting._id}`)}
+                                >
+                                  View Notes <span className="material-icons text-sm ml-1">description</span>
+                                </button>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </>
+                  )}
+
+                  <div className="mt-12">
+                    <div className="flex items-center justify-between mb-6">
+                      <h3 className="text-lg font-bold">Today's Schedule</h3>
+                      <button className="text-primary text-sm font-bold hover:underline" onClick={() => setActiveView('meetings')}>View All Meetings</button>
+                    </div>
+                    <div className="space-y-3">
+                      {[...liveMeetings, ...pendingMeetings].length === 0 ? (
+                        <div className="text-center py-8">
+                          <p className="text-slate-500 text-sm">No meetings scheduled.</p>
+                        </div>
+                      ) : (
+                        [...liveMeetings, ...pendingMeetings].slice(0, 3).map((meeting) => (
+                          <div key={meeting._id} className="flex items-center justify-between p-4 bg-[#111827] border border-[#1f2a3b] rounded-xl group hover:border-primary transition-all">
+                            <div className="flex items-center space-x-4">
+                              <div className={`w-12 h-12 ${meeting.status === 'live' ? 'bg-emerald-500/10' : 'bg-primary/10'} rounded-lg flex items-center justify-center ${meeting.status === 'live' ? 'text-emerald-400' : 'text-primary'}`}>
+                                <span className="material-icons text-xl">{meeting.status === 'live' ? 'videocam' : 'event'}</span>
+                              </div>
+                              <div>
+                                <h4 className="font-bold text-sm text-start">{meeting.name}</h4>
+                                <p className="text-xs text-slate-500 text-start">
+                                  {meeting.status === 'live' ? 'Live Now' : meeting.startTime ? new Date(meeting.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Scheduled'} · {meeting.participants?.length || 0} participants
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center space-x-3">
+                              {meeting.status === 'live' ? (
+                                <button
+                                  className="px-4 py-2 bg-primary text-white text-xs font-bold rounded-lg hover:bg-primary/90 transition-all"
+                                  onClick={() => navigate(`/meeting/${meeting.meetingId}`)}
+                                >
+                                  Join Now
+                                </button>
+                              ) : (
+                                <button className="px-4 py-2 border border-[#1f2a3b] text-slate-400 text-xs font-bold rounded-lg cursor-not-allowed">
+                                  Upcoming
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
                 </section>
               </>
             ) : activeView === 'meetings' ? (
@@ -1860,20 +2019,20 @@ export default function Dashboard() {
                         const label = ACTIVITY_LABELS[log.action] || log.action;
                         const isLast = idx === activityLogs.length - 1;
                         return (
-                            <div key={log._id || idx} className={`activity-item relative flex items-center py-4 ${isLast ? '' : 'activity-line'}`}>
-                              <div className={`z-10 w-11 h-11 flex-shrink-0 ${config.bg} border ${config.border} rounded-xl flex items-center justify-center mr-4`}>
-                                <span className={`material-symbols-outlined text-2xl ${config.color}`}>{config.icon}</span>
-                              </div>
-                              <div className="min-w-0">
-                                <div className="flex flex-col items-start">
-                                  <span className="text-[15px] font-semibold text-slate-100 truncate block">{label}</span>
-                                  <span className="text-xs text-slate-500 mt-0.5">{timeAgo(log.timestamp)}</span>
-                                </div>
-                              </div>
-                              <div className="ml-auto flex-shrink-0 pl-4">
-                                <span className="text-sm text-slate-500">{formatTimestamp(log.timestamp)}</span>
+                          <div key={log._id || idx} className={`activity-item relative flex items-center py-4 ${isLast ? '' : 'activity-line'}`}>
+                            <div className={`z-10 w-11 h-11 flex-shrink-0 ${config.bg} border ${config.border} rounded-xl flex items-center justify-center mr-4`}>
+                              <span className={`material-symbols-outlined text-2xl ${config.color}`}>{config.icon}</span>
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex flex-col items-start">
+                                <span className="text-[15px] font-semibold text-slate-100 truncate block">{label}</span>
+                                <span className="text-xs text-slate-500 mt-0.5">{timeAgo(log.timestamp)}</span>
                               </div>
                             </div>
+                            <div className="ml-auto flex-shrink-0 pl-4">
+                              <span className="text-sm text-slate-500">{formatTimestamp(log.timestamp)}</span>
+                            </div>
+                          </div>
                         );
                       })}
                     </div>
@@ -1892,33 +2051,30 @@ export default function Dashboard() {
 
                   <div className="flex items-center space-x-3 p-1 bg-[#1a242f] border border-[#2d3a4b] rounded-xl mb-8">
                     <button
-                      className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${
-                        settingsTab === 'profile'
-                          ? 'bg-primary text-white'
-                          : 'text-slate-400 hover:text-white hover:bg-[#101922]'
-                      }`}
+                      className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${settingsTab === 'profile'
+                        ? 'bg-primary text-white'
+                        : 'text-slate-400 hover:text-white hover:bg-[#101922]'
+                        }`}
                       onClick={() => setSettingsTab('profile')}
                       type="button"
                     >
                       Profile Details
                     </button>
                     <button
-                      className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${
-                        settingsTab === 'password'
-                          ? 'bg-primary text-white'
-                          : 'text-slate-400 hover:text-white hover:bg-[#101922]'
-                      }`}
+                      className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${settingsTab === 'password'
+                        ? 'bg-primary text-white'
+                        : 'text-slate-400 hover:text-white hover:bg-[#101922]'
+                        }`}
                       onClick={() => setSettingsTab('password')}
                       type="button"
                     >
                       Password
                     </button>
                     <button
-                      className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${
-                        settingsTab === 'account'
-                          ? 'bg-primary text-white'
-                          : 'text-slate-400 hover:text-white hover:bg-[#101922]'
-                      }`}
+                      className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${settingsTab === 'account'
+                        ? 'bg-primary text-white'
+                        : 'text-slate-400 hover:text-white hover:bg-[#101922]'
+                        }`}
                       onClick={() => setSettingsTab('account')}
                       type="button"
                     >
@@ -2062,44 +2218,40 @@ export default function Dashboard() {
                     <section className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
                       <div className="flex items-center space-x-1 p-1 bg-[#1a242f] border border-[#2d3a4b] rounded-xl">
                         <button
-                          className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${
-                            canvasFilter === 'all'
-                              ? 'bg-primary text-white'
-                              : 'text-slate-400 hover:text-white hover:bg-[#101922]'
-                          }`}
+                          className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${canvasFilter === 'all'
+                            ? 'bg-primary text-white'
+                            : 'text-slate-400 hover:text-white hover:bg-[#101922]'
+                            }`}
                           onClick={() => setCanvasFilter('all')}
                           type="button"
                         >
                           All
                         </button>
                         <button
-                          className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${
-                            canvasFilter === 'recent'
-                              ? 'bg-primary text-white'
-                              : 'text-slate-400 hover:text-white hover:bg-[#101922]'
-                          }`}
+                          className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${canvasFilter === 'recent'
+                            ? 'bg-primary text-white'
+                            : 'text-slate-400 hover:text-white hover:bg-[#101922]'
+                            }`}
                           onClick={() => setCanvasFilter('recent')}
                           type="button"
                         >
                           Recent
                         </button>
                         <button
-                          className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${
-                            canvasFilter === 'meeting'
-                              ? 'bg-amber-500 text-white'
-                              : 'text-slate-400 hover:text-white hover:bg-[#101922]'
-                          }`}
+                          className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${canvasFilter === 'meeting'
+                            ? 'bg-amber-500 text-white'
+                            : 'text-slate-400 hover:text-white hover:bg-[#101922]'
+                            }`}
                           onClick={() => setCanvasFilter('meeting')}
                           type="button"
                         >
                           Meeting
                         </button>
                         <button
-                          className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${
-                            canvasFilter === 'private'
-                              ? 'bg-primary text-white'
-                              : 'text-slate-400 hover:text-white hover:bg-[#101922]'
-                          }`}
+                          className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${canvasFilter === 'private'
+                            ? 'bg-primary text-white'
+                            : 'text-slate-400 hover:text-white hover:bg-[#101922]'
+                            }`}
                           onClick={() => setCanvasFilter('private')}
                           type="button"
                         >
@@ -2155,13 +2307,12 @@ export default function Dashboard() {
                             />
                             <div className="absolute top-3 right-3 z-10">
                               <span
-                                className={`px-2 py-1 bg-[#101922]/80 text-[10px] font-bold rounded border uppercase ${
-                                  canvas.tagColor === 'amber'
-                                    ? 'text-amber-400 border-amber-400/30'
-                                    : canvas.tagColor === 'emerald'
+                                className={`px-2 py-1 bg-[#101922]/80 text-[10px] font-bold rounded border uppercase ${canvas.tagColor === 'amber'
+                                  ? 'text-amber-400 border-amber-400/30'
+                                  : canvas.tagColor === 'emerald'
                                     ? 'text-emerald-400 border-emerald-400/30'
                                     : 'text-primary border-primary/30'
-                                }`}
+                                  }`}
                               >
                                 {canvas.tag}
                               </span>
@@ -2172,8 +2323,8 @@ export default function Dashboard() {
                               <h4 className="font-bold text-sm truncate text-white">{canvas.title}</h4>
                               {isRealCanvas(canvas) && (
                                 <div className="relative">
-                                  <button 
-                                    className="text-slate-500 hover:text-primary transition-colors" 
+                                  <button
+                                    className="text-slate-500 hover:text-primary transition-colors"
                                     type="button"
                                     data-canvas-menu-button
                                     onClick={(e) => {
@@ -2184,7 +2335,7 @@ export default function Dashboard() {
                                     <span className="material-icons text-lg">more_vert</span>
                                   </button>
                                   {currentMenuCanvasId === canvas.id && (
-                                    <div 
+                                    <div
                                       className="absolute right-0 top-full mt-2 bg-[#101922] border border-[#2d3a4b] rounded-lg shadow-xl z-50 min-w-[180px] overflow-hidden"
                                       data-canvas-menu
                                     >
@@ -2256,7 +2407,7 @@ export default function Dashboard() {
                           const folderCanvasCount = savedCanvases.filter(c => c.folder === folder._id).length;
                           const colors = ['blue', 'amber', 'emerald', 'purple'];
                           const color = colors[index % colors.length];
-                          
+
                           return (
                             <div
                               key={folder._id}
@@ -2267,15 +2418,14 @@ export default function Dashboard() {
                                 onClick={() => setActiveFolderId(folder._id)}
                               >
                                 <div
-                                  className={`w-10 h-10 rounded-lg flex items-center justify-center mr-4 transition-colors ${
-                                    color === 'blue'
-                                      ? 'bg-blue-500/10 text-blue-500 group-hover:bg-blue-500 group-hover:text-white'
-                                      : color === 'amber'
+                                  className={`w-10 h-10 rounded-lg flex items-center justify-center mr-4 transition-colors ${color === 'blue'
+                                    ? 'bg-blue-500/10 text-blue-500 group-hover:bg-blue-500 group-hover:text-white'
+                                    : color === 'amber'
                                       ? 'bg-amber-500/10 text-amber-500 group-hover:bg-amber-500 group-hover:text-white'
                                       : color === 'emerald'
-                                      ? 'bg-emerald-500/10 text-emerald-500 group-hover:bg-emerald-500 group-hover:text-white'
-                                      : 'bg-purple-500/10 text-purple-500 group-hover:bg-purple-500 group-hover:text-white'
-                                  }`}
+                                        ? 'bg-emerald-500/10 text-emerald-500 group-hover:bg-emerald-500 group-hover:text-white'
+                                        : 'bg-purple-500/10 text-purple-500 group-hover:bg-purple-500 group-hover:text-white'
+                                    }`}
                                 >
                                   <span className="material-symbols-outlined">folder</span>
                                 </div>
@@ -2334,8 +2484,8 @@ export default function Dashboard() {
                             </div>
                           );
                         })}
-                        <button 
-                          className="group flex items-center justify-center p-4 bg-indigo-600 text-white rounded-xl hover:bg-indigo-500 cursor-pointer transition-all" 
+                        <button
+                          className="group flex items-center justify-center p-4 bg-indigo-600 text-white rounded-xl hover:bg-indigo-500 cursor-pointer transition-all"
                           onClick={() => setShowCreateFolderModal(true)}
                           type="button"
                         >
@@ -2348,44 +2498,40 @@ export default function Dashboard() {
                     <section className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
                       <div className="flex items-center space-x-1 p-1 bg-[#1a242f] border border-[#2d3a4b] rounded-xl">
                         <button
-                          className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${
-                            canvasFilter === 'all'
-                              ? 'bg-primary text-white'
-                              : 'text-slate-400 hover:text-white hover:bg-[#101922]'
-                          }`}
+                          className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${canvasFilter === 'all'
+                            ? 'bg-primary text-white'
+                            : 'text-slate-400 hover:text-white hover:bg-[#101922]'
+                            }`}
                           onClick={() => setCanvasFilter('all')}
                           type="button"
                         >
                           All
                         </button>
                         <button
-                          className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${
-                            canvasFilter === 'recent'
-                              ? 'bg-primary text-white'
-                              : 'text-slate-400 hover:text-white hover:bg-[#101922]'
-                          }`}
+                          className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${canvasFilter === 'recent'
+                            ? 'bg-primary text-white'
+                            : 'text-slate-400 hover:text-white hover:bg-[#101922]'
+                            }`}
                           onClick={() => setCanvasFilter('recent')}
                           type="button"
                         >
                           Recent
                         </button>
                         <button
-                          className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${
-                            canvasFilter === 'meeting'
-                              ? 'bg-amber-500 text-white'
-                              : 'text-slate-400 hover:text-white hover:bg-[#101922]'
-                          }`}
+                          className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${canvasFilter === 'meeting'
+                            ? 'bg-amber-500 text-white'
+                            : 'text-slate-400 hover:text-white hover:bg-[#101922]'
+                            }`}
                           onClick={() => setCanvasFilter('meeting')}
                           type="button"
                         >
                           Meeting
                         </button>
                         <button
-                          className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${
-                            canvasFilter === 'private'
-                              ? 'bg-primary text-white'
-                              : 'text-slate-400 hover:text-white hover:bg-[#101922]'
-                          }`}
+                          className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${canvasFilter === 'private'
+                            ? 'bg-primary text-white'
+                            : 'text-slate-400 hover:text-white hover:bg-[#101922]'
+                            }`}
                           onClick={() => setCanvasFilter('private')}
                           type="button"
                         >
@@ -2441,13 +2587,12 @@ export default function Dashboard() {
                             />
                             <div className="absolute top-3 right-3 z-10">
                               <span
-                                className={`px-2 py-1 bg-[#101922]/80 text-[10px] font-bold rounded border uppercase ${
-                                  canvas.tagColor === 'amber'
-                                    ? 'text-amber-400 border-amber-400/30'
-                                    : canvas.tagColor === 'emerald'
+                                className={`px-2 py-1 bg-[#101922]/80 text-[10px] font-bold rounded border uppercase ${canvas.tagColor === 'amber'
+                                  ? 'text-amber-400 border-amber-400/30'
+                                  : canvas.tagColor === 'emerald'
                                     ? 'text-emerald-400 border-emerald-400/30'
                                     : 'text-primary border-primary/30'
-                                }`}
+                                  }`}
                               >
                                 {canvas.tag}
                               </span>
@@ -2458,8 +2603,8 @@ export default function Dashboard() {
                               <h4 className="font-bold text-sm truncate text-white">{canvas.title}</h4>
                               {isRealCanvas(canvas) && (
                                 <div className="relative">
-                                  <button 
-                                    className="text-slate-500 hover:text-primary transition-colors" 
+                                  <button
+                                    className="text-slate-500 hover:text-primary transition-colors"
                                     type="button"
                                     data-canvas-menu-button
                                     onClick={(e) => {
@@ -2470,7 +2615,7 @@ export default function Dashboard() {
                                     <span className="material-icons text-lg">more_vert</span>
                                   </button>
                                   {currentMenuCanvasId === canvas.id && (
-                                    <div 
+                                    <div
                                       className="absolute right-0 top-full mt-2 bg-[#101922] border border-[#2d3a4b] rounded-lg shadow-xl z-50 min-w-[180px] overflow-hidden"
                                       data-canvas-menu
                                     >
@@ -2582,35 +2727,33 @@ export default function Dashboard() {
                 />
               </div>
 
-                <div className="flex items-center justify-between rounded-xl border border-white/10 bg-white/5 p-4">
-                  <span className="text-sm text-slate-200">Device Settings</span>
-                  <div className="flex items-center gap-3">
-                    <button
-                      onClick={() => setJoinAudioEnabled((prev) => !prev)}
-                      className={`flex h-11 w-11 items-center justify-center rounded-full border transition-all ${
-                        joinAudioEnabled
-                          ? 'border-emerald-400/60 bg-emerald-800 text-white'
-                          : 'border-rose-400/60 bg-rose-500 text-white'
+              <div className="flex items-center justify-between rounded-xl border border-white/10 bg-white/5 p-4">
+                <span className="text-sm text-slate-200">Device Settings</span>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setJoinAudioEnabled((prev) => !prev)}
+                    className={`flex h-11 w-11 items-center justify-center rounded-full border transition-all ${joinAudioEnabled
+                      ? 'border-emerald-400/60 bg-emerald-800 text-white'
+                      : 'border-rose-400/60 bg-rose-500 text-white'
                       }`}
-                      type="button"
-                      title={joinAudioEnabled ? 'Disable Audio' : 'Enable Audio'}
-                    >
-                      <span className="material-icons">{joinAudioEnabled ? 'mic' : 'mic_off'}</span>
-                    </button>
-                    <button
-                      onClick={() => setJoinVideoEnabled((prev) => !prev)}
-                      className={`flex h-11 w-11 items-center justify-center rounded-full border transition-all ${
-                        joinVideoEnabled
-                          ? 'border-emerald-400/60 bg-emerald-800 text-white'
-                          : 'border-rose-400/60 bg-rose-500 text-white'
+                    type="button"
+                    title={joinAudioEnabled ? 'Disable Audio' : 'Enable Audio'}
+                  >
+                    <span className="material-icons">{joinAudioEnabled ? 'mic' : 'mic_off'}</span>
+                  </button>
+                  <button
+                    onClick={() => setJoinVideoEnabled((prev) => !prev)}
+                    className={`flex h-11 w-11 items-center justify-center rounded-full border transition-all ${joinVideoEnabled
+                      ? 'border-emerald-400/60 bg-emerald-800 text-white'
+                      : 'border-rose-400/60 bg-rose-500 text-white'
                       }`}
-                      type="button"
-                      title={joinVideoEnabled ? 'Disable Video' : 'Enable Video'}
-                    >
-                      <span className="material-icons">{joinVideoEnabled ? 'videocam' : 'videocam_off'}</span>
-                    </button>
-                  </div>
+                    type="button"
+                    title={joinVideoEnabled ? 'Disable Video' : 'Enable Video'}
+                  >
+                    <span className="material-icons">{joinVideoEnabled ? 'videocam' : 'videocam_off'}</span>
+                  </button>
                 </div>
+              </div>
 
               <button
                 onClick={handleJoinMeetingSubmit}
@@ -2663,22 +2806,20 @@ export default function Dashboard() {
             <div className="mb-6 flex gap-3">
               <button
                 onClick={() => setCreateMeetingMode('instant')}
-                className={`flex-1 rounded-lg border px-4 py-2 text-sm font-semibold transition-all ${
-                  createMeetingMode === 'instant'
-                    ? 'border-indigo-400 bg-indigo-500/20 text-white'
-                    : 'border-white/10 text-slate-300 hover:border-white/30'
-                }`}
+                className={`flex-1 rounded-lg border px-4 py-2 text-sm font-semibold transition-all ${createMeetingMode === 'instant'
+                  ? 'border-indigo-400 bg-indigo-500/20 text-white'
+                  : 'border-white/10 text-slate-300 hover:border-white/30'
+                  }`}
                 type="button"
               >
                 Instant Meeting
               </button>
               <button
                 onClick={() => setCreateMeetingMode('scheduled')}
-                className={`flex-1 rounded-lg border px-4 py-2 text-sm font-semibold transition-all ${
-                  createMeetingMode === 'scheduled'
-                    ? 'border-indigo-400 bg-indigo-500/20 text-white'
-                    : 'border-white/10 text-slate-300 hover:border-white/30'
-                }`}
+                className={`flex-1 rounded-lg border px-4 py-2 text-sm font-semibold transition-all ${createMeetingMode === 'scheduled'
+                  ? 'border-indigo-400 bg-indigo-500/20 text-white'
+                  : 'border-white/10 text-slate-300 hover:border-white/30'
+                  }`}
                 type="button"
               >
                 Schedule Meeting
@@ -2695,11 +2836,10 @@ export default function Dashboard() {
                 )}
 
                 {instantMeetingDetails && (
-                  <div className={`rounded-xl border p-4 text-sm space-y-2 ${
-                    instantMeetingDetails?.meetingDbId
-                      ? 'border-emerald-500/40 bg-emerald-500/10 text-slate-200'
-                      : 'border-blue-500/40 bg-blue-500/10 text-slate-200'
-                  }`}>
+                  <div className={`rounded-xl border p-4 text-sm space-y-2 ${instantMeetingDetails?.meetingDbId
+                    ? 'border-emerald-500/40 bg-emerald-500/10 text-slate-200'
+                    : 'border-blue-500/40 bg-blue-500/10 text-slate-200'
+                    }`}>
                     <div className="flex items-center gap-2 mb-3">
                       <span className={`material-icons text-sm ${instantMeetingDetails?.meetingDbId ? 'text-emerald-400' : 'text-blue-400'}`}>
                         {instantMeetingDetails?.meetingDbId ? 'check_circle' : 'info'}
@@ -2722,13 +2862,12 @@ export default function Dashboard() {
                         {instantMeetingDetails.shareLink || (isInstantGenerating ? 'Generating...' : 'Not yet generated')}
                       </span>
                     </div>
-                    <p className={`text-xs mt-2 ${
-                      instantMeetingDetails?.meetingDbId 
-                        ? 'text-emerald-300' 
-                        : 'text-blue-300'
-                    }`}>
-                      {instantMeetingDetails?.meetingDbId 
-                        ? 'Other members can now join this meeting' 
+                    <p className={`text-xs mt-2 ${instantMeetingDetails?.meetingDbId
+                      ? 'text-emerald-300'
+                      : 'text-blue-300'
+                      }`}>
+                      {instantMeetingDetails?.meetingDbId
+                        ? 'Other members can now join this meeting'
                         : 'Click "Host Meeting" below to create and enter the meeting'}
                     </p>
                   </div>
@@ -2739,11 +2878,10 @@ export default function Dashboard() {
                   <div className="flex items-center gap-3">
                     <button
                       onClick={() => setCreateAudioEnabled((prev) => !prev)}
-                      className={`flex h-11 w-11 items-center justify-center rounded-full border transition-all ${
-                        createAudioEnabled
-                          ? 'border-emerald-400/60 bg-emerald-800 text-white'
-                          : 'border-rose-400/60 bg-rose-500 text-white'
-                      }`}
+                      className={`flex h-11 w-11 items-center justify-center rounded-full border transition-all ${createAudioEnabled
+                        ? 'border-emerald-400/60 bg-emerald-800 text-white'
+                        : 'border-rose-400/60 bg-rose-500 text-white'
+                        }`}
                       type="button"
                       title={createAudioEnabled ? 'Disable Audio' : 'Enable Audio'}
                     >
@@ -2751,11 +2889,10 @@ export default function Dashboard() {
                     </button>
                     <button
                       onClick={() => setCreateVideoEnabled((prev) => !prev)}
-                      className={`flex h-11 w-11 items-center justify-center rounded-full border transition-all ${
-                        createVideoEnabled
-                          ? 'border-emerald-400/60 bg-emerald-800 text-white'
-                          : 'border-rose-400/60 bg-rose-500 text-white'
-                      }`}
+                      className={`flex h-11 w-11 items-center justify-center rounded-full border transition-all ${createVideoEnabled
+                        ? 'border-emerald-400/60 bg-emerald-800 text-white'
+                        : 'border-rose-400/60 bg-rose-500 text-white'
+                        }`}
                       type="button"
                       title={createVideoEnabled ? 'Disable Video' : 'Enable Video'}
                     >
@@ -2823,11 +2960,10 @@ export default function Dashboard() {
                 </button>
 
                 {scheduledMeetingDetails && (
-                  <div className={`rounded-xl border p-4 text-sm space-y-2 ${
-                    scheduledMeetingDetails?.meetingDbId
-                      ? 'border-emerald-500/40 bg-emerald-500/10 text-slate-200'
-                      : 'border-blue-500/40 bg-blue-500/10 text-slate-200'
-                  }`}>
+                  <div className={`rounded-xl border p-4 text-sm space-y-2 ${scheduledMeetingDetails?.meetingDbId
+                    ? 'border-emerald-500/40 bg-emerald-500/10 text-slate-200'
+                    : 'border-blue-500/40 bg-blue-500/10 text-slate-200'
+                    }`}>
                     <div className="flex items-center justify-between">
                       <span className="text-slate-400">Meeting ID</span>
                       <span className="font-semibold">{scheduledMeetingDetails.id}</span>
@@ -3141,6 +3277,31 @@ export default function Dashboard() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ─── Help Options Button (Bot + Walkthrough) ─── */}
+      {!isBotOpen && (
+        <HelpOptionsButton
+          onBotClick={() => setIsBotOpen(true)}
+          onWalkthroughClick={() => {
+            setWalkthroughStep(0);
+            setShowWalkthrough(true);
+          }}
+        />
+      )}
+
+      {/* ─── Bot Widget ─── */}
+      {isBotOpen && (
+        <BotWidget onClose={() => setIsBotOpen(false)} />
+      )}
+
+      {/* ─── Walkthrough Overlay ─── */}
+      {showWalkthrough && (
+        <DashboardWalkthroughOverlay
+          step={walkthroughStep}
+          setStep={setWalkthroughStep}
+          onClose={() => setShowWalkthrough(false)}
+        />
       )}
     </div>
   );
