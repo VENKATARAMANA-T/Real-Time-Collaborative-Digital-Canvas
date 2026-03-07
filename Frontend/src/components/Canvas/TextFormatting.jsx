@@ -30,10 +30,10 @@ const TextFormatting = ({ textFormat, updateTextProp, toggleTextProp, fontFamili
           <ChevronDown size={10} className="text-zinc-500 pointer-events-none" />
           <select
             onChange={(e) => updateTextProp({ size: parseInt(e.target.value) })}
-            className="absolute inset-0 opacity-0 cursor-pointer"
+            className="absolute inset-0 opacity-0 cursor-pointer bg-zinc-800 text-zinc-200"
             value={textFormat.size}
           >
-            {fontSizes.map(s => <option key={s} value={s}>{s}</option>)}
+            {fontSizes.map(s => <option key={s} value={s} className="bg-zinc-800 text-zinc-200">{s}</option>)}
           </select>
         </div>
       </div>
@@ -48,13 +48,6 @@ const TextFormatting = ({ textFormat, updateTextProp, toggleTextProp, fontFamili
       <IconButton icon={AlignCenter} active={textFormat.align === 'center'} onClick={() => updateTextProp({ align: 'center' })} />
       <IconButton icon={AlignRight} active={textFormat.align === 'right'} onClick={() => updateTextProp({ align: 'right' })} />
       <div className="w-[1px] h-8 bg-zinc-700 mx-1" />
-      <button
-        onClick={() => toggleTextProp('background')}
-        className={`flex flex-col items-center p-2 rounded-lg gap-1 ${textFormat.background ? 'bg-zinc-700 text-blue-400' : 'text-zinc-400 hover:bg-zinc-800'}`}
-      >
-        <Square size={16} fill={textFormat.background ? "currentColor" : "none"} />
-        <span className="text-[9px]">Fill</span>
-      </button>
     </div>
   );
 };

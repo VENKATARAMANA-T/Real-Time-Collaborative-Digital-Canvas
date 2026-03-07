@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 
 // --- Helper Components ---
 
-// Slider that calculates percentage for the CSS-based fill effect defined in index.css
+// Slider that calculates percentage for the CSS-based fill effect defined in meeting.css
 const Slider = ({ min, max, value, onChange }) => {
   const percentage = ((value - min) / (max - min)) * 100;
   return (
@@ -12,7 +12,7 @@ const Slider = ({ min, max, value, onChange }) => {
       max={max}
       value={value}
       onChange={(e) => onChange(Number(e.target.value))}
-      className="w-full"
+      className="app-slider w-full"
       style={{ '--value': `${percentage}%` }}
     />
   );

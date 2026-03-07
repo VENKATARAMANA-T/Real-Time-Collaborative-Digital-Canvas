@@ -1,19 +1,16 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import React, { useState, useRef, useEffect, useCallback, useLayoutEffect } from 'react';
+import { Plus, Scissors, Copy, Clipboard, LayoutDashboard } from 'lucide-react';
 import TopMenu from '../components/Canvas/TopMenu';
 import Toolbar from '../components/Canvas/Toolbar';
 import PropertiesPanel from '../components/Canvas/PropertiesPanel';
 import StatusBar from '../components/Canvas/StatusBar';
 import PaintCanvas from '../components/Canvas/PaintCanvas';
+import LayerPanel from '../components/Canvas/LayerPanel';
 import usePaintHistory from '../hooks/usePaintHistory';
 import usePaintTools from '../hooks/usePaintTools';
-import { canvasAPI } from '../services/api';
-import { useAuth } from '../context/AuthContext.jsx';
+import { getElementBounds } from '../utils/canvasHelpers';
 
 const PaintApp = () => {
-  const { user } = useAuth();
-  const navigate = useNavigate();
-  const { id } = useParams();
   const canvasRef = useRef(null);
   const tempCanvasRef = useRef(null);
   const contextRef = useRef(null);
@@ -22,29 +19,32 @@ const PaintApp = () => {
   const workspaceRef = useRef(null);
   const mainContainerRef = useRef(null);
 
-  const [activeCanvasId, setActiveCanvasId] = useState(id || null);
-  const [canvasTitle, setCanvasTitle] = useState('');
-  const [isSaving, setIsSaving] = useState(false);
-  const [saveMessage, setSaveMessage] = useState('');
-  const [loadError, setLoadError] = useState('');
-  const [isLoadingCanvas, setIsLoadingCanvas] = useState(true);
-  const [loadedPixelData, setLoadedPixelData] = useState(null);
-  const [showTitleModal, setShowTitleModal] = useState(false);
-  const [titleInput, setTitleInput] = useState('');
-
   const [zoom, setZoom] = useState(100);
-  const [canvasSize, setCanvasSize] = useState({ width: 1920, height: 1080 });
+  const [canvasSize, setCanvasSize] = useState({ x: 0, y: 0, width: 1920, height: 1080 });
   const [gridSize, setGridSize] = useState(20);
   const [currPos, setCurrPos] = useState({ x: 0, y: 0 });
   const [elements, setElements] = useState([]);
+  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
+  const [layers, setLayers] = useState([
+    { id: 'layer-1', name: 'Background', visible: true, locked: false, opacity: 1, blendMode: 'normal', bgColor: '#ffffff' }
+  ]);
+  const [activeLayerId, setActiveLayerId] = useState('layer-1');
+  const [canvasBgColor, setCanvasBgColor] = useState('#ffffff');
+  const [showCheckerboard, setShowCheckerboard] = useState(false);
 
   const [isFileMenuOpen, setIsFileMenuOpen] = useState(false);
   const [isEditMenuOpen, setIsEditMenuOpen] = useState(false);
   const [isViewMenuOpen, setIsViewMenuOpen] = useState(false);
   const [showRulers, setShowRulers] = useState(false);
   const [showGridlines, setShowGridlines] = useState(false);
+  const [snapToGrid, setSnapToGrid] = useState(false);
+  const [gridColor, setGridColor] = useState('#b0b0b0');
   const [showStatusBar, setShowStatusBar] = useState(true);
   const [alwaysShowToolbar, setAlwaysShowToolbar] = useState(true);
+  const [currentView, setCurrentView] = useState('canvas'); // 'canvas' or 'dashboard'
+  const [lastSavedStep, setLastSavedStep] = useState(-1);
+  const [notifications, setNotifications] = useState([]);
+  const [pasteOffset, setPasteOffset] = useState({ x: 0, y: 0 });
 
   const {
     tool,
@@ -60,6 +60,8 @@ const PaintApp = () => {
     setEditingId,
     clipboard,
     setClipboard,
+    aiEnabled,
+    setAiEnabled,
     textFormat,
     handleToolChange,
     updateColor: baseUpdateColor,
@@ -73,7 +75,7 @@ const PaintApp = () => {
     saveState,
     undo: baseUndo,
     redo: baseRedo
-  } = usePaintHistory(canvasRef, elements);
+  } = usePaintHistory(canvasRef, elements, layers, activeLayerId, canvasBgColor, showCheckerboard);
 
   const palette = [
     '#000000', '#7f7f7f', '#880015', '#ed1c24', '#ff7f27', '#fff200', '#22b14c', '#00a2e8', '#3f48cc', '#a349a4',
@@ -100,13 +102,31 @@ const PaintApp = () => {
       setIsEditMenuOpen(false);
     };
     window.addEventListener('click', closeMenus);
-    return () => window.removeEventListener('click', closeMenus);
+    return () => {
+      window.removeEventListener('click', closeMenus);
+    };
   }, []);
+
 
   const handleCopy = useCallback(() => {
     if (selectedId) {
       const el = elements.find(e => e.id === selectedId);
-      if (el) setClipboard(JSON.parse(JSON.stringify(el)));
+      if (el) {
+        // Use getElementBounds to get the true position for ALL element types
+        const bounds = getElementBounds(el);
+
+        // Deep clone preserving object references
+        const clone = { ...el };
+        if (el.points) clone.points = el.points.map(p => ({ ...p }));
+        if (el.image) clone.image = el.image;
+        if (el.dataUrl) clone.dataUrl = el.dataUrl;
+
+        // Store the computed bounds so paste knows the real position
+        clone._bounds = bounds;
+
+        setClipboard(clone);
+        setPasteOffset({ x: 0, y: 0 });
+      }
     }
   }, [selectedId, elements, setClipboard]);
 
@@ -114,30 +134,98 @@ const PaintApp = () => {
     if (selectedId) {
       const el = elements.find(e => e.id === selectedId);
       if (el) {
-        setClipboard(JSON.parse(JSON.stringify(el)));
+        const layer = layers.find(l => l.id === (el.layerId || 'layer-1'));
+        if (layer?.locked) return;
+
+        const bounds = getElementBounds(el);
+
+        // Deep clone preserving object references
+        const clone = { ...el };
+        if (el.points) clone.points = el.points.map(p => ({ ...p }));
+        if (el.image) clone.image = el.image;
+        if (el.dataUrl) clone.dataUrl = el.dataUrl;
+        clone._bounds = bounds;
+        setClipboard(clone);
+
         const nextElements = elements.filter(e => e.id !== selectedId);
         setElements(nextElements);
         setSelectedId(null);
         saveState(nextElements);
       }
     }
-  }, [selectedId, elements, setClipboard, setSelectedId, saveState]);
+  }, [selectedId, elements, setClipboard, setSelectedId, saveState, layers]);
 
-  const handlePaste = useCallback(() => {
+  const handlePaste = useCallback((pos = null) => {
     if (clipboard) {
+      const activeLayer = layers.find(l => l.id === activeLayerId);
+      if (activeLayer?.locked || !activeLayer?.visible) return;
+
       const newId = Date.now();
+
+      // Use stored bounds for the original position (works for ALL element types)
+      const origBounds = clipboard._bounds || getElementBounds(clipboard);
+      const origX = origBounds.x;
+      const origY = origBounds.y;
+
+      // Calculate staggering offset
+      const currentOffset = pos ? { x: 0, y: 0 } : {
+        x: pasteOffset.x + 20,
+        y: pasteOffset.y + 20
+      };
+
+      if (!pos) setPasteOffset(currentOffset);
+
+      // The delta from the original position
+      const dx = pos ? (pos.x - origX) : currentOffset.x;
+      const dy = pos ? (pos.y - origY) : currentOffset.y;
+
+      // Start from the clipboard data
       const newEl = {
         ...clipboard,
         id: newId,
-        x: clipboard.x + 20,
-        y: clipboard.y + 20
+        layerId: activeLayerId
       };
+
+      // Remove the internal bounds marker
+      delete newEl._bounds;
+
+      if (clipboard.type === 'path') {
+        // Path elements: shift all points by dx/dy
+        if (clipboard.points) {
+          newEl.points = clipboard.points.map(p => ({
+            x: p.x + dx,
+            y: p.y + dy
+          }));
+        }
+        // Also shift x/y if they exist (for movement tracking)
+        if (clipboard.x !== undefined) newEl.x = clipboard.x + dx;
+        if (clipboard.y !== undefined) newEl.y = clipboard.y + dy;
+      } else {
+        // Shapes, text, raster-fill, etc: shift x/y, preserve w/h
+        newEl.x = (clipboard.x !== undefined ? clipboard.x : origX) + dx;
+        newEl.y = (clipboard.y !== undefined ? clipboard.y : origY) + dy;
+        // Explicitly preserve dimensions
+        if (clipboard.w !== undefined) newEl.w = clipboard.w;
+        if (clipboard.h !== undefined) newEl.h = clipboard.h;
+      }
+
+      // For raster-fill images, ensure the image reference is preserved
+      if (clipboard.image) {
+        newEl.image = clipboard.image;
+      }
+      if (!newEl.image && clipboard.dataUrl) {
+        const img = new Image();
+        img.src = clipboard.dataUrl;
+        newEl.image = img;
+      }
+
       const nextElements = [...elements, newEl];
       setElements(nextElements);
       setSelectedId(newId);
+      handleToolChange('select'); // switch to Select so pasted element is immediately moveable/resizable
       saveState(nextElements);
     }
-  }, [clipboard, elements, setSelectedId, saveState]);
+  }, [clipboard, elements, setSelectedId, handleToolChange, saveState, layers, activeLayerId, pasteOffset]);
 
   const updateColor = (newColor) => {
     baseUpdateColor(newColor, elements, setElements, saveState);
@@ -152,11 +240,190 @@ const PaintApp = () => {
   };
 
   const undo = () => {
-    baseUndo(contextRef, setElements, setSelectedId, setEditingId);
+    baseUndo(contextRef, setElements, setSelectedId, setEditingId, setLayers, setActiveLayerId, setCanvasBgColor, setShowCheckerboard);
   };
 
   const redo = () => {
-    baseRedo(contextRef, setElements, setSelectedId, setEditingId);
+    baseRedo(contextRef, setElements, setSelectedId, setEditingId, setLayers, setActiveLayerId, setCanvasBgColor, setShowCheckerboard);
+  };
+
+  const addLayer = () => {
+    const newId = `layer-${Date.now()}`;
+    const newLayer = {
+      id: newId,
+      name: `Layer ${layers.length + 1}`,
+      visible: true,
+      locked: false,
+      opacity: 1,
+      blendMode: 'normal',
+      bgColor: 'white'
+    };
+    const nextLayers = [newLayer, ...layers];
+    setLayers(nextLayers);
+    setActiveLayerId(newId);
+    saveState(elements, nextLayers, newId, canvasBgColor, showCheckerboard);
+  };
+
+  const deleteLayer = (id) => {
+    if (layers.length <= 1) return;
+    const nextLayers = layers.filter(l => l.id !== id);
+    const nextElements = elements.filter(el => el.layerId !== id);
+    setLayers(nextLayers);
+    setElements(nextElements);
+    if (activeLayerId === id) setActiveLayerId(nextLayers[0].id);
+    saveState(nextElements, nextLayers);
+  };
+
+  const toggleLayerVisibility = (id) => {
+    const nextLayers = layers.map(l => l.id === id ? { ...l, visible: !l.visible } : l);
+    setLayers(nextLayers);
+    saveState(elements, nextLayers);
+  };
+
+  const toggleLayerLock = (id) => {
+    const nextLayers = layers.map(l => l.id === id ? { ...l, locked: !l.locked } : l);
+    setLayers(nextLayers);
+    saveState(elements, nextLayers);
+  };
+
+  const reorderLayers = (startIndex, endIndex) => {
+    const result = Array.from(layers);
+    const [removed] = result.splice(startIndex, 1);
+    result.splice(endIndex, 0, removed);
+    setLayers(result);
+    saveState(elements, result, activeLayerId, canvasBgColor, showCheckerboard);
+  };
+
+  const updateLayerOpacity = (id, opacity) => {
+    const nextLayers = layers.map(l => l.id === id ? { ...l, opacity } : l);
+    setLayers(nextLayers);
+    saveState(elements, nextLayers, activeLayerId, canvasBgColor, showCheckerboard);
+  };
+
+  const updateLayerBgColor = (id, bgColor) => {
+    const nextLayers = layers.map(l => l.id === id ? { ...l, bgColor } : l);
+    setLayers(nextLayers);
+    saveState(elements, nextLayers, activeLayerId, canvasBgColor, showCheckerboard);
+  };
+
+  const updateLayerBlendMode = (id, blendMode) => {
+    const nextLayers = layers.map(l => l.id === id ? { ...l, blendMode } : l);
+    setLayers(nextLayers);
+    saveState(elements, nextLayers, activeLayerId, canvasBgColor, showCheckerboard);
+  };
+
+  const renameLayer = (id, newName) => {
+    const nextLayers = layers.map(l => l.id === id ? { ...l, name: newName } : l);
+    setLayers(nextLayers);
+    saveState(elements, nextLayers, activeLayerId, canvasBgColor, showCheckerboard);
+  };
+
+  // Merge active layer DOWN into the layer below it
+  const mergeLayers = (sourceId) => {
+    if (layers.length <= 1) return; // nothing to merge into
+
+    const sourceIdx = layers.findIndex(l => l.id === sourceId);
+    if (sourceIdx === -1) return;
+
+    // Target is the layer BELOW (next index, since layers[0] is top)
+    const targetIdx = sourceIdx + 1;
+    if (targetIdx >= layers.length) return; // already at the bottom
+
+    const sourceLayer = layers[sourceIdx];
+    const targetLayer = layers[targetIdx];
+
+    // Move all elements from source layer to target layer
+    const nextElements = elements.map(el => {
+      if (el.layerId === sourceId || (!el.layerId && sourceId === 'layer-1')) {
+        return {
+          ...el,
+          layerId: targetLayer.id,
+          _mergeHistory: [...(el._mergeHistory || []), sourceId]
+        };
+      }
+      return el;
+    });
+
+    // Remove the source layer
+    const nextLayers = layers.filter(l => l.id !== sourceId);
+
+    // Update the merged target layer name
+    const mergedName = `${sourceLayer.name} + ${targetLayer.name}`;
+    const finalLayers = nextLayers.map(l => {
+      if (l.id === targetLayer.id) {
+        return {
+          ...l,
+          name: mergedName,
+          visible: true,
+          _mergeHistory: [...(l._mergeHistory || []), { sourceLayer, oldTargetName: l.name }]
+        };
+      }
+      return l;
+    });
+
+    setElements(nextElements);
+    setLayers(finalLayers);
+    setActiveLayerId(targetLayer.id);
+    saveState(nextElements, finalLayers, targetLayer.id, canvasBgColor, showCheckerboard);
+  };
+
+  // Separate (un-merge) the most recently merged layer
+  const splitLayer = (targetId) => {
+    const targetIdx = layers.findIndex(l => l.id === targetId);
+    if (targetIdx === -1) return;
+
+    const targetLayer = layers[targetIdx];
+
+    // Check if layer has merge history
+    if (!targetLayer._mergeHistory || targetLayer._mergeHistory.length === 0) return;
+
+    const newMergeHistory = [...targetLayer._mergeHistory];
+    const lastMerge = newMergeHistory.pop();
+    const sourceLayer = lastMerge.sourceLayer;
+
+    // Restore target layer name & history
+    const restoredTargetLayer = {
+      ...targetLayer,
+      name: lastMerge.oldTargetName,
+      _mergeHistory: newMergeHistory
+    };
+
+    // Insert source layer above the target layer
+    const nextLayers = [
+      ...layers.slice(0, targetIdx),
+      sourceLayer,
+      restoredTargetLayer,
+      ...layers.slice(targetIdx + 1)
+    ];
+
+    // Restore elements' layerId
+    const nextElements = elements.map(el => {
+      if (el.layerId === targetId && el._mergeHistory && el._mergeHistory.length > 0) {
+        const lastSourceId = el._mergeHistory[el._mergeHistory.length - 1];
+        if (lastSourceId === sourceLayer.id) {
+          const newHistory = [...el._mergeHistory];
+          newHistory.pop();
+          return { ...el, layerId: sourceLayer.id, _mergeHistory: newHistory };
+        }
+      }
+      return el;
+    });
+
+    setElements(nextElements);
+    setLayers(nextLayers);
+    setActiveLayerId(sourceLayer.id);
+    saveState(nextElements, nextLayers, sourceLayer.id, canvasBgColor, showCheckerboard);
+  };
+
+  const toggleCheckerboard = () => {
+    const next = !showCheckerboard;
+    setShowCheckerboard(next);
+    saveState(elements, layers, activeLayerId, canvasBgColor, next);
+  };
+
+  const updateCanvasBgColor = (newColor) => {
+    setCanvasBgColor(newColor);
+    saveState(elements, layers, activeLayerId, newColor);
   };
 
   const handleFullScreen = () => {
@@ -167,189 +434,168 @@ const PaintApp = () => {
     }
   };
 
-  const handleSave = async () => {
-    // If no title and no active ID, show modal
-    if (!activeCanvasId && !canvasTitle.trim()) {
-      setShowTitleModal(true);
-      return;
-    }
-    await performSave(canvasTitle);
+  const handleSave = () => {
+    // Just internally mark as saved — no download!
+    setLastSavedStep(historyStep);
   };
 
-  const performSave = async (title) => {
-    try {
-      setIsSaving(true);
-      setSaveMessage('Saving...');
-      const exportCanvas = document.createElement('canvas');
-      exportCanvas.width = canvasRef.current.width;
-      exportCanvas.height = canvasRef.current.height;
-      const exportCtx = exportCanvas.getContext('2d');
-      if (canvasRef.current) {
-        exportCtx.drawImage(canvasRef.current, 0, 0);
-      }
-      if (tempCanvasRef.current) {
-        exportCtx.drawImage(tempCanvasRef.current, 0, 0);
-      }
-      const pixelData = exportCanvas.toDataURL('image/webp', 0.7);
+  const handleExport = () => {
+    // This is the old handleSave logic — it downloads the image
+    const exportCanvas = document.createElement('canvas');
+    const sourceCanvas = canvasRef.current;
+    if (!sourceCanvas) return;
 
-      // Generate username text badge as thumbnail
-      const username = user?.username || 'User';
-      const badgeCanvas = document.createElement('canvas');
-      badgeCanvas.width = 400;
-      badgeCanvas.height = 200;
-      const badgeCtx = badgeCanvas.getContext('2d');
-      badgeCtx.fillStyle = '#1d7ff2';
-      badgeCtx.fillRect(0, 0, 400, 200);
-      badgeCtx.fillStyle = '#ffffff';
-      badgeCtx.font = 'bold 48px Arial';
-      badgeCtx.textAlign = 'center';
-      badgeCtx.textBaseline = 'middle';
-      badgeCtx.fillText(username, 200, 100);
-      const thumbnail = badgeCanvas.toDataURL('image/webp', 0.6);
+    exportCanvas.width = sourceCanvas.width;
+    exportCanvas.height = sourceCanvas.height;
+    const ctx = exportCanvas.getContext('2d');
 
-      const payload = {
-        title: title || 'Untitled Canvas',
-        folderId: null, // Personal Sketches folder (update with actual ID if needed)
-        data: {
-          elements,
-          canvasSize,
-          pixelData
-        },
-        thumbnail
-      };
-
-      console.log('Saving canvas with payload:', payload);
-
-      if (activeCanvasId) {
-        await canvasAPI.update(activeCanvasId, payload);
-      } else {
-        const created = await canvasAPI.create(payload);
-        if (created?._id) {
-          setActiveCanvasId(created._id);
-          setCanvasTitle(created.title);
-          navigate(`/paint/${created._id}`, { replace: true });
-        }
-      }
-      setSaveMessage('Saved');
-      setTimeout(() => setSaveMessage(''), 2000);
-    } catch (error) {
-      setSaveMessage(error.response?.data?.message || 'Save failed');
-      setTimeout(() => setSaveMessage(''), 3000);
-    } finally {
-      setIsSaving(false);
-      setShowTitleModal(false);
+    if (canvasBgColor !== 'transparent') {
+      ctx.fillStyle = canvasBgColor;
+      ctx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
     }
+
+    ctx.drawImage(sourceCanvas, 0, 0);
+
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const link = document.createElement('a');
+    link.download = `paint-pro-${timestamp}.png`;
+    link.href = exportCanvas.toDataURL('image/png');
+    link.click();
   };
 
-  const handleTitleSubmit = () => {
-    if (titleInput.trim()) {
-      setCanvasTitle(titleInput.trim());
-      performSave(titleInput.trim());
-    }
+  const handleImport = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const img = new Image();
+          img.onload = () => {
+            const newId = Date.now();
+
+            // Calculate center of current view
+            const viewWidth = workspaceRef.current?.clientWidth || 800;
+            const viewHeight = workspaceRef.current?.clientHeight || 600;
+            const scale = zoom / 100;
+
+            // Get coordinates in canvas space
+            const centerX = panOffset.x + (viewWidth / 2) / scale;
+            const centerY = panOffset.y + (viewHeight / 2) / scale;
+
+            // Maintain aspect ratio and limit size to 80% of view
+            let w = img.width;
+            let h = img.height;
+            const maxW = (viewWidth * 0.8) / scale;
+            const maxH = (viewHeight * 0.8) / scale;
+
+            if (w > maxW || h > maxH) {
+              const ratio = Math.min(maxW / w, maxH / h);
+              w *= ratio;
+              h *= ratio;
+            }
+
+            const newEl = {
+              id: newId,
+              type: 'raster-fill',
+              x: centerX - w / 2,
+              y: centerY - h / 2,
+              w: w,
+              h: h,
+              image: img,
+              dataUrl: event.target.result,
+              layerId: activeLayerId
+            };
+            const nextElements = [...elements, newEl];
+            setElements(nextElements);
+            setSelectedId(newId); // Select the imported image
+            saveState(nextElements);
+          };
+          img.src = event.target.result;
+        };
+        reader.readAsDataURL(file);
+      }
+    };
+    input.click();
   };
-
-  useEffect(() => {
-    setActiveCanvasId(id || null);
-  }, [id]);
-
-  useEffect(() => {
-    if (!loadedPixelData || !canvasRef.current || !contextRef.current) return;
-
-    const img = new Image();
-    img.crossOrigin = 'anonymous'; // Required for Cloudinary URLs to work with canvas
-    img.src = loadedPixelData;
-    img.onload = () => {
-      if (!canvasRef.current || !contextRef.current) return;
-      const ctx = contextRef.current;
-      ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-      ctx.fillStyle = 'white';
-      ctx.fillRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-      ctx.drawImage(img, 0, 0, canvasRef.current.width, canvasRef.current.height);
-    };
-  }, [loadedPixelData]);
-
-  useEffect(() => {
-    let isMounted = true;
-
-    const loadCanvas = async () => {
-      if (!user) {
-        navigate('/');
-        return;
-      }
-
-      setIsLoadingCanvas(true);
-      setLoadError('');
-
-      if (!activeCanvasId) {
-        if (isMounted) setIsLoadingCanvas(false);
-        return;
-      }
-
-      try {
-        const canvas = await canvasAPI.getById(activeCanvasId);
-        if (!isMounted) return;
-
-        const nextElements = canvas?.data?.elements || [];
-        setElements(nextElements);
-        if (canvas?.data?.canvasSize) {
-          setCanvasSize(canvas.data.canvasSize);
-        }
-        if (canvas?.title) {
-          setCanvasTitle(canvas.title);
-        }
-        const serverPixelData = canvas?.data?.pixelData || null;
-        setLoadedPixelData(serverPixelData);
-        if (!serverPixelData && contextRef.current && canvasRef.current) {
-          const ctx = contextRef.current;
-          ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-          ctx.fillStyle = 'white';
-          ctx.fillRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-        }
-        setLoadError('');
-
-        setTimeout(() => {
-          if (isMounted) saveState(nextElements);
-        }, 0);
-      } catch (error) {
-        if (isMounted) {
-          setLoadError(error.response?.data?.message || 'Failed to load canvas');
-        }
-      } finally {
-        if (isMounted) setIsLoadingCanvas(false);
-      }
-    };
-
-    loadCanvas();
-    return () => {
-      isMounted = false;
-    };
-  }, [activeCanvasId, navigate, saveState, user]);
 
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (!editingId) {
         if (e.ctrlKey && e.key === 'r') { e.preventDefault(); setShowRulers(prev => !prev); }
         if (e.ctrlKey && e.key === 'g') { e.preventDefault(); setShowGridlines(prev => !prev); }
+
         if (e.key === 'F11') { e.preventDefault(); handleFullScreen(); }
         if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId) {
-          const nextElements = elements.filter(el => el.id !== selectedId);
-          setElements(nextElements);
-          setSelectedId(null);
-          saveState(nextElements);
+          const el = elements.find(item => item.id === selectedId);
+          if (el) {
+            const layer = layers.find(l => l.id === (el.layerId || 'layer-1'));
+            if (layer?.locked) return;
+
+            const nextElements = elements.filter(item => item.id !== selectedId);
+            setElements(nextElements);
+            setSelectedId(null);
+            saveState(nextElements);
+          }
         }
         if (e.metaKey || e.ctrlKey) {
           if (e.key === 'c') { e.preventDefault(); handleCopy(); }
           else if (e.key === 'x') { e.preventDefault(); handleCut(); }
           else if (e.key === 'v') { e.preventDefault(); handlePaste(); }
+          else if (e.key === 'z') {
+            e.preventDefault();
+            if (e.shiftKey) redo();
+            else undo();
+          }
+          else if (e.key === 'y') { e.preventDefault(); redo(); }
         }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedId, editingId, elements, saveState, handleCopy, handleCut, handlePaste]);
+  }, [selectedId, editingId, elements, layers, activeLayerId, saveState, handleCopy, handleCut, handlePaste]);
+
+  useEffect(() => {
+    // Standard starting bounds - the "Reference Sheet"
+    let minX = 0;
+    let minY = 0;
+    let maxX = 1920;
+    let maxY = 1080;
+
+    elements.forEach(el => {
+      const bounds = getElementBounds(el);
+      if (bounds) {
+        minX = Math.min(minX, bounds.x);
+        minY = Math.min(minY, bounds.y);
+        maxX = Math.max(maxX, bounds.x + bounds.w);
+        maxY = Math.max(maxY, bounds.y + bounds.h);
+      }
+    });
+
+    const margin = 1200; // Increased margin for smoother growth
+    const target = {
+      x: Math.floor((minX / 100)) * 100 - margin, // Align to 100px grid for stability
+      y: Math.floor((minY / 100)) * 100 - margin,
+      width: Math.ceil(((maxX - minX) + margin * 2) / 100) * 100,
+      height: Math.ceil(((maxY - minY) + margin * 2) / 100) * 100
+    };
+
+    // Buffer to avoid jitter - only update if change is significant
+    const threshold = 400;
+    if (Math.abs(target.x - canvasSize.x) > threshold ||
+      Math.abs(target.y - canvasSize.y) > threshold ||
+      Math.abs(target.width - canvasSize.width) > threshold ||
+      Math.abs(target.height - canvasSize.height) > threshold) {
+      setCanvasSize(target);
+    }
+  }, [elements, canvasSize]);
+
+  const collaborators = []; // Simulation removed for "proper" implementation
 
   return (
-    <div ref={workspaceRef} className="flex flex-col h-screen w-full bg-[#09090b] text-zinc-200 overflow-hidden font-sans select-none">
+    <div ref={workspaceRef} className="flex flex-col h-screen w-full bg-[#09090b] text-zinc-100 overflow-hidden font-sans select-none">
       <TopMenu
         isFileMenuOpen={isFileMenuOpen}
         setIsFileMenuOpen={setIsFileMenuOpen}
@@ -358,6 +604,8 @@ const PaintApp = () => {
         isViewMenuOpen={isViewMenuOpen}
         setIsViewMenuOpen={setIsViewMenuOpen}
         handleSave={handleSave}
+        handleExport={handleExport}
+        handleImport={handleImport}
         handleCopy={handleCopy}
         handleCut={handleCut}
         handlePaste={handlePaste}
@@ -378,106 +626,182 @@ const PaintApp = () => {
         redo={redo}
         historyStep={historyStep}
         historyLength={history.length}
-        onBack={() => navigate('/dashboard')}
+        isDirty={historyStep !== lastSavedStep}
+        currentView={currentView}
+        setCurrentView={setCurrentView}
       />
 
-      {alwaysShowToolbar && (
-        <Toolbar
-          tool={tool}
-          handleToolChange={handleToolChange}
-          fillMode={fillMode}
-          setFillMode={setFillMode}
-          isTextToolActive={isTextToolActive}
-          textFormat={textFormat}
-          updateTextProp={updateTextProp}
-          toggleTextProp={toggleTextProp}
-          fontFamilies={fontFamilies}
-          fontSizes={fontSizes}
-          color={color}
-          updateColor={updateColor}
-          palette={palette}
-          zoom={zoom}
-          setZoom={setZoom}
-          showGridlines={showGridlines}
-          setShowGridlines={setShowGridlines}
-        />
+      {currentView === 'dashboard' ? (
+        <div className="flex-1 bg-zinc-50 flex flex-col items-center justify-center p-8 text-center animate-in fade-in duration-500">
+          <div className="max-w-md w-full">
+            <div className="w-20 h-20 bg-zinc-800 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-2xl border border-zinc-700/50">
+              <svg className="w-10 h-10 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+            </div>
+            <h1 className="text-2xl font-bold text-zinc-100 mb-2">Welcome Back</h1>
+            <p className="text-zinc-500 mb-8 italic">Choose a project to continue or start a fresh canvas.</p>
+
+            <div className="mt-8 pt-8 border-t border-zinc-800/50">
+              <p className="text-xs text-zinc-600 uppercase tracking-widest font-bold mb-4">Dashboard Status</p>
+              <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-4 text-left">
+                <div className="flex items-center gap-3 text-sm text-zinc-400">
+                  <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+                  System is ready for new creation
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <>
+
+          {alwaysShowToolbar && (
+            <Toolbar
+              tool={tool}
+              handleToolChange={handleToolChange}
+              fillMode={fillMode}
+              setFillMode={setFillMode}
+              isTextToolActive={isTextToolActive}
+              textFormat={textFormat}
+              updateTextProp={updateTextProp}
+              toggleTextProp={toggleTextProp}
+              fontFamilies={fontFamilies}
+              fontSizes={fontSizes}
+              color={color}
+              updateColor={updateColor}
+              palette={palette}
+              zoom={zoom}
+              setZoom={setZoom}
+              showGridlines={showGridlines}
+              setShowGridlines={setShowGridlines}
+              snapToGrid={snapToGrid}
+              setSnapToGrid={setSnapToGrid}
+              gridColor={gridColor}
+              setGridColor={setGridColor}
+              setPanOffset={setPanOffset}
+              canvasBgColor={canvasBgColor}
+              updateCanvasBgColor={updateCanvasBgColor}
+              showCheckerboard={showCheckerboard}
+              toggleCheckerboard={toggleCheckerboard}
+            />
+          )}
+
+          <main className="flex-1 flex relative overflow-hidden bg-[#09090b]">
+            <PropertiesPanel
+              strokeWidth={strokeWidth}
+              setStrokeWidth={setStrokeWidth}
+              canvasBgColor={canvasBgColor}
+              setCanvasBgColor={updateCanvasBgColor}
+              activeLayerId={activeLayerId}
+              layers={layers}
+              updateLayerBgColor={updateLayerBgColor}
+              aiEnabled={aiEnabled}
+              setAiEnabled={setAiEnabled}
+            />
+
+            <div ref={mainContainerRef} className="flex-1 overflow-hidden bg-transparent flex items-center justify-center relative">
+              <PaintCanvas
+                canvasRef={canvasRef}
+                tempCanvasRef={tempCanvasRef}
+                contextRef={contextRef}
+                tempContextRef={tempContextRef}
+                textAreaRef={textAreaRef}
+                mainContainerRef={mainContainerRef}
+                canvasSize={canvasSize}
+                setCanvasSize={setCanvasSize}
+                zoom={zoom}
+                setZoom={setZoom}
+                showRulers={showRulers}
+                showGridlines={showGridlines}
+                gridColor={gridColor}
+                gridSize={gridSize}
+                snapToGrid={snapToGrid}
+                tool={tool}
+                color={color}
+                strokeWidth={strokeWidth}
+                opacity={opacity}
+                fillMode={fillMode}
+                elements={elements}
+                setElements={setElements}
+                selectedId={selectedId}
+                setSelectedId={setSelectedId}
+                editingId={editingId}
+                setEditingId={setEditingId}
+                textFormat={textFormat}
+                saveState={saveState}
+                panOffset={panOffset}
+                setPanOffset={setPanOffset}
+                layers={layers}
+                activeLayerId={activeLayerId}
+                canvasBgColor={canvasBgColor}
+                showCheckerboard={showCheckerboard}
+                collaborators={collaborators}
+                aiEnabled={aiEnabled}
+                handleCut={handleCut}
+                handlePaste={handlePaste}
+                clipboard={clipboard}
+              />
+
+
+            </div>
+            <LayerPanel
+              layers={layers}
+              activeLayerId={activeLayerId}
+              setActiveLayerId={setActiveLayerId}
+              addLayer={addLayer}
+              deleteLayer={deleteLayer}
+              toggleVisibility={toggleLayerVisibility}
+              toggleLock={toggleLayerLock}
+              reorderLayers={reorderLayers}
+              updateLayerOpacity={updateLayerOpacity}
+              updateLayerBgColor={updateLayerBgColor}
+              updateLayerBlendMode={updateLayerBlendMode}
+              renameLayer={renameLayer}
+              mergeLayers={mergeLayers}
+              splitLayer={splitLayer}
+            />
+          </main>
+        </>
       )}
 
-      <main className="flex-1 flex relative overflow-hidden bg-[#09090b]">
-        <PropertiesPanel strokeWidth={strokeWidth} setStrokeWidth={setStrokeWidth} />
-
-        <div ref={mainContainerRef} className="flex-1 overflow-hidden bg-zinc-950 flex items-center justify-center relative">
-          <PaintCanvas
-            canvasRef={canvasRef}
-            tempCanvasRef={tempCanvasRef}
-            contextRef={contextRef}
-            tempContextRef={tempContextRef}
-            textAreaRef={textAreaRef}
-            mainContainerRef={mainContainerRef}
-            canvasSize={canvasSize}
-            setCanvasSize={setCanvasSize}
-            zoom={zoom}
-            setZoom={setZoom}
-            showRulers={showRulers}
-            showGridlines={showGridlines}
-            gridSize={gridSize}
-            tool={tool}
-            color={color}
-            strokeWidth={strokeWidth}
-            opacity={opacity}
-            fillMode={fillMode}
-            elements={elements}
-            setElements={setElements}
-            selectedId={selectedId}
-            setSelectedId={setSelectedId}
-            editingId={editingId}
-            setEditingId={setEditingId}
-            textFormat={textFormat}
-            saveState={saveState}
-          />
-        </div>
-      </main>
-
-      {showStatusBar && (
+      {showStatusBar && currentView === 'canvas' && (
         <StatusBar currPos={currPos} canvasSize={canvasSize} zoom={zoom} setZoom={setZoom} />
       )}
 
-      {/* Title Modal */}
-      {showTitleModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md">
-          <div className="bg-[#18181b] border border-zinc-700 rounded-xl p-6 w-96 shadow-2xl">
-            <h3 className="text-lg font-bold text-white mb-4">Enter Canvas Title</h3>
-            <input
-              type="text"
-              value={titleInput}
-              onChange={(e) => setTitleInput(e.target.value)}
-              className="w-full px-4 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="e.g. My Awesome Drawing"
-              autoFocus
-            />
-            <div className="flex justify-end gap-3 mt-6">
-              <button
-                onClick={() => setShowTitleModal(false)}
-                className="px-4 py-2 bg-zinc-800 text-white rounded-lg hover:bg-zinc-700 transition-all"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleTitleSubmit}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-all"
-              >
-                Save
-              </button>
+      {/* ── Toast Notifications ────────────────────────────────────────────── */}
+      {notifications.length > 0 && (
+        <div className="fixed bottom-10 right-4 z-[200] flex flex-col gap-2 pointer-events-none">
+          {notifications.map(n => (
+            <div
+              key={n.id}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl shadow-2xl text-sm font-semibold
+                backdrop-blur-md border animate-in fade-in slide-in-from-right-4 duration-200
+                ${n.type === 'success'
+                  ? 'bg-green-500/20 border-green-500/30 text-green-300'
+                  : n.type === 'error'
+                    ? 'bg-red-500/20 border-red-500/30 text-red-300'
+                    : 'bg-blue-500/20 border-blue-500/30 text-blue-300'
+                }`}
+            >
+              <span className="text-base">
+                {n.type === 'success' ? '✓' : n.type === 'error' ? '✕' : 'ℹ'}
+              </span>
+              {n.message}
             </div>
-          </div>
+          ))}
         </div>
       )}
 
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
         
-        html, body { margin: 0; padding: 0; overflow: hidden; height: 100vh; width: 100vw; background-color: #0c0c0e; }
-        body { font-family: 'Inter', sans-serif; color: #a1a1aa; }
+        html, body { margin: 0; padding: 0; overflow: hidden; height: 100vh; width: 100vw; background-color: #09090b; }
+        body { font-family: 'Inter', sans-serif; color: #e4e4e7; }
+
+        .inner-shadow {
+          box-shadow: inset 0 0 100px rgba(0,0,0,0.5);
+        }
 
         nav button, 
         header .grid-cols-3 button, 
@@ -490,53 +814,77 @@ const PaintApp = () => {
           align-items: center;
           justify-content: center;
           padding: 0;
-          transition: all 0.2s ease;
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         header .grid-cols-3 button {
-          border-radius: 12px !important;
-          width: 42px !important;
-          height: 42px !important;
-          color: #e4e4e7 !important;
+          border-radius: 14px !important;
+          width: 44px !important;
+          height: 44px !important;
+          color: #a1a1aa !important;
+          border: 1px solid transparent !important;
         }
         header .grid-cols-3 button:hover {
-          background-color: rgba(39, 39, 42, 0.5) !important;
+          background-color: rgba(63, 63, 70, 0.3) !important;
+          color: #ffffff !important;
+          border-color: rgba(161, 161, 170, 0.2) !important;
+          transform: translateY(-1px);
         }
         header .grid-cols-3 .bg-zinc-700 {
-          background-color: #27272a !important; 
-          color: #3b82f6 !important; 
+          background-color: rgba(37, 99, 235, 0.15) !important; 
+          color: #60a5fa !important; 
+          border-color: rgba(37, 99, 235, 0.3) !important;
+          box-shadow: 0 0 15px rgba(37, 99, 235, 0.1);
         }
 
         header .grid-cols-5 button {
-          border-radius: 10px !important;
-          width: 38px !important;
-          height: 38px !important;
-          color: #e4e4e7 !important;
+          border-radius: 12px !important;
+          width: 40px !important;
+          height: 40px !important;
+          color: #a1a1aa !important;
         }
         header .grid-cols-5 .bg-blue-600 {
           background-color: #2563eb !important; 
-          border: 2px solid white !important; 
+          border: 2px solid rgba(255,255,255,0.2) !important; 
           color: white !important;
-          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
+          box-shadow: 0 8px 16px -4px rgba(37, 99, 235, 0.4);
+          transform: scale(1.05);
         }
 
         nav button {
-          border-radius: 8px !important;
-          padding: 6px 16px !important;
-          background-color: #18181b !important;
-          color: white !important;
+          border-radius: 10px !important;
+          padding: 8px 18px !important;
+          background-color: #1f1f23 !important;
+          color: #e4e4e7 !important;
+          font-weight: 600 !important;
+          border: 1px solid rgba(255,255,255,0.05) !important;
+        }
+        nav button:hover {
+          background-color: #27272a !important;
+          transform: translateY(-1px);
         }
 
         header .flex.items-center.gap-2 button {
-          background-color: #ffffff !important;
-          color: #18181b !important;
-          border-radius: 6px !important;
-          width: 30px !important;
-          height: 30px !important;
+          background-color: rgba(255, 255, 255, 0.05) !important;
+          color: #e4e4e7 !important;
+          border-radius: 8px !important;
+          width: 32px !important;
+          height: 32px !important;
+          border: 1px solid rgba(255,255,255,0.1) !important;
+        }
+        header .flex.items-center.gap-2 button:hover:not(.bg-blue-500) {
+          background-color: rgba(255, 255, 255, 0.1) !important;
+          color: #ffffff !important;
+        }
+        header .flex.items-center.gap-2 button.bg-blue-500 {
+          background-color: #2563eb !important; 
+          border: 2px solid rgba(255,255,255,0.2) !important; 
+          color: white !important;
+          box-shadow: 0 8px 16px -4px rgba(37, 99, 235, 0.4) !important;
+          transform: scale(1.05) !important;
         }
 
         .no-scrollbar::-webkit-scrollbar { display: none; }
-        canvas { image-rendering: pixelated; }
       `}</style>
     </div>
   );

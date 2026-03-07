@@ -9,6 +9,7 @@ const usePaintTools = () => {
   const [selectedId, setSelectedId] = useState(null);
   const [editingId, setEditingId] = useState(null);
   const [clipboard, setClipboard] = useState(null);
+  const [aiEnabled, setAiEnabled] = useState(true);
 
   const [textFormat, setTextFormat] = useState({
     font: 'Arial',
@@ -25,7 +26,7 @@ const usePaintTools = () => {
     if (editingId) {
       setEditingId(null);
     }
-    if (newTool !== 'select') {
+    if (newTool !== 'select' && newTool !== 'hand') {
       setSelectedId(null);
     }
     setTool(newTool);
@@ -80,6 +81,8 @@ const usePaintTools = () => {
     setEditingId,
     clipboard,
     setClipboard,
+    aiEnabled,
+    setAiEnabled,
     textFormat,
     setTextFormat,
     handleToolChange,
