@@ -9,6 +9,7 @@ const {
   joinMeeting, 
   joinMeetingByLink, 
   endMeeting, 
+  cancelMeeting,
   updatePermission,
   updateHostSettings,
   leaveMeeting,
@@ -62,6 +63,9 @@ router.post('/join-link/:token', joinMeetingByLink);
 
 // End Meeting (Host Only)
 router.put('/:id/end', endMeeting);
+
+// Cancel Meeting (Host Only — permanently deletes)
+router.delete('/:id/cancel', cancelMeeting);
 
 // Leave Meeting (Participant Only)
 router.put('/:id/leave', leaveMeeting);

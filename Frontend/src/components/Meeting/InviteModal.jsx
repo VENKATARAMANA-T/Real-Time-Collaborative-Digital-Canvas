@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-function InviteModal({ meetingId, meetingPassword, onClose }) {
+function InviteModal({ meetingId, meetingPassword, shareLink, onClose }) {
   const [copiedField, setCopiedField] = useState(null);
 
   const copyToClipboard = (text, field) => {
@@ -84,6 +84,39 @@ function InviteModal({ meetingId, meetingPassword, onClose }) {
               <p className="text-emerald-400 text-xs mt-2 font-medium">Copied to clipboard!</p>
             )}
           </div>
+
+          {/* Info Message */}
+          {shareLink && (
+            <div className="mb-6">
+              <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">
+                Shareable Link
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={shareLink}
+                  readOnly
+                  className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white font-mono text-xs focus:outline-none focus:border-primary/50 transition-all truncate"
+                />
+                <button
+                  onClick={() => copyToClipboard(shareLink, 'link')}
+                  className={`px-4 py-3 rounded-xl font-bold text-xs uppercase tracking-widest transition-all ${
+                    copiedField === 'link'
+                      ? 'bg-emerald-500/80 text-white'
+                      : 'bg-primary/80 hover:bg-primary text-white'
+                  }`}
+                  title="Copy Link"
+                >
+                  <span className="material-symbols-outlined text-sm">
+                    {copiedField === 'link' ? 'check' : 'content_copy'}
+                  </span>
+                </button>
+              </div>
+              {copiedField === 'link' && (
+                <p className="text-emerald-400 text-xs mt-2 font-medium">Copied to clipboard!</p>
+              )}
+            </div>
+          )}
 
           {/* Info Message */}
           <div className="bg-primary/10 border border-primary/30 rounded-xl p-4 mb-6">

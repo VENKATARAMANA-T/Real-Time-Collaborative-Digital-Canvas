@@ -49,7 +49,8 @@ const chatSocket =  (io, socket) => {
         
         const newMessage = {
           username: username, // From socket context
-          msg: msg            // From payload
+          msg: msg,           // From payload
+          time: new Date()    // Timestamp
         };
 
         // Update DB: Push to array

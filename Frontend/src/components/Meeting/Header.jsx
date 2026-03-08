@@ -8,7 +8,7 @@ const getInitials = (name) => {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 };
 
-function Header({ meetingId, meetingPassword, participants = [], meetingRecorder }) {
+function Header({ meetingId, meetingPassword, shareLink, participants = [], meetingRecorder }) {
   const [showInviteModal, setShowInviteModal] = useState(false);
 
   const activeParticipants = useMemo(
@@ -89,6 +89,7 @@ function Header({ meetingId, meetingPassword, participants = [], meetingRecorder
         <InviteModal
           meetingId={meetingId}
           meetingPassword={meetingPassword}
+          shareLink={shareLink}
           onClose={() => setShowInviteModal(false)}
         />
       )}

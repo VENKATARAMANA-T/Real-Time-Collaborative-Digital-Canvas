@@ -16,6 +16,7 @@ const chatSchema = new mongoose.Schema({
   messages: [{
     username: { type: String, required: true },
     msg: { type: String, required: true },
+    time: { type: Date, default: Date.now }
   }]
 }, 
 { timestamps: true }

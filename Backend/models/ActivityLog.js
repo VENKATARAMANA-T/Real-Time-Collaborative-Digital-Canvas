@@ -12,6 +12,7 @@ const activityLogSchema = new mongoose.Schema({
     enum: [
       // 🔐 Auth & Profile
       'REGISTER_USER',
+      'ACCOUNT_ACTIVATED',
       'LOGIN_SUCCESS',
       'LOGOUT',
       'PASSWORD_RESET_REQUEST',
