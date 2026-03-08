@@ -30,7 +30,11 @@ const Canvas = forwardRef(function Canvas({
   onElementsChange,
   onActionStart,
   selectedElementId,
-  onSelectElement
+  onSelectElement,
+  socket,
+  meetingDbId,
+  isHost = false,
+  isCanvasLocked = false
 }, ref) {
   const canvasRef = useRef(null);
   const helperCanvasRef = useRef(null); // Off-screen canvas for ink layer
@@ -40,6 +44,36 @@ const Canvas = forwardRef(function Canvas({
   const [viewport, setViewport] = useState({ scale: 1, offset: { x: 0, y: 0 } });
   const [isSpacePressed, setIsSpacePressed] = useState(false);
   const [isPanning, setIsPanning] = useState(false);
+  const viewportSyncTimerRef = useRef(null);
+
+  // Host viewport sync: when host zooms/pans in locked mode, broadcast to participants
+  useEffect(() => {
+    if (!socket || !meetingDbId || !isHost || !isCanvasLocked) return;
+    // Throttle emission to avoid flooding
+    if (viewportSyncTimerRef.current) clearTimeout(viewportSyncTimerRef.current);
+    viewportSyncTimerRef.current = setTimeout(() => {
+      socket.emit('host_viewport_sync', {
+        meetingId: meetingDbId,
+        viewport: { scale: viewport.scale, offset: viewport.offset }
+      });
+    }, 50);
+  }, [viewport, socket, meetingDbId, isHost, isCanvasLocked]);
+
+  // Non-host: listen for host viewport sync
+  useEffect(() => {
+    if (!socket || isHost) return;
+    const handleHostViewportSync = (data) => {
+      if (!data?.viewport) return;
+      setViewport({
+        scale: data.viewport.scale,
+        offset: { x: data.viewport.offset.x, y: data.viewport.offset.y }
+      });
+    };
+    socket.on('host_viewport_sync', handleHostViewportSync);
+    return () => {
+      socket.off('host_viewport_sync', handleHostViewportSync);
+    };
+  }, [socket, isHost]);
 
   const [interactionMode, setInteractionMode] = useState('none');
   const [resizeHandle, setResizeHandle] = useState(null);
@@ -296,6 +330,12 @@ const Canvas = forwardRef(function Canvas({
           const fontWeight = style.fontWeight || 'normal';
           const fontStyle = style.fontStyle || 'normal';
 
+          // Clip text to sticky note bounds to prevent overflow
+          ctx.save();
+          ctx.beginPath();
+          ctx.rect(x, y, width, height);
+          ctx.clip();
+
           ctx.font = `${fontStyle} ${fontWeight} ${fontSize}px ${fontFamily}`;
           ctx.fillStyle = style.brushColor || '#000000';
           ctx.textBaseline = 'top';
@@ -323,6 +363,7 @@ const Canvas = forwardRef(function Canvas({
               ctx.fillRect(x + 20, y + 80, width - 80, 6);
             }
           }
+          ctx.restore(); // Remove clip
         }
       } else if (type === 'image') {
         // Image element: draw the loaded image
@@ -1014,7 +1055,7 @@ const Canvas = forwardRef(function Canvas({
                 textAlign: el.style.textAlign || 'left',
                 color: el.style.brushColor || '#000000',
                 lineHeight: '1.5',
-                overflow: 'hidden',
+                overflow: 'auto',
                 transformOrigin: 'top left'
               }}
               className="focus:outline-none"

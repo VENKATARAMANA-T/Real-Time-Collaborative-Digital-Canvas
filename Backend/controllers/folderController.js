@@ -50,8 +50,32 @@ exports.createFolder = async (req, res) => {
 // @access  Private
 exports.getFolders = async (req, res) => {
   try {
-    const folders = await Folder.find({ owner: req.user._id })
+    let folders = await Folder.find({ owner: req.user._id })
       .sort({ createdAt: -1 });
+
+    // Auto-create default "Personal Sketches" folder if it doesn't exist
+    const hasDefault = folders.some(f => f.name === 'Personal Sketches');
+    if (!hasDefault) {
+      const defaultFolder = await Folder.create({
+        name: 'Personal Sketches',
+        owner: req.user._id,
+        isDefault: true
+      });
+      folders = [defaultFolder, ...folders];
+    } else {
+      // Ensure Personal Sketches appears first
+      const idx = folders.findIndex(f => f.name === 'Personal Sketches');
+      if (idx > 0) {
+        const [ps] = folders.splice(idx, 1);
+        folders.unshift(ps);
+      }
+      // Ensure isDefault flag is set (backfill for older accounts)
+      const ps = folders.find(f => f.name === 'Personal Sketches');
+      if (ps && !ps.isDefault) {
+        ps.isDefault = true;
+        await ps.save();
+      }
+    }
 
     res.status(200).json(folders);
   } catch (error) {

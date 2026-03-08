@@ -26,6 +26,11 @@ export default function AuthModal({ isOpen, onClose, mode, onModeChange, isLoadi
     forgot: { error: '', success: '' },
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [activationSent, setActivationSent] = useState(false);
+  const [activationEmail, setActivationEmail] = useState('');
+  const [activationComplete, setActivationComplete] = useState(false);
+  const [linkExpired, setLinkExpired] = useState(false);
+  const [timeLeft, setTimeLeft] = useState(300); // 5 minutes in seconds
 
   const setModeFlash = (targetMode, updates) => {
     setFlashByMode((prev) => ({
@@ -52,9 +57,52 @@ export default function AuthModal({ isOpen, onClose, mode, onModeChange, isLoadi
         register: { error: '', success: '' },
         forgot: { error: '', success: '' },
       });
+      setActivationSent(false);
+      setActivationEmail('');
+      setActivationComplete(false);
+      setLinkExpired(false);
+      setTimeLeft(300);
       clearError();
     }
   }, [isOpen, clearError]);
+
+  // Listen for activation success from the other tab via BroadcastChannel
+  useEffect(() => {
+    if (!activationSent) return;
+
+    let channel;
+    try {
+      channel = new BroadcastChannel('collabcanvas_activation');
+      channel.onmessage = (event) => {
+        if (event.data?.type === 'ACCOUNT_ACTIVATED' && event.data?.success) {
+          setActivationComplete(true);
+        }
+      };
+    } catch (e) { /* BroadcastChannel not supported */ }
+
+    return () => {
+      try { channel?.close(); } catch (e) {}
+    };
+  }, [activationSent]);
+
+  // 5-minute countdown timer for activation link expiry
+  useEffect(() => {
+    if (!activationSent || activationComplete || linkExpired) return;
+
+    setTimeLeft(300);
+    const interval = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          setLinkExpired(true);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [activationSent, activationComplete, linkExpired]);
 
   useEffect(() => {
     if (error) {
@@ -65,6 +113,7 @@ export default function AuthModal({ isOpen, onClose, mode, onModeChange, isLoadi
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
     clearModeFlash('login');
+
     setIsSubmitting(true);
     
     const result = await login({ email: loginEmail, password: loginPassword });
@@ -73,7 +122,6 @@ export default function AuthModal({ isOpen, onClose, mode, onModeChange, isLoadi
     
     if (result.success) {
       setModeFlash('login', { success: 'Login successful! Redirecting to dashboard...' });
-      // Redirect to dashboard after 1 second
       setTimeout(() => {
         onClose();
         navigate('/dashboard');
@@ -86,6 +134,7 @@ export default function AuthModal({ isOpen, onClose, mode, onModeChange, isLoadi
   const handleRegisterSubmit = async (e) => {
     e.preventDefault();
     clearModeFlash('register');
+
     setIsSubmitting(true);
     
     const result = await register({ 
@@ -97,12 +146,10 @@ export default function AuthModal({ isOpen, onClose, mode, onModeChange, isLoadi
     setIsSubmitting(false);
     
     if (result.success) {
-      setModeFlash('register', { success: result.message || 'Registration successful! Please login.' });
-      // Switch to login mode after 2 seconds
-      setTimeout(() => {
-        clearModeFlash('register');
-        onModeChange('login');
-      }, 2000);
+      // Show activation link sent message
+      setActivationSent(true);
+      setActivationEmail(regEmail);
+      setModeFlash('register', { success: result.message || 'Activation link has been sent to your email address. Please check your email to activate your account.' });
     } else {
       setModeFlash('register', { error: result.message || 'Registration failed' });
     }
@@ -137,13 +184,16 @@ export default function AuthModal({ isOpen, onClose, mode, onModeChange, isLoadi
 
   return (
     <div className={`fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/80 backdrop-blur-sm opacity-0 transition-opacity duration-300 ${isOpen ? 'opacity-100' : ''}`}>
-      <button onClick={onClose} className="absolute top-6 right-6 text-white/50 hover:text-white z-50">
-        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-          <path strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
-        </svg>
-      </button>
+      {/* Hide close button when waiting for email activation */}
+      {!(activationSent && mode === 'register' && !activationComplete) && (
+        <button onClick={onClose} className="absolute top-6 right-6 text-white/50 hover:text-white z-50">
+          <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
+          </svg>
+        </button>
+      )}
 
-      <div className="relative w-full max-w-md h-[600px] perspective-1000">
+      <div className="relative w-full max-w-md h-[680px] perspective-1000">
         <div className={`relative w-full h-full transition-transform duration-700 transform-style-3d ${
           mode === 'register' ? 'rotate-y-180' : ''
         }`}>
@@ -201,13 +251,13 @@ export default function AuthModal({ isOpen, onClose, mode, onModeChange, isLoadi
 
               <form onSubmit={handleLoginSubmit} className="space-y-4 flex-1">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Email</label>
+                  <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Email Address</label>
                   <input
                     type="email"
                     value={loginEmail}
                     onChange={(e) => setLoginEmail(e.target.value)}
                     className="w-full px-4 py-3 rounded-lg premium-input text-white text-sm"
-                    placeholder="user@example.com"
+                    placeholder="youremail@gmail.com"
                     required
                   />
                 </div>
@@ -250,7 +300,7 @@ export default function AuthModal({ isOpen, onClose, mode, onModeChange, isLoadi
                 </button>
               </form>
 
-              <div className="text-center mt-6 pt-6 border-t border-slate-700/50">
+              <div className="text-center mt-4 pt-4 border-t border-slate-700/50">
                 <span className="text-slate-400 text-sm">New to CollabCanvas?</span>
                 <button
                   onClick={() => onModeChange('register')}
@@ -265,6 +315,120 @@ export default function AuthModal({ isOpen, onClose, mode, onModeChange, isLoadi
           {/* Register Form */}
           <div className={`absolute inset-0 backface-hidden rotate-y-180 ${mode === 'forgot' ? 'hidden' : ''}`}>
             <div className="w-full h-full glass-card rounded-2xl p-8 flex flex-col shadow-2xl bg-[#0f172a]">
+              
+              {/* Activation Link Sent State */}
+              {activationSent ? (
+                <div className="flex flex-col items-center justify-center flex-1 text-center">
+                  
+                  {/* After activation is complete — real-time update */}
+                  {activationComplete ? (
+                    <>
+                      <div className="w-16 h-16 bg-green-600/20 rounded-full flex items-center justify-center mx-auto mb-6 border-2 border-green-500/30">
+                        <svg className="w-8 h-8 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                        </svg>
+                      </div>
+                      <h3 className="text-2xl font-bold text-white mb-3">Sign Up Successful! 🎉</h3>
+                      <p className="text-green-300 text-sm mb-2">
+                        Your account has been activated successfully.
+                      </p>
+                      <p className="text-slate-400 text-sm mb-8 px-4">
+                        You can now login with your credentials.
+                      </p>
+                      <div className="w-full">
+                        <button
+                          onClick={() => {
+                            setActivationSent(false);
+                            setActivationEmail('');
+                            setActivationComplete(false);
+                            setLinkExpired(false);
+                            setTimeLeft(300);
+                            clearModeFlash('register');
+                            onModeChange('login');
+                          }}
+                          className="w-full py-3.5 rounded-lg bg-green-600 hover:bg-green-500 font-bold text-white transition-all shadow-lg hover:shadow-green-500/25"
+                        >
+                          Go to Login
+                        </button>
+                      </div>
+                    </>
+
+                  ) : linkExpired ? (
+                    /* Link expired state */
+                    <>
+                      <div className="w-16 h-16 bg-orange-600/20 rounded-full flex items-center justify-center mx-auto mb-6 border-2 border-orange-500/30">
+                        <svg className="w-8 h-8 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      </div>
+                      <h3 className="text-2xl font-bold text-white mb-3">Link Expired</h3>
+                      <p className="text-orange-300 text-sm mb-2">
+                        The activation link has expired.
+                      </p>
+                      <p className="text-slate-400 text-sm mb-8 px-4">
+                        The 5-minute window has passed. Please register again to get a new activation link.
+                      </p>
+                      <div className="w-full">
+                        <button
+                          onClick={() => {
+                            setActivationSent(false);
+                            setActivationEmail('');
+                            setActivationComplete(false);
+                            setLinkExpired(false);
+                            setTimeLeft(300);
+                            clearModeFlash('register');
+                            setRegUsername('');
+                            setRegEmail('');
+                            setRegPassword('');
+                            onClose();
+                            window.location.href = '/';
+                          }}
+                          className="w-full py-3.5 rounded-lg bg-orange-600 hover:bg-orange-500 font-bold text-white transition-all shadow-lg hover:shadow-orange-500/25"
+                        >
+                          Go to Home Page
+                        </button>
+                      </div>
+                    </>
+
+                  ) : (
+                    /* Waiting for verification */
+                    <>
+                  <div className="w-16 h-16 bg-cyan-600/20 rounded-full flex items-center justify-center mx-auto mb-6 border-2 border-cyan-500/30">
+                    <svg className="w-8 h-8 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                    </svg>
+                  </div>
+                  <h3 className="text-2xl font-bold text-white mb-3">Check Your Email</h3>
+                  <p className="text-cyan-300 text-sm mb-2">
+                    Activation link sent to your email address
+                  </p>
+                  <p className="text-slate-400 text-sm mb-4 px-4">
+                    We've sent an activation link to <span className="text-cyan-400 font-semibold">{activationEmail}</span>. 
+                    Please open your email and click the link to activate your account.
+                  </p>
+                  
+                  {/* Countdown timer */}
+                  <div className="mb-4 px-4 py-3 rounded-lg bg-slate-800/50 border border-slate-700/50">
+                    <p className="text-xs text-slate-500 uppercase font-semibold mb-1">Link expires in</p>
+                    <p className={`text-2xl font-mono font-bold ${timeLeft <= 60 ? 'text-orange-400' : 'text-cyan-400'}`}>
+                      {String(Math.floor(timeLeft / 60)).padStart(2, '0')}:{String(timeLeft % 60).padStart(2, '0')}
+                    </p>
+                  </div>
+
+                  {/* Animated waiting indicator */}
+                  <div className="flex items-center gap-2 text-slate-500 text-sm">
+                    <div className="flex gap-1">
+                      <span className="w-2 h-2 bg-cyan-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
+                      <span className="w-2 h-2 bg-cyan-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
+                      <span className="w-2 h-2 bg-cyan-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+                    </div>
+                    <span>Waiting for email verification</span>
+                  </div>
+                    </>
+                  )}
+                </div>
+              ) : (
+                <>
               <div className="text-center mb-6">
                 <div className="w-12 h-12 bg-cyan-600/20 rounded-xl flex items-center justify-center mx-auto mb-4 text-cyan-300">
                   <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
@@ -329,13 +493,13 @@ export default function AuthModal({ isOpen, onClose, mode, onModeChange, isLoadi
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Email</label>
+                  <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Email Address</label>
                   <input
                     type="email"
                     value={regEmail}
                     onChange={(e) => setRegEmail(e.target.value)}
                     className="w-full px-4 py-3 rounded-lg premium-input text-white text-sm"
-                    placeholder="user@example.com"
+                    placeholder="youremail@gmail.com"
                     required
                   />
                 </div>
@@ -370,7 +534,7 @@ export default function AuthModal({ isOpen, onClose, mode, onModeChange, isLoadi
                 </button>
               </form>
 
-              <div className="text-center mt-6 pt-6 border-t border-slate-700/50">
+              <div className="text-center mt-3 pt-3 border-t border-slate-700/50">
                 <span className="text-slate-400 text-sm">Already have an account?</span>
                 <button
                   onClick={() => onModeChange('login')}
@@ -379,6 +543,8 @@ export default function AuthModal({ isOpen, onClose, mode, onModeChange, isLoadi
                   Sign In
                 </button>
               </div>
+                </>
+              )}
             </div>
           </div>
 
@@ -441,7 +607,7 @@ export default function AuthModal({ isOpen, onClose, mode, onModeChange, isLoadi
                     value={forgotEmail}
                     onChange={(e) => setForgotEmail(e.target.value)}
                     className="w-full px-4 py-3 rounded-lg premium-input text-white text-sm"
-                    placeholder="user@example.com"
+                    placeholder="youremail@gmail.com"
                     required
                   />
                   <p className="text-xs text-slate-500 mt-2">

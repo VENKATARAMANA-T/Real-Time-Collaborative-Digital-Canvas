@@ -256,6 +256,13 @@ socket.on('webrtc_ice_candidate', (data) => {
       io.to(data.meetingId).emit('canvas_locked', data);
     });
 
+    // Host viewport sync (zoom/pan) for locked canvas mode
+    socket.on('host_viewport_sync', (data) => {
+      // data: { meetingId, viewport: { scale, offset: { x, y } } }
+      if (!data?.meetingId || !data?.viewport) return;
+      socket.to(data.meetingId).emit('host_viewport_sync', data);
+    });
+
     // Live cursor movement (canvas only)
     socket.on('cursor_move', (data) => {
       // data: { meetingId, userId, username, x, y }

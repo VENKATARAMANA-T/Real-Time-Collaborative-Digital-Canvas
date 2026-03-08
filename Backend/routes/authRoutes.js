@@ -6,10 +6,12 @@ const {
 	refreshAccessToken,
 	logoutUser,
 	forgotPassword,
-	resetPassword
+	resetPassword,
+	activateAccount
 } = require('../controllers/authController.js');
 
 router.post('/register', registerUser);
+router.get('/activate/:token', activateAccount);
 router.post('/login', loginUser);
 router.post('/refresh', refreshAccessToken);
 router.post('/logout', logoutUser);

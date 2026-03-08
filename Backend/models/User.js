@@ -13,13 +13,12 @@ const userSchema = new mongoose.Schema({
     unique: true,
     lowercase: true,
     match: [
-      /^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/,
-      'Please provide a valid email (e.g., user@example.com)'
+      /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/,
+      'Please provide a valid email address (e.g., youremail@gmail.com)'
     ]
   },
   password: {
     type: String,
-    required: [true, 'Please provide a password'],
     minlength: [6, 'Password must be at least 6 characters'],
     select: false // Still good practice to hide this by default
   },
@@ -34,6 +33,18 @@ const userSchema = new mongoose.Schema({
   isActive: {
     type: Boolean,
     default: true
+  },
+  isVerified: {
+    type: Boolean,
+    default: false
+  },
+  activationTokenHash: {
+    type: String,
+    default: null
+  },
+  activationTokenExpire: {
+    type: Date,
+    default: null
   },
   
   refreshTokenHash: {

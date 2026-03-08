@@ -21,11 +21,11 @@ const meetingSchema = new mongoose.Schema({
     select: false // Security: Won't return in queries unless explicitly asked
   },
 
-  // 🔗 The Canvas being worked on
+  // 🔗 The Canvas being worked on (optional for scheduled meetings until host starts)
   canvas: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Canvas',
-    required: true
+    default: null
   },
 
   // 👑 The Person who started it
@@ -67,6 +67,13 @@ const meetingSchema = new mongoose.Schema({
     ref: 'User',
     default: null
   },
+
+  // Array of all recordings (supports multiple recordings per meeting)
+  recordings: [{
+    filename: { type: String, required: true },
+    recordedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    uploadedAt: { type: Date, default: Date.now }
+  }],
 
   // � Meeting Status (pending, live, ended)
   status: {
@@ -110,6 +117,12 @@ const meetingSchema = new mongoose.Schema({
   shareLink: {
     type: String,
     required: true
+  },
+
+  // 🏷️ Whether this is an instant meeting (not shown on dashboard lists)
+  isInstant: {
+    type: Boolean,
+    default: false
   },
 
   // 🕒 Time Tracking

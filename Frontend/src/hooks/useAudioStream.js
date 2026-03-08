@@ -492,14 +492,39 @@ export const useAudioStream = ({ micEnabled = true, videoEnabled = true, meeting
       }
     };
 
-    // Connection state
+    // Connection state - handle recovery for dropped connections
     peerConnection.onconnectionstatechange = () => {
-      console.log(`🔌 Connection state: ${peerConnection.connectionState} for ${participantMapRef.current[participantId]}`);
-      if (
-        peerConnection.connectionState === 'failed' ||
-        peerConnection.connectionState === 'disconnected' ||
-        peerConnection.connectionState === 'closed'
-      ) {
+      const state = peerConnection.connectionState;
+      console.log(`🔌 Connection state: ${state} for ${participantMapRef.current[participantId]}`);
+      
+      if (state === 'failed') {
+        // Try ICE restart before giving up
+        console.log(`🔄 ICE restart for ${participantMapRef.current[participantId]}`);
+        (async () => {
+          try {
+            const offer = await peerConnection.createOffer({ iceRestart: true });
+            await peerConnection.setLocalDescription(offer);
+            socket.emit('webrtc_offer', {
+              meetingId,
+              from: userId,
+              to: participantId,
+              offer
+            });
+          } catch (err) {
+            console.error('ICE restart failed:', err.message);
+            cleanupPeerConnection(participantId);
+          }
+        })();
+      } else if (state === 'disconnected') {
+        // Wait briefly — disconnected often self-recovers
+        setTimeout(() => {
+          const currentPc = peerConnectionsRef.current[participantId];
+          if (currentPc && currentPc.connectionState === 'disconnected') {
+            console.log(`⚠️ Peer ${participantMapRef.current[participantId]} still disconnected — cleaning up`);
+            cleanupPeerConnection(participantId);
+          }
+        }, 5000);
+      } else if (state === 'closed') {
         cleanupPeerConnection(participantId);
       }
     };
@@ -652,9 +677,11 @@ export const useAudioStream = ({ micEnabled = true, videoEnabled = true, meeting
   if (!pc) return;
 
   try {
-    // If the remote description isn't set yet, wait 250ms and try again
+    // If the remote description isn't set yet, wait and retry (max 5 attempts)
     if (!pc.remoteDescription || !pc.remoteDescription.type) {
-      setTimeout(() => handlerRefs.current.handleIncomingICECandidate(data), 250);
+      const retryCount = (data._retryCount || 0) + 1;
+      if (retryCount > 5) return; // Give up after 5 retries
+      setTimeout(() => handlerRefs.current.handleIncomingICECandidate({ ...data, _retryCount: retryCount }), 250);
       return;
     }
     await pc.addIceCandidate(new RTCIceCandidate(candidate));
@@ -678,11 +705,20 @@ export const useAudioStream = ({ micEnabled = true, videoEnabled = true, meeting
 
     const others = participants.filter(p => (p._id || p.id) !== userId);
     for (const participant of others) {
-      if (!peerConnectionsRef.current[participant._id]) {
-        await createPeerConnection(participant._id, true);
+      const pid = participant._id || participant.id;
+      const existingPc = peerConnectionsRef.current[pid];
+      
+      // If connection exists but is in a bad state, clean it up first
+      if (existingPc && (existingPc.connectionState === 'failed' || existingPc.connectionState === 'closed' || existingPc.connectionState === 'disconnected')) {
+        console.log(`♻️ Recycling stale connection for ${participant.username}`);
+        cleanupPeerConnection(pid);
+      }
+      
+      if (!peerConnectionsRef.current[pid]) {
+        await createPeerConnection(pid, true);
       }
     }
-  }, [socket, participants, userId, createPeerConnection]);
+  }, [socket, participants, userId, createPeerConnection, cleanupPeerConnection]);
 
   // Setup handlers once
   useEffect(() => {

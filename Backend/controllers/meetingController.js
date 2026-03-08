@@ -6,6 +6,22 @@ const { uploadToCloudinary, deleteFromCloudinary } = require('../config/cloudina
 const fs = require('fs');
 const path = require('path');
 
+// Helper: Check if user is already in an active (live) meeting
+const checkUserInActiveMeeting = async (userId, excludeMeetingId = null) => {
+  const query = {
+    status: 'live',
+    $or: [
+      { host: userId },
+      { 'participants.user': userId, 'participants.leaveTime': null }
+    ]
+  };
+  if (excludeMeetingId) {
+    query._id = { $ne: excludeMeetingId };
+  }
+  const activeMeeting = await Meeting.findOne(query).select('meetingId name').lean();
+  return activeMeeting;
+};
+
 // @desc    Get all meetings for the logged-in user (as host or participant)
 // @route   GET /api/meetings
 // @access  Private
@@ -21,21 +37,28 @@ exports.getUserMeetings = async (req, res) => {
       ]
     })
       .populate('host', 'username email')
+      .select('+password')
       .sort({ createdAt: -1 })
       .lean();
 
     console.log('[getUserMeetings] Total meetings found:', meetings.length, '| Statuses:', meetings.map(m => m.status));
 
-    // Categorize meetings
-    const live = [];
-    const pending = [];
+    // Categorize meetings into active / upcoming / ended
+    // Instant meetings are excluded from active and upcoming lists
+    const now = new Date();
+    const fiveMinFromNow = new Date(now.getTime() + 5 * 60 * 1000);
+    const active = [];
+    const upcoming = [];
     const ended = [];
 
     for (const m of meetings) {
+      const isHost = m.host._id.toString() === userId.toString();
       const item = {
         _id: m._id,
         name: m.name || 'Untitled Meeting',
         meetingId: m.meetingId,
+        password: isHost ? m.password : undefined,
+        shareLink: m.shareLink || undefined,
         status: m.status,
         host: m.host,
         participantCount: (m.participants || []).length,
@@ -47,17 +70,27 @@ exports.getUserMeetings = async (req, res) => {
         startTime: m.startTime,
         endTime: m.endTime,
         createdAt: m.createdAt,
-        isHost: m.host._id.toString() === userId.toString(),
+        isHost,
+        isInstant: !!m.isInstant,
         hasRecording: !!m.recordingPath
       };
 
-      if (m.status === 'live') live.push(item);
-      else if (m.status === 'pending') pending.push(item);
-      else ended.push(item);
+      if (m.status === 'ended') {
+        ended.push(item);
+      } else if (m.isInstant) {
+        // Instant meetings are not shown in dashboard lists
+        continue;
+      } else if (m.status === 'live' || (m.startTime && new Date(m.startTime) <= fiveMinFromNow)) {
+        // Live meetings or scheduled meetings within 5 min → active
+        active.push(item);
+      } else {
+        // Scheduled meetings more than 5 min away → upcoming
+        upcoming.push(item);
+      }
     }
 
-    console.log('[getUserMeetings] Returning => live:', live.length, 'pending:', pending.length, 'ended:', ended.length);
-    res.status(200).json({ success: true, live, pending, ended });
+    console.log('[getUserMeetings] Returning => active:', active.length, 'upcoming:', upcoming.length, 'ended:', ended.length);
+    res.status(200).json({ success: true, active, upcoming, ended });
   } catch (error) {
     console.error('[getUserMeetings] ERROR:', error.message);
     res.status(500).json({ message: 'Server Error', error: error.message });
@@ -96,6 +129,12 @@ exports.createInstantMeeting = async (req, res) => {
   try {
     const { title, meetingId, password, name } = req.body;
 
+    // Check if user is already in an active meeting
+    const existingMeeting = await checkUserInActiveMeeting(req.user._id);
+    if (existingMeeting) {
+      return res.status(409).json({ message: `You are already in an active meeting (${existingMeeting.meetingId}). Please leave it before starting a new one.` });
+    }
+
     const meetingName = name && name.trim() ? name.trim() : 'Untitled Meeting';
 
     // 1. Create New Canvas for instant meeting
@@ -112,7 +151,7 @@ exports.createInstantMeeting = async (req, res) => {
     const linkToken = crypto.randomBytes(32).toString('hex'); 
     const clientUrl = process.env.CLIENT_URL || 'http://localhost:3000';
 
-    // 3. Create Meeting with PENDING status using provided credentials
+    // 3. Create Meeting with LIVE status (instant meetings go live immediately)
     const meeting = await Meeting.create({
       name: meetingName,
       meetingId,
@@ -122,14 +161,10 @@ exports.createInstantMeeting = async (req, res) => {
       canvas: canvasToUse._id,
       host: req.user._id,
       participants: [],
-      status: 'pending', // Instant meetings start in pending
+      status: 'live',
+      isInstant: true,
       startTime: new Date()
     });
-
-    // Emit real-time meeting update to the host's dashboard
-    if (req.app && req.app.get('io')) {
-      req.app.get('io').to(req.user._id.toString()).emit('meeting_update', { type: 'created', meeting: { _id: meeting._id, name: meetingName, meetingId: meeting.meetingId, status: meeting.status, startTime: meeting.startTime, createdAt: meeting.createdAt } });
-    }
 
     res.status(201).json({
       success: true,
@@ -167,14 +202,46 @@ exports.startMeeting = async (req, res) => {
       return res.status(400).json({ message: 'Meeting is already started or ended' });
     }
 
+    // Check if host is already in another active meeting
+    const existingMeeting = await checkUserInActiveMeeting(req.user._id, meeting._id);
+    if (existingMeeting) {
+      return res.status(409).json({ message: `You are already in an active meeting (${existingMeeting.meetingId}). Please leave it before starting this one.` });
+    }
+
+    // If no canvas yet (scheduled meetings), create one now
+    if (!meeting.canvas) {
+      const canvasToUse = await Canvas.create({
+        title: meeting.name || `Meeting Canvas - ${new Date().toLocaleDateString()}`,
+        owner: req.user._id,
+        data: {},
+        folder: null,
+        isMeetingCanvas: true
+      });
+      meeting.canvas = canvasToUse._id;
+    }
+
     // Transition from pending to live
     meeting.status = 'live';
     await meeting.save();
 
+    // Notify all participants' dashboards that this meeting is now live
+    if (req.app && req.app.get('io')) {
+      const io = req.app.get('io');
+      // Notify the host's own dashboard
+      io.to(req.user._id.toString()).emit('meeting_update', { type: 'started', meetingId: meeting._id });
+      // Notify each participant's dashboard
+      for (const p of meeting.participants) {
+        if (p.user) {
+          io.to(p.user.toString()).emit('meeting_update', { type: 'started', meetingId: meeting._id });
+        }
+      }
+    }
+
     res.status(200).json({
       success: true,
       message: 'Meeting started successfully',
-      meetingStatus: 'live'
+      meetingStatus: 'live',
+      canvasId: meeting.canvas
     });
 
   } catch (error) {
@@ -190,33 +257,41 @@ exports.createMeeting = async (req, res) => {
     const { canvasId, title, name, scheduledDate, scheduledTime } = req.body;
     const meetingName = name && name.trim() ? name.trim() : 'Untitled Meeting';
     const isScheduled = scheduledDate && scheduledTime;
-    let canvasToUse;
 
-    // 1. Determine Canvas (New vs Existing)
-    if (canvasId) {
-      // Use Existing: Check ownership
-      canvasToUse = await Canvas.findOne({ _id: canvasId, owner: req.user._id });
-      if (!canvasToUse) {
-        return res.status(404).json({ message: 'Canvas not found or you are not the owner' });
+    // For non-scheduled (live) meetings, check if user is already in an active meeting
+    if (!isScheduled) {
+      const existingMeeting = await checkUserInActiveMeeting(req.user._id);
+      if (existingMeeting) {
+        return res.status(409).json({ message: `You are already in an active meeting (${existingMeeting.meetingId}). Please leave it before creating a new one.` });
       }
-    } else {
-      // Create New: "Untitled Meeting Canvas" with unique timestamp
-      const timestamp = Date.now();
-      canvasToUse = await Canvas.create({
-        title: title || meetingName || `Meeting Canvas - ${new Date().toLocaleDateString()} (${timestamp})`,
-        owner: req.user._id,
-        data: {},
-        folder: null,
-        isMeetingCanvas: true
-      });
+    }
+    let canvasToUse = null;
+
+    // 1. Determine Canvas — only create now for NON-scheduled (live) meetings
+    //    Scheduled meetings get their canvas when the host starts/joins.
+    if (!isScheduled) {
+      if (canvasId) {
+        canvasToUse = await Canvas.findOne({ _id: canvasId, owner: req.user._id });
+        if (!canvasToUse) {
+          return res.status(404).json({ message: 'Canvas not found or you are not the owner' });
+        }
+      } else {
+        const timestamp = Date.now();
+        canvasToUse = await Canvas.create({
+          title: title || meetingName || `Meeting Canvas - ${new Date().toLocaleDateString()} (${timestamp})`,
+          owner: req.user._id,
+          data: {},
+          folder: null,
+          isMeetingCanvas: true
+        });
+      }
     }
 
     // 2. Generate Meeting Credentials
-    const meetingId = uuidv4().slice(0, 8); // e.g., "a1b2-c3d4"
-    const password = crypto.randomBytes(3).toString('hex'); // e.g., "a7f39b"
+    const meetingId = uuidv4().slice(0, 8);
+    const password = crypto.randomBytes(3).toString('hex');
     
-    // 3. Generate Secure Link Token (URL-Safe replacement for Bcrypt)
-    // This creates a long, random string that is impossible to guess
+    // 3. Generate Secure Link Token
     const linkToken = crypto.randomBytes(32).toString('hex'); 
     const clientUrl = process.env.CLIENT_URL || 'http://localhost:3000';
 
@@ -228,14 +303,14 @@ exports.createMeeting = async (req, res) => {
       startTime = new Date(`${scheduledDate}T${scheduledTime}`);
     }
 
-    // 5. Create Meeting
+    // 5. Create Meeting (canvas may be null for scheduled meetings)
     const meeting = await Meeting.create({
       name: meetingName,
       meetingId,
       password,
-      linkToken, // Store the token
-      shareLink: `${clientUrl}/join-link/${linkToken}`, // Link uses the secure token, NOT the ID
-      canvas: canvasToUse._id,
+      linkToken,
+      shareLink: `${clientUrl}/join-link/${linkToken}`,
+      canvas: canvasToUse ? canvasToUse._id : null,
       host: req.user._id,
       participants: [],
       status: meetingStatus,
@@ -252,9 +327,9 @@ exports.createMeeting = async (req, res) => {
       meetingDbId: meeting._id,
       meetingId: meeting.meetingId,
       meetingName: meetingName,
-      password: password, // Show this ONCE to the host
+      password: password,
       shareLink: meeting.shareLink,
-      canvasId: canvasToUse._id,
+      canvasId: canvasToUse ? canvasToUse._id : null,
       role: 'host',
       permission: 'edit',
       status: meeting.status
@@ -286,6 +361,17 @@ exports.joinMeetingByLink = async (req, res) => {
 
     // 2. Allow all users (host and non-host) to join as long as meeting is not ended
     const isHost = meeting.host.toString() === req.user._id.toString();
+
+    // 2.5 Non-host users can only join after the host has started the meeting
+    if (!isHost && meeting.status === 'pending') {
+      return res.status(403).json({ message: 'The host has not started this meeting yet. Please wait for the host to start.' });
+    }
+
+    // 2.6 Check if user is already in another active meeting
+    const existingActiveMeeting = await checkUserInActiveMeeting(req.user._id, meeting._id);
+    if (existingActiveMeeting) {
+      return res.status(409).json({ message: `You are already in an active meeting (${existingActiveMeeting.meetingId}). Please leave it before joining another.` });
+    }
 
     // 3. Add to participants if not already joined
     const existingParticipant = meeting.participants.find(
@@ -347,6 +433,17 @@ exports.joinMeeting = async (req, res) => {
 
     // 3. Allow all users (host and non-host) to join as long as meeting is not ended
     const isHost = meeting.host.toString() === req.user._id.toString();
+
+    // 3.5 Non-host users can only join after the host has started the meeting
+    if (!isHost && meeting.status === 'pending') {
+      return res.status(403).json({ message: 'The host has not started this meeting yet. Please wait for the host to start.' });
+    }
+
+    // 3.6 Check if user is already in another active meeting
+    const existingActiveMeeting = await checkUserInActiveMeeting(req.user._id, meeting._id);
+    if (existingActiveMeeting) {
+      return res.status(409).json({ message: `You are already in an active meeting (${existingActiveMeeting.meetingId}). Please leave it before joining another.` });
+    }
 
     // 4. Add User to Participants (if not already joined)
     const existingParticipant = meeting.participants.find(
@@ -608,6 +705,7 @@ exports.updateHostSettings = async (req, res) => {
 exports.getMeetingDetails = async (req, res) => {
   try {
     const meeting = await Meeting.findById(req.params.id)
+      .select('+password')
       .populate('host', 'username name email')
       .populate('participants.user', 'username name email');
 
@@ -654,6 +752,8 @@ exports.getMeetingDetails = async (req, res) => {
         status: meeting.status,
         host: meeting.host,
         participants: formattedParticipants,
+        password: isHost ? meeting.password : undefined,
+        shareLink: meeting.shareLink || undefined,
         hostSettings: {
           isAllMuted: meeting.isAllMuted ?? false,
           isAllVideoOff: meeting.isAllVideoOff ?? false,
@@ -740,19 +840,6 @@ exports.uploadRecording = async (req, res) => {
     const fileSizeMB = (req.file.size / (1024 * 1024)).toFixed(2);
     console.log(`[uploadRecording] File received: ${req.file.originalname}, size: ${fileSizeMB}MB, mimetype: ${req.file.mimetype}`);
 
-    // Delete old local recording if it exists
-    if (meeting.recordingPath) {
-      const oldFilePath = path.join(__dirname, '..', 'uploads', 'recordings', meeting.recordingPath);
-      try {
-        if (fs.existsSync(oldFilePath)) {
-          fs.unlinkSync(oldFilePath);
-          console.log(`[uploadRecording] Deleted old recording: ${oldFilePath}`);
-        }
-      } catch (delErr) {
-        console.warn('[uploadRecording] Failed to delete old recording:', delErr.message);
-      }
-    }
-
     // Save recording to local disk (uploads/recordings/)
     const filename = `recording_${req.params.id}_${Date.now()}.webm`;
     const recordingsDir = path.join(__dirname, '..', 'uploads', 'recordings');
@@ -763,9 +850,17 @@ exports.uploadRecording = async (req, res) => {
     fs.writeFileSync(filePath, req.file.buffer);
     console.log(`[uploadRecording] Saved locally: ${filePath}`);
 
-    // Store just the filename — served via /api/recordings/:filename
+    // Keep legacy single field updated (for backward compat)
     meeting.recordingPath = filename;
     meeting.recordedBy = req.user._id;
+
+    // Push to recordings array (supports multiple recordings)
+    meeting.recordings.push({
+      filename: filename,
+      recordedBy: req.user._id,
+      uploadedAt: new Date()
+    });
+
     await meeting.save();
 
     res.status(200).json({
@@ -782,12 +877,41 @@ exports.uploadRecording = async (req, res) => {
 // @desc    Get Meeting Notes (Chat + Recording info for ended meetings)
 // @route   GET /api/meetings/:id/notes
 // @access  Private (Host or Participant)
+// @desc    Cancel/Delete a pending meeting permanently
+// @route   DELETE /api/meetings/:id/cancel
+// @access  Private (Host Only)
+exports.cancelMeeting = async (req, res) => {
+  try {
+    const meeting = await Meeting.findById(req.params.id);
+    if (!meeting) {
+      return res.status(404).json({ message: 'Meeting not found' });
+    }
+    if (meeting.host.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'Only the host can cancel this meeting' });
+    }
+    if (meeting.status === 'live') {
+      return res.status(400).json({ message: 'Cannot cancel a live meeting. End it first.' });
+    }
+    // Delete canvas if one was created
+    if (meeting.canvas) {
+      await Canvas.findByIdAndDelete(meeting.canvas);
+    }
+    await Meeting.findByIdAndDelete(meeting._id);
+    console.log('[cancelMeeting] Meeting', meeting.meetingId, 'cancelled and deleted by host', req.user._id.toString());
+    res.status(200).json({ success: true, message: 'Meeting cancelled and removed' });
+  } catch (error) {
+    console.error('[cancelMeeting] ERROR:', error.message);
+    res.status(500).json({ message: 'Server Error', error: error.message });
+  }
+};
+
 exports.getMeetingNotes = async (req, res) => {
   try {
     const meeting = await Meeting.findById(req.params.id)
       .populate('host', 'username name email')
       .populate('participants.user', 'username name email')
-      .populate('recordedBy', 'username name');
+      .populate('recordedBy', 'username name')
+      .populate('recordings.recordedBy', 'username name');
 
     if (!meeting) {
       return res.status(404).json({ message: 'Meeting not found' });
@@ -805,6 +929,29 @@ exports.getMeetingNotes = async (req, res) => {
     // Get chat history
     const Chat = require('../models/Chat');
     const chat = await Chat.findOne({ meetingId: meeting._id });
+
+    // Build recordings array (merge legacy single recording + new array)
+    let allRecordings = [];
+    if (meeting.recordings && meeting.recordings.length > 0) {
+      allRecordings = meeting.recordings.map(r => ({
+        filename: r.filename,
+        recordedBy: r.recordedBy ? {
+          _id: r.recordedBy._id,
+          username: r.recordedBy.username || r.recordedBy.name
+        } : null,
+        uploadedAt: r.uploadedAt
+      }));
+    } else if (meeting.recordingPath) {
+      // Fallback: legacy single recording
+      allRecordings = [{
+        filename: meeting.recordingPath,
+        recordedBy: meeting.recordedBy ? {
+          _id: meeting.recordedBy._id,
+          username: meeting.recordedBy.username || meeting.recordedBy.name
+        } : null,
+        uploadedAt: meeting.endTime || meeting.updatedAt
+      }];
+    }
 
     res.status(200).json({
       success: true,
@@ -826,6 +973,7 @@ exports.getMeetingNotes = async (req, res) => {
           leaveTime: p.leaveTime
         })),
         recordingPath: meeting.recordingPath || null,
+        recordings: allRecordings,
         recordedBy: meeting.recordedBy ? {
           _id: meeting.recordedBy._id,
           username: meeting.recordedBy.username || meeting.recordedBy.name

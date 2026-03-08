@@ -14,7 +14,28 @@ const redoStack = {};
 // Structure: { "meetingId": [elements...] }
 const liveCanvasState = {};
 
+// Auto-save timers for periodic canvas state persistence
+const autoSaveTimers = {};
+
 const canvasSocket = (io, socket) => {
+
+    // Auto-save canvas state to DB (debounced, 30s after last change)
+    const scheduleAutoSave = (meetingId) => {
+        if (autoSaveTimers[meetingId]) clearTimeout(autoSaveTimers[meetingId]);
+        autoSaveTimers[meetingId] = setTimeout(async () => {
+            try {
+                const elements = liveCanvasState[meetingId];
+                if (!elements || elements.length === 0) return;
+                const meeting = await Meeting.findById(meetingId);
+                if (!meeting || !meeting.canvas) return;
+                await Canvas.findByIdAndUpdate(meeting.canvas, { $set: { data: { elements } } });
+                console.log(`💾 Auto-saved canvas for meeting ${meetingId} (${elements.length} elements)`);
+            } catch (err) {
+                console.error(`Auto-save failed for meeting ${meetingId}:`, err.message);
+            }
+            delete autoSaveTimers[meetingId];
+        }, 30000);
+    };
 
     // =================================================================
     // 1. GENERIC CANVAS OPERATION (Draw, Text, Shape, etc.)
@@ -124,14 +145,35 @@ const canvasSocket = (io, socket) => {
         if (!meetingId || !Array.isArray(elements)) return;
         liveCanvasState[meetingId] = elements;
         socket.to(meetingId).emit('canvas_state_updated', { elements });
+        scheduleAutoSave(meetingId);
     });
 
-    socket.on('request_canvas_state', (data) => {
+    socket.on('request_canvas_state', async (data) => {
         const meetingId = typeof data === 'string' ? data : data?.meetingId;
         if (!meetingId) return;
-        socket.emit('canvas_state_snapshot', {
-            elements: liveCanvasState[meetingId] || []
-        });
+        // If we have in-memory state, use it
+        if (liveCanvasState[meetingId] && liveCanvasState[meetingId].length > 0) {
+            socket.emit('canvas_state_snapshot', {
+                elements: liveCanvasState[meetingId]
+            });
+            return;
+        }
+        // Fall back to DB (server restart or first joiner)
+        try {
+            const meeting = await Meeting.findById(meetingId);
+            if (meeting?.canvas) {
+                const canvas = await Canvas.findById(meeting.canvas);
+                const savedElements = canvas?.data?.elements || (Array.isArray(canvas?.data) ? canvas.data : null);
+                if (savedElements && savedElements.length > 0) {
+                    liveCanvasState[meetingId] = savedElements;
+                    socket.emit('canvas_state_snapshot', { elements: savedElements });
+                    return;
+                }
+            }
+        } catch (err) {
+            console.error('Failed to load canvas from DB:', err.message);
+        }
+        socket.emit('canvas_state_snapshot', { elements: [] });
     });
 
     // =================================================================
@@ -162,15 +204,20 @@ const canvasSocket = (io, socket) => {
 
             // 4. GET FINAL DATA FROM RAM (Using liveCanvasHistory)
             const finalHistory = liveCanvasHistory[meetingId] || [];
+            const finalElements = liveCanvasState[meetingId] || [];
 
             // 5. UPDATE CANVAS DOCUMENT
             if (canvasId) {
+                const updateData = { data: finalHistory };
+                if (finalElements.length > 0) {
+                    updateData.data = { elements: finalElements, history: finalHistory };
+                }
                 await Canvas.findByIdAndUpdate(
                     canvasId,
-                    { $set: { data: finalHistory } }, // Save the operations log
+                    { $set: updateData },
                     { new: true }
                 );
-                console.log(`Canvas ${canvasId} saved with ${finalHistory.length} operations.`);
+                console.log(`Canvas ${canvasId} saved with ${finalElements.length} elements and ${finalHistory.length} operations.`);
             }
 
             // 6. CLOSE THE MEETING
@@ -182,6 +229,10 @@ const canvasSocket = (io, socket) => {
             delete liveCanvasHistory[meetingId];
             delete redoStack[meetingId];
             delete liveCanvasState[meetingId];
+            if (autoSaveTimers[meetingId]) {
+                clearTimeout(autoSaveTimers[meetingId]);
+                delete autoSaveTimers[meetingId];
+            }
 
             // 8. NOTIFY CLIENTS
             io.to(meetingId).emit('meeting_ended_client');

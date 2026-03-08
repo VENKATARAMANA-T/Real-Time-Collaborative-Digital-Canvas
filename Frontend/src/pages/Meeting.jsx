@@ -39,7 +39,10 @@ function Meeting() {
   const [meetingPassword, setMeetingPassword] = useState(
     location.state?.meetingPassword ? location.state.meetingPassword : (sessionStorage.getItem('meetingPassword') || '')
   );
-  const meetingRole = location.state?.role || sessionStorage.getItem('meetingRole') || 'participant';
+  const [shareLink, setShareLink] = useState('');
+  const _initialRole = location.state?.role || sessionStorage.getItem('meetingRole') || 'participant';
+  const [effectiveRole, setEffectiveRole] = useState(_initialRole);
+  const meetingRole = effectiveRole;
   const [meetingPermission, setMeetingPermission] = useState(
     location.state?.permission || sessionStorage.getItem('meetingPermission') || 'view'
   );
@@ -174,6 +177,27 @@ useEffect(() => {
         if (response.success && response.meeting?.meetingId && !meetingId) {
           setMeetingId(response.meeting.meetingId);
           sessionStorage.setItem('meetingId', response.meeting.meetingId);
+        }
+        if (response.success && response.meeting?.password && !meetingPassword) {
+          setMeetingPassword(response.meeting.password);
+          sessionStorage.setItem('meetingPassword', response.meeting.password);
+        }
+        if (response.success && response.meeting?.shareLink) {
+          setShareLink(response.meeting.shareLink);
+        }
+        if (response.success && response.meeting?.host) {
+          const hostId = response.meeting.host._id || response.meeting.host;
+          const isHost = hostId.toString() === userId?.toString();
+          if (isHost && effectiveRole !== 'host') {
+            setEffectiveRole('host');
+            sessionStorage.setItem('meetingRole', 'host');
+            setMeetingPermission('edit');
+            sessionStorage.setItem('meetingPermission', 'edit');
+          }
+        }
+        if (response.success && response.meeting?.status) {
+          setMeetingStatus(response.meeting.status);
+          sessionStorage.setItem('meetingStatus', response.meeting.status);
         }
         // Load host settings from DB (persisted state for late joiners)
         if (response.success && response.meeting?.hostSettings) {
@@ -444,6 +468,8 @@ useEffect(() => {
   const mediaRecorderRef = useRef(null);
   const recordedChunksRef = useRef([]);
   const recordingStreamRef = useRef(null);
+  const recordingAudioCtxRef = useRef(null);
+  const recordingMicStreamRef = useRef(null);
 
   const getCursorColor = useCallback((id) => {
     if (!id) return '#38bdf8';
@@ -579,6 +605,7 @@ useEffect(() => {
 
   const {
     localVideoStream,
+    remoteStreams,
     audioError,
     videoError,
     stopLocalStream,
@@ -1905,7 +1932,7 @@ const handleUserJoined = (data) => {
 
     try {
       // Capture the current browser tab (auto-select, no picker dialog)
-      const stream = await navigator.mediaDevices.getDisplayMedia({
+      const displayStream = await navigator.mediaDevices.getDisplayMedia({
         video: { displaySurface: 'browser', frameRate: { ideal: 30 } },
         audio: true,
         preferCurrentTab: true,
@@ -1914,10 +1941,77 @@ const handleUserJoined = (data) => {
         monitorTypeSurfaces: 'exclude'
       });
 
-      recordingStreamRef.current = stream;
+      // Request a dedicated microphone stream for recording (independent of meeting mic toggle)
+      let recordingMicStream = null;
+      try {
+        recordingMicStream = await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+        });
+      } catch (micErr) {
+        console.warn('Could not get mic for recording, continuing without local mic:', micErr);
+      }
+
+      // Mix all audio sources (display audio + dedicated mic + remote participants)
+      const audioCtx = new AudioContext();
+      // Resume AudioContext — browsers suspend it by default
+      if (audioCtx.state === 'suspended') {
+        await audioCtx.resume();
+      }
+      recordingAudioCtxRef.current = audioCtx;
+      const destination = audioCtx.createMediaStreamDestination();
+      let hasAnyAudioSource = false;
+
+      // Add display/tab audio if present
+      const displayAudioTracks = displayStream.getAudioTracks();
+      if (displayAudioTracks.length > 0) {
+        const displayAudioSource = audioCtx.createMediaStreamSource(
+          new MediaStream(displayAudioTracks)
+        );
+        displayAudioSource.connect(destination);
+        hasAnyAudioSource = true;
+      }
+
+      // Add dedicated recording microphone
+      if (recordingMicStream) {
+        const micTracks = recordingMicStream.getAudioTracks();
+        if (micTracks.length > 0) {
+          const micSource = audioCtx.createMediaStreamSource(recordingMicStream);
+          micSource.connect(destination);
+          hasAnyAudioSource = true;
+        }
+      }
+
+      // Add remote participant audio streams (other users' voices via WebRTC)
+      if (remoteStreams && Object.keys(remoteStreams).length > 0) {
+        Object.entries(remoteStreams).forEach(([pid, remoteStream]) => {
+          try {
+            const remoteTracks = remoteStream.getAudioTracks().filter(t => t.readyState === 'live');
+            if (remoteTracks.length > 0) {
+              const remoteSource = audioCtx.createMediaStreamSource(
+                new MediaStream(remoteTracks)
+              );
+              remoteSource.connect(destination);
+              hasAnyAudioSource = true;
+            }
+          } catch (e) {
+            console.warn(`Could not add remote audio for participant ${pid}:`, e);
+          }
+        });
+      }
+
+      // Build the recording stream: display video + mixed audio (if any)
+      const combinedTracks = [...displayStream.getVideoTracks()];
+      if (hasAnyAudioSource) {
+        combinedTracks.push(...destination.stream.getAudioTracks());
+      }
+      const combinedStream = new MediaStream(combinedTracks);
+
+      recordingStreamRef.current = displayStream;
+      // Store the dedicated mic stream for cleanup
+      recordingMicStreamRef.current = recordingMicStream;
       recordedChunksRef.current = [];
 
-      const mediaRecorder = new MediaRecorder(stream, {
+      const mediaRecorder = new MediaRecorder(combinedStream, {
         mimeType: MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
           ? 'video/webm;codecs=vp9,opus'
           : 'video/webm'
@@ -1930,10 +2024,18 @@ const handleUserJoined = (data) => {
       };
 
       mediaRecorder.onstop = async () => {
-        // Cleanup stream
+        // Cleanup stream and audio context
         if (recordingStreamRef.current) {
           recordingStreamRef.current.getTracks().forEach(t => t.stop());
           recordingStreamRef.current = null;
+        }
+        if (recordingMicStreamRef.current) {
+          recordingMicStreamRef.current.getTracks().forEach(t => t.stop());
+          recordingMicStreamRef.current = null;
+        }
+        if (recordingAudioCtxRef.current) {
+          recordingAudioCtxRef.current.close().catch(() => {});
+          recordingAudioCtxRef.current = null;
         }
 
         setIsLocalRecording(false);
@@ -1964,7 +2066,7 @@ const handleUserJoined = (data) => {
       };
 
       // Handle user clicking "Stop sharing" in the browser prompt
-      stream.getVideoTracks()[0].onended = () => {
+      displayStream.getVideoTracks()[0].onended = () => {
         if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
           mediaRecorderRef.current.stop();
         }
@@ -1993,7 +2095,7 @@ const handleUserJoined = (data) => {
         setNotificationKey(prev => prev + 1);
       }
     }
-  }, [isLocalRecording, hostSettings.isScreenRecordingAllowed, meetingRecorder, userId, socket, meetingDbId, user]);
+  }, [isLocalRecording, hostSettings.isScreenRecordingAllowed, meetingRecorder, userId, socket, meetingDbId, user, remoteStreams]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -2005,6 +2107,14 @@ const handleUserJoined = (data) => {
       if (recordingStreamRef.current) {
         recordingStreamRef.current.getTracks().forEach(t => t.stop());
         recordingStreamRef.current = null;
+      }
+      if (recordingMicStreamRef.current) {
+        recordingMicStreamRef.current.getTracks().forEach(t => t.stop());
+        recordingMicStreamRef.current = null;
+      }
+      if (recordingAudioCtxRef.current) {
+        recordingAudioCtxRef.current.close().catch(() => {});
+        recordingAudioCtxRef.current = null;
       }
       cleanupScreenSharePCs();
       stopScreenShareStream();
@@ -2065,6 +2175,7 @@ const handleUserJoined = (data) => {
       <Header
         meetingId={meetingId}
         meetingPassword={meetingPassword}
+        shareLink={shareLink}
         participants={headerParticipants}
         meetingRecorder={meetingRecorder}
       />
@@ -2170,6 +2281,10 @@ const handleUserJoined = (data) => {
               onCanvasClick={handleCanvasClick}
               selectedElementId={selectedElementId}
               onSelectElement={handleSelectionChange}
+              socket={socket}
+              meetingDbId={meetingDbId}
+              isHost={meetingRole === 'host'}
+              isCanvasLocked={!isCollaborativeMode}
             />
           </>
         )}

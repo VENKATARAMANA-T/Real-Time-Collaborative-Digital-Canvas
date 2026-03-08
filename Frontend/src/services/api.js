@@ -31,6 +31,7 @@ api.interceptors.response.use(
     const authPaths = [
       '/auth/login',
       '/auth/register',
+      '/auth/activate',
       '/auth/forgot-password',
       '/auth/reset-password',
       '/auth/refresh',
@@ -108,6 +109,11 @@ export const authAPI = {
 
   forgotPassword: async (email) => {
     const response = await api.post('/auth/forgot-password', { email });
+    return response.data;
+  },
+
+  activateAccount: async (token) => {
+    const response = await api.get(`/auth/activate/${token}`);
     return response.data;
   },
 
@@ -209,6 +215,11 @@ export const meetingAPI = {
 
   end: async (meetingDbId, canvasData = {}) => {
     const response = await api.put(`/meetings/${meetingDbId}/end`, canvasData);
+    return response.data;
+  },
+
+  cancel: async (meetingDbId) => {
+    const response = await api.delete(`/meetings/${meetingDbId}/cancel`);
     return response.data;
   },
 
@@ -371,6 +382,21 @@ export const uploadAPI = {
     const response = await api.delete('/upload/delete', {
       data: { publicId, resourceType },
     });
+    return response.data;
+  },
+};
+
+export const notificationAPI = {
+  getAll: async () => {
+    const response = await api.get('/notifications');
+    return response.data;
+  },
+  markAsRead: async (id) => {
+    const response = await api.put(`/notifications/${id}/read`);
+    return response.data;
+  },
+  markAllAsRead: async () => {
+    const response = await api.put('/notifications/read-all');
     return response.data;
   },
 };

@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
-import { userAPI, canvasAPI, meetingAPI, folderAPI } from '../services/api';
+import { userAPI, canvasAPI, meetingAPI, folderAPI, notificationAPI } from '../services/api';
 import { useSocket } from '../hooks/useSocket.js';
 
 const ACTIVITY_ICON_MAP = {
@@ -90,6 +90,9 @@ export default function Dashboard() {
   const [activeView, setActiveView] = useState('home');
   const [activeFolderId, setActiveFolderId] = useState(null);
   const [canvasFilter, setCanvasFilter] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchReady, setSearchReady] = useState(false);
   const [settingsTab, setSettingsTab] = useState('profile');
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [profileUsername, setProfileUsername] = useState('');
@@ -115,6 +118,12 @@ export default function Dashboard() {
   const [scheduleTime, setScheduleTime] = useState('');
   const [scheduleError, setScheduleError] = useState('');
   const [meetingTransition, setMeetingTransition] = useState({ active: false, label: '' });
+  const [activeJoinMeetingId, setActiveJoinMeetingId] = useState(null);
+  const [activeJoinAudio, setActiveJoinAudio] = useState(true);
+  const [activeJoinVideo, setActiveJoinVideo] = useState(true);
+  const [cancelConfirmMeetingId, setCancelConfirmMeetingId] = useState(null);
+  const [inviteMeeting, setInviteMeeting] = useState(null);
+  const notifAudioCtxRef = useRef(null);
   const [joinMeetingFlash, setJoinMeetingFlash] = useState(null);
   const [createMeetingFlash, setCreateMeetingFlash] = useState(null);
   const [instantMeetingDetails, setInstantMeetingDetails] = useState(null);
@@ -124,8 +133,8 @@ export default function Dashboard() {
   const [meetingName, setMeetingName] = useState('');
 
   // Real meetings data
-  const [liveMeetings, setLiveMeetings] = useState([]);
-  const [pendingMeetings, setPendingMeetings] = useState([]);
+  const [activeMeetings, setActiveMeetings] = useState([]);
+  const [upcomingMeetings, setUpcomingMeetings] = useState([]);
   const [endedMeetings, setEndedMeetings] = useState([]);
   const [isLoadingMeetings, setIsLoadingMeetings] = useState(false);
 
@@ -153,11 +162,51 @@ export default function Dashboard() {
   const [activityLogs, setActivityLogs] = useState([]);
   const [isLoadingActivity, setIsLoadingActivity] = useState(false);
 
+  // Notification state (meeting reminders only)
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  // Search debounce: show loading briefly then results
+  useEffect(() => {
+    const q = searchQuery.replace(/\s+/g, ' ').trim();
+    if (!q) { setIsSearching(false); setSearchReady(false); return; }
+    setIsSearching(true);
+    setSearchReady(false);
+    const timer = setTimeout(() => { setIsSearching(false); setSearchReady(true); }, 400);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Clear search when switching views
+  useEffect(() => { setSearchQuery(''); }, [activeView]);
+
   useEffect(() => {
     if (user) {
       setProfileUsername(user.username || '');
       setProfileEmail(user.email || '');
     }
+  }, [user]);
+
+  // Fetch persisted notifications from backend
+  useEffect(() => {
+    const fetchNotifications = async () => {
+      if (!user) return;
+      try {
+        const data = await notificationAPI.getAll();
+        const notifs = (data.notifications || []).map((n) => ({
+          _id: n._id,
+          meetingId: n.meetingId,
+          name: n.meetingName,
+          startTime: n.startTime,
+          read: n.read,
+          createdAt: n.createdAt
+        }));
+        setNotifications(notifs);
+        setUnreadCount(notifs.filter((n) => !n.read).length);
+      } catch (err) {
+        console.error('Failed to fetch notifications:', err);
+      }
+    };
+    fetchNotifications();
   }, [user]);
 
   // Fetch activity logs
@@ -190,6 +239,45 @@ export default function Dashboard() {
     }
   }, [user, socket]);
 
+  // ─── Real-time meeting reminder notifications via socket ───
+  useEffect(() => {
+    if (!socket) return;
+    const handler = (data) => {
+      console.log('[Dashboard] meeting_reminder received:', data);
+      setNotifications((prev) => {
+        // Avoid duplicates
+        if (prev.some((n) => n._id === data._id)) return prev;
+        return [{ ...data, read: false }, ...prev];
+      });
+      setUnreadCount((c) => c + 1);
+      playNotificationSound();
+    };
+    socket.on('meeting_reminder', handler);
+    return () => { socket.off('meeting_reminder', handler); };
+  }, [socket]);
+
+  const markNotificationRead = async (id) => {
+    try {
+      await notificationAPI.markAsRead(id);
+      setNotifications((prev) =>
+        prev.map((n) => (n._id === id ? { ...n, read: true } : n))
+      );
+      setUnreadCount((c) => Math.max(0, c - 1));
+    } catch (err) {
+      console.error('Failed to mark notification as read:', err);
+    }
+  };
+
+  const markAllNotificationsRead = async () => {
+    try {
+      await notificationAPI.markAllAsRead();
+      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+      setUnreadCount(0);
+    } catch (err) {
+      console.error('Failed to mark all notifications as read:', err);
+    }
+  };
+
   // ─── Meeting fetch logic (simplified, direct fetch) ───
   const pollTimerRef = useRef(null);
 
@@ -198,9 +286,9 @@ export default function Dashboard() {
     if (!user) return;
     try {
       const data = await meetingAPI.getMyMeetings();
-      console.log('[Dashboard] fetchMeetings => live:', data.live?.length, 'pending:', data.pending?.length, 'ended:', data.ended?.length);
-      setLiveMeetings(data.live || []);
-      setPendingMeetings(data.pending || []);
+      console.log('[Dashboard] fetchMeetings => active:', data.active?.length, 'upcoming:', data.upcoming?.length, 'ended:', data.ended?.length);
+      setActiveMeetings(data.active || []);
+      setUpcomingMeetings(data.upcoming || []);
       setEndedMeetings(data.ended || []);
       return data;
     } catch (err) {
@@ -308,28 +396,12 @@ export default function Dashboard() {
       if (!user) return;
       setIsLoadingFolders(true);
       try {
-        let allFolders = await folderAPI.getAll();
-        
-        // Check if "Personal Sketches" default folder exists
-        let personalFolder = allFolders.find(f => f.name === 'Personal Sketches' && f.isDefault);
-        // Fallback: match by name alone (for users registered before isDefault was added)
-        if (!personalFolder) {
-          personalFolder = allFolders.find(f => f.name === 'Personal Sketches');
-        }
-        
-        // If not, create it (handle race condition if already created)
-        if (!personalFolder) {
-          try {
-            personalFolder = await folderAPI.create({ name: 'Personal Sketches' });
-          } catch (createErr) {
-            // Folder may have been created by a concurrent request (React StrictMode)
-            allFolders = await folderAPI.getAll();
-            personalFolder = allFolders.find(f => f.name === 'Personal Sketches');
-          }
-          allFolders = await folderAPI.getAll();
-        }
-        
+        // Backend getFolders auto-creates "Personal Sketches" if missing
+        const allFolders = await folderAPI.getAll();
         setFolders(allFolders || []);
+        
+        // Find the default folder for reference
+        const personalFolder = allFolders.find(f => f.name === 'Personal Sketches');
         if (personalFolder) setDefaultFolderId(personalFolder._id);
       } catch (error) {
         console.error('Failed to fetch folders:', error);
@@ -513,6 +585,44 @@ export default function Dashboard() {
     }, 1100);
   };
 
+  const handleCancelMeeting = async (meetingDbId) => {
+    try {
+      await meetingAPI.cancel(meetingDbId);
+      setActiveMeetings((prev) => prev.filter((m) => m._id !== meetingDbId));
+      setUpcomingMeetings((prev) => prev.filter((m) => m._id !== meetingDbId));
+    } catch (error) {
+      console.error('Failed to cancel meeting:', error);
+    } finally {
+      setCancelConfirmMeetingId(null);
+    }
+  };
+
+  const playNotificationSound = () => {
+    try {
+      if (!notifAudioCtxRef.current) notifAudioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
+      const ctx = notifAudioCtxRef.current;
+      const now = ctx.currentTime;
+      // Two-tone "ding-dong" doorbell style notification
+      const tones = [
+        { freq: 830, start: 0, dur: 0.15 },
+        { freq: 660, start: 0.18, dur: 0.22 },
+      ];
+      tones.forEach(({ freq, start, dur }) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0, now + start);
+        gain.gain.linearRampToValueAtTime(0.45, now + start + 0.015);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + start + dur);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now + start);
+        osc.stop(now + start + dur + 0.05);
+      });
+    } catch (_) { /* audio not available */ }
+  };
+
   const navigateToMeeting = (meetingData, mediaState) => {
     // Handle both object and string formats for meetingData
     const meetingId = typeof meetingData === 'string' 
@@ -555,7 +665,8 @@ export default function Dashboard() {
         })
       );
     } catch (error) {
-      showMeetingFlash(setJoinMeetingFlash, 'Invalid meeting details');
+      const msg = error?.response?.data?.message || 'Invalid meeting details';
+      showMeetingFlash(setJoinMeetingFlash, msg);
     }
   };
 
@@ -606,7 +717,8 @@ export default function Dashboard() {
         scheduledTime: scheduleTime
       });
     } catch (error) {
-      showMeetingFlash(setCreateMeetingFlash, 'Failed to generate meeting details');
+      const msg = error?.response?.data?.message || 'Failed to generate meeting details';
+      showMeetingFlash(setCreateMeetingFlash, msg);
     } finally {
       setIsScheduledGenerating(false);
     }
@@ -653,7 +765,8 @@ export default function Dashboard() {
       }
     } catch (error) {
       console.error('Error:', error);
-      showMeetingFlash(setCreateMeetingFlash, 'Failed to create meeting');
+      const msg = error?.response?.data?.message || 'Failed to create meeting';
+      showMeetingFlash(setCreateMeetingFlash, msg);
       setIsInstantGenerating(false);
     }
   };
@@ -1015,6 +1128,11 @@ export default function Dashboard() {
             >
               <span className="material-icons mr-3">notifications</span>
               Notifications
+              {unreadCount > 0 && (
+                <span className="ml-auto bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[20px] h-5 flex items-center justify-center px-1.5">
+                  {unreadCount}
+                </span>
+              )}
             </button>
             <button
               className={`w-full flex items-center px-4 py-3 text-sm font-semibold rounded-xl transition-all ${
@@ -1073,15 +1191,25 @@ export default function Dashboard() {
                   <span className="material-icons absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors">search</span>
                   <input
                     className="w-full pl-10 pr-4 py-2 bg-[#111827] border border-[#1f2a3b] focus:border-primary focus:ring-0 rounded-xl text-sm transition-all text-slate-200"
-                    placeholder="Search canvases, meetings or templates..."
+                    placeholder="Search for Canvases or Meetings..."
                     type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
                   />
                 </div>
               </div>
               <div className="flex items-center space-x-4">
-                <button className="p-2 text-slate-400 hover:bg-[#111827] rounded-full transition-all relative">
+                <button
+                  className="p-2 text-slate-400 hover:bg-[#111827] rounded-full transition-all relative"
+                  onClick={() => setActiveView('notifications')}
+                  type="button"
+                >
                   <span className="material-icons">notifications</span>
-                  <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-[#0f172a]"></span>
+                  {unreadCount > 0 && (
+                    <span className="absolute top-1 right-1 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 border-2 border-[#0f172a]">
+                      {unreadCount}
+                    </span>
+                  )}
                 </button>
                 <button className="p-2 text-slate-400 hover:bg-[#111827] rounded-full transition-all">
                   <span className="material-icons">help_outline</span>
@@ -1089,11 +1217,19 @@ export default function Dashboard() {
               </div>
             </header>
           ) : activeView === 'meetings' ? (
-            <header className="h-16 flex-shrink-0 flex items-center justify-between px-8 bg-[#1a242f] border-b border-[#2d3a4b]">
-              <div className="flex items-center space-x-6">
-                <h2 className="text-xl font-bold">Meetings</h2>
+            <header className="h-16 flex-shrink-0 flex items-center justify-between px-8 bg-[#0f172a] border-b border-[#1f2a3b]">
+              <div className="flex-1 max-w-xl">
+                <div className="relative group">
+                  <span className="material-icons absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors">search</span>
+                  <input
+                    className="w-full pl-10 pr-4 py-2 bg-[#111827] border border-[#1f2a3b] focus:border-primary focus:ring-0 rounded-xl text-sm transition-all text-slate-200"
+                    placeholder="Search for Meetings..."
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
+                </div>
               </div>
-              <div className="flex items-center space-x-4"></div>
             </header>
           ) : activeView === 'notifications' ? (
             <header className="h-16 flex-shrink-0 flex items-center px-8 bg-[#1a242f] border-b border-[#2d3a4b]">
@@ -1133,19 +1269,17 @@ export default function Dashboard() {
               <div className="flex items-center space-x-4"></div>
             </header>
           ) : (
-            <header className="h-16 flex-shrink-0 flex items-center justify-start px-8 bg-[#1a242f] border-b border-[#2d3a4b]">
-              <div className="w-full max-w-md relative group">
-                <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-xl group-focus-within:text-primary transition-colors">
-                  search
-                </span>
-                <input
-                  className="w-full h-10 bg-[#101922]/40 border border-[#2d3a4b] rounded-xl pl-10 pr-4 text-sm text-slate-200 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                  placeholder="Search canvases..."
-                  type="text"
-                />
-                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center space-x-1 pointer-events-none">
-                  <kbd className="px-1.5 py-0.5 text-[10px] font-bold text-slate-500 bg-[#2d3a4b]/50 rounded border border-[#2d3a4b]">Ctrl</kbd>
-                  <kbd className="px-1.5 py-0.5 text-[10px] font-bold text-slate-500 bg-[#2d3a4b]/50 rounded border border-[#2d3a4b]">K</kbd>
+            <header className="h-16 flex-shrink-0 flex items-center justify-between px-8 bg-[#0f172a] border-b border-[#1f2a3b]">
+              <div className="flex-1 max-w-xl">
+                <div className="relative group">
+                  <span className="material-icons absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors">search</span>
+                  <input
+                    className="w-full pl-10 pr-4 py-2 bg-[#111827] border border-[#1f2a3b] focus:border-primary focus:ring-0 rounded-xl text-sm transition-all text-slate-200"
+                    placeholder="Search for Canvases..."
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
                 </div>
               </div>
             </header>
@@ -1180,6 +1314,109 @@ export default function Dashboard() {
             )}
             {activeView === 'home' ? (
               <>
+                {(() => {
+                  const q = searchQuery.replace(/\s+/g, ' ').trim().toLowerCase();
+                  if (q && isSearching) {
+                    return (
+                      <div className="flex flex-col items-center justify-center py-20">
+                        <div className="relative w-12 h-12 mb-4">
+                          <div className="absolute inset-0 rounded-full border-4 border-[#1f2a3b]"></div>
+                          <div className="absolute inset-0 rounded-full border-4 border-primary border-t-transparent animate-spin"></div>
+                        </div>
+                        <p className="text-slate-400 text-sm">Searching...</p>
+                      </div>
+                    );
+                  }
+                  if (q && searchReady) {
+                    const matchedCanvases = savedCanvases.filter(c => (c.title || '').toLowerCase().includes(q));
+                    const matchedMeetings = [...activeMeetings, ...upcomingMeetings, ...endedMeetings].filter(m => (m.name || '').toLowerCase().includes(q) || (m.meetingId || '').toLowerCase().includes(q));
+                    const noResults = matchedCanvases.length === 0 && matchedMeetings.length === 0;
+                    return (
+                      <div>
+                        <div className="flex items-center justify-between mb-6">
+                          <p className="text-sm text-slate-400">
+                            Results for "<span className="text-white font-semibold">{searchQuery.trim()}</span>"
+                            <span className="ml-2 text-slate-500">({matchedCanvases.length + matchedMeetings.length} found)</span>
+                          </p>
+                          <button className="text-xs text-slate-400 hover:text-white transition-colors" onClick={() => setSearchQuery('')} type="button">
+                            <span className="material-icons text-sm align-middle mr-1">close</span>Clear search
+                          </button>
+                        </div>
+                        {noResults ? (
+                          <div className="text-center py-20">
+                            <span className="material-icons text-5xl text-slate-700 mb-3 block">search_off</span>
+                            <p className="text-slate-400 text-lg font-medium">No results found</p>
+                            <p className="text-slate-600 text-sm mt-1">Try a different search term</p>
+                          </div>
+                        ) : (
+                          <>
+                            {matchedCanvases.length > 0 && (
+                              <section className="mb-10">
+                                <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-4">Canvases ({matchedCanvases.length})</h3>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                                  {matchedCanvases.map((canvas) => (
+                                    <div key={canvas._id} className={`group bg-[#111827] border border-[#1f2a3b] rounded-xl overflow-hidden hover:shadow-lg transition-all border-b-4 ${canvas.isMeetingCanvas ? 'border-b-amber-400/60' : 'border-b-emerald-400/60'}`}>
+                                      <div className="h-40 bg-[#0b1220] relative overflow-hidden">
+                                        <div className={`absolute inset-0 bg-gradient-to-br ${canvas.isMeetingCanvas ? 'from-amber-500/10' : 'from-emerald-500/10'} to-transparent`}></div>
+                                        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 backdrop-blur-sm">
+                                          <button className="px-4 py-2 bg-primary text-white text-xs font-bold rounded-lg shadow-lg" onClick={() => navigate(canvas.isMeetingCanvas ? `/meeting-canvas/${canvas._id}` : `/paint/${canvas._id}`)} type="button">Open Editor</button>
+                                        </div>
+                                        <img alt={`${canvas.title} Preview`} className="absolute inset-0 w-full h-full object-cover opacity-50 pointer-events-none" src={canvas.thumbnail || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='200'%3E%3Crect fill='%23111827' width='400' height='200'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%234b5563' font-family='sans-serif' font-size='16'%3ENo Preview%3C/text%3E%3C/svg%3E"} />
+                                        {canvas.isMeetingCanvas && (
+                                          <div className="absolute top-3 right-3 z-10"><span className="px-2 py-1 bg-[#101922]/80 text-[10px] font-bold rounded border uppercase text-amber-400 border-amber-400/30">Meeting</span></div>
+                                        )}
+                                      </div>
+                                      <div className="p-4">
+                                        <h4 className="font-bold text-sm truncate mb-1">{canvas.title || 'Untitled Canvas'}</h4>
+                                        <div className="flex items-center text-xs text-slate-500 space-x-2">
+                                          <span className="material-icons text-sm">schedule</span>
+                                          <span>{new Date(canvas.updatedAt).toLocaleString()}</span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </section>
+                            )}
+                            {matchedMeetings.length > 0 && (
+                              <section>
+                                <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-4">Meetings ({matchedMeetings.length})</h3>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                                  {matchedMeetings.map((meeting) => (
+                                    <div key={meeting._id} className={`group bg-[#1a242f] border border-[#2d3a4b] rounded-xl p-5 hover:shadow-lg transition-all border-l-4 ${meeting.status === 'live' ? 'border-l-emerald-500' : meeting.status === 'ended' ? 'border-l-slate-600' : 'border-l-primary'}`}>
+                                      <div className="flex justify-between items-start mb-3">
+                                        <div className={`w-10 h-10 ${meeting.status === 'live' ? 'bg-emerald-500/10 text-emerald-500' : meeting.status === 'ended' ? 'bg-slate-500/10 text-slate-500' : 'bg-primary/10 text-primary'} rounded-lg flex items-center justify-center`}>
+                                          <span className="material-icons">{meeting.status === 'live' ? 'videocam' : meeting.status === 'ended' ? 'history' : 'event_available'}</span>
+                                        </div>
+                                        <span className={`px-2 py-1 text-[10px] font-bold rounded uppercase ${meeting.status === 'live' ? 'bg-emerald-900/30 text-emerald-400' : meeting.status === 'ended' ? 'bg-slate-800 text-slate-400' : 'bg-blue-900/30 text-blue-400'}`}>
+                                          {meeting.status === 'live' ? 'Live' : meeting.status === 'ended' ? 'Ended' : 'Scheduled'}
+                                        </span>
+                                      </div>
+                                      <h4 className="font-bold text-base mb-1 text-start">{meeting.name}</h4>
+                                      <p className="text-xs text-slate-500 mb-3">ID: {meeting.meetingId}</p>
+                                      <div className="flex items-center justify-between pt-3 border-t border-[#2d3a4b]">
+                                        <span className="text-xs text-slate-500"><span className="material-icons text-sm mr-1 align-middle">group</span>{meeting.participants?.length || 0}</span>
+                                        <button className="text-primary text-xs font-bold hover:underline" type="button" onClick={() => {
+                                          if (meeting.status === 'ended') { navigate(`/meeting-notes/${meeting._id}`); }
+                                          else { navigate(`/meeting/${meeting.meetingId}`, { state: { meetingDbId: meeting._id, meetingId: meeting.meetingId, role: meeting.isHost ? 'host' : 'participant', permission: meeting.isHost ? 'edit' : 'view', status: meeting.status } }); }
+                                        }}>
+                                          {meeting.status === 'ended' ? 'View Notes' : meeting.status === 'live' ? 'Join Now' : 'View Details'} <span className="material-icons text-sm ml-1 align-middle">arrow_forward</span>
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </section>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
+                {!searchQuery.replace(/\s+/g, ' ').trim() && (
+                <>
                 <section className="mb-10 text-start">
                   <h1 className="text-3xl font-bold mb-2 ">Welcome back, {displayName}</h1>
                   <p className="text-slate-400">Ready to visualize your next big idea?</p>
@@ -1278,9 +1515,12 @@ export default function Dashboard() {
                 </button>
               </div>
 
-              {activeTab === 'recent' && (
+              {activeTab === 'recent' && (() => {
+                const q = searchQuery.replace(/\s+/g, ' ').trim().toLowerCase();
+                const recentCanvases = savedCanvases.slice(0, 4).filter(c => !q || (c.title || '').toLowerCase().includes(q));
+                return (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                  {savedCanvases.slice(0, 4).map((canvas) => (
+                  {recentCanvases.map((canvas) => (
                     <div key={canvas._id} className={`group bg-[#111827] border border-[#1f2a3b] rounded-xl overflow-hidden hover:shadow-lg transition-all border-b-4 ${canvas.isMeetingCanvas ? 'border-b-amber-400/60' : 'border-b-emerald-400/60'}`}>
                       <div className="h-40 bg-[#0b1220] relative overflow-hidden">
                         <div className={`absolute inset-0 bg-gradient-to-br ${canvas.isMeetingCanvas ? 'from-amber-500/10' : 'from-emerald-500/10'} to-transparent`}></div>
@@ -1372,28 +1612,32 @@ export default function Dashboard() {
                       </div>
                     </div>
                   ))}
-                  {savedCanvases.length === 0 && (
+                  {recentCanvases.length === 0 && (
                     <div className="col-span-4 text-center py-12">
-                      <p className="text-slate-500">No canvases yet. Create your first canvas!</p>
+                      <p className="text-slate-500">{searchQuery.trim() ? 'No canvases match your search.' : 'No canvases yet. Create your first canvas!'}</p>
                     </div>
                   )}
                 </div>
-              )}
+                );
+              })()}
 
-              {activeTab === 'upcoming' && (
+              {activeTab === 'upcoming' && (() => {
+                const q = searchQuery.replace(/\s+/g, ' ').trim().toLowerCase();
+                const filteredMeetings = [...activeMeetings, ...upcomingMeetings].filter(m => !q || (m.name || '').toLowerCase().includes(q) || (m.meetingId || '').toLowerCase().includes(q));
+                return (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                   {isLoadingMeetings ? (
                     <div className="col-span-3 text-center py-12">
                       <span className="material-icons animate-spin text-primary text-3xl">refresh</span>
                       <p className="text-slate-500 mt-2">Loading meetings...</p>
                     </div>
-                  ) : [...liveMeetings, ...pendingMeetings].length === 0 ? (
+                  ) : filteredMeetings.length === 0 ? (
                     <div className="col-span-3 text-center py-12">
                       <span className="material-icons text-slate-600 text-4xl block mb-2">event_busy</span>
-                      <p className="text-slate-500">No upcoming meetings. Schedule one to get started!</p>
+                      <p className="text-slate-500">{q ? 'No meetings match your search.' : 'No upcoming meetings. Schedule one to get started!'}</p>
                     </div>
                   ) : (
-                    [...liveMeetings, ...pendingMeetings].map((meeting) => (
+                    filteredMeetings.map((meeting) => (
                       <div key={meeting._id} className={`group bg-white dark:bg-surface-dark border border-slate-200 dark:border-border-dark rounded-xl p-5 hover:shadow-lg transition-all border-l-4 ${meeting.status === 'live' ? 'border-l-emerald-500' : 'border-l-primary'}`}>
                         <div className="flex justify-between items-start mb-4">
                           <div className={`w-10 h-10 ${meeting.status === 'live' ? 'bg-emerald-500/10' : 'bg-primary/10'} rounded-lg flex items-center justify-center ${meeting.status === 'live' ? 'text-emerald-500' : 'text-primary'}`}>
@@ -1415,7 +1659,15 @@ export default function Dashboard() {
                           <button
                             className="text-primary text-xs font-bold hover:underline flex items-center"
                             type="button"
-                            onClick={() => navigate(`/meeting/${meeting.meetingId}`)}
+                            onClick={() => navigate(`/meeting/${meeting.meetingId}`, {
+                              state: {
+                                meetingDbId: meeting._id,
+                                meetingId: meeting.meetingId,
+                                role: meeting.isHost ? 'host' : 'participant',
+                                permission: meeting.isHost ? 'edit' : 'view',
+                                status: meeting.status
+                              }
+                            })}
                           >
                             {meeting.status === 'live' ? 'Join Now' : 'View Details'} <span className="material-icons text-sm ml-1">arrow_forward</span>
                           </button>
@@ -1424,12 +1676,16 @@ export default function Dashboard() {
                     ))
                   )}
                 </div>
-              )}
+                );
+              })()}
 
-              {activeTab === 'completed' && (
+              {activeTab === 'completed' && (() => {
+                const q = searchQuery.replace(/\s+/g, ' ').trim().toLowerCase();
+                const completedMeetings = endedMeetings.filter(m => !q || (m.name || '').toLowerCase().includes(q) || (m.meetingId || '').toLowerCase().includes(q));
+                return (
                 <>
                   <div className="flex items-center justify-between mb-4">
-                    <p className="text-xs text-slate-500">{endedMeetings.length} completed meeting{endedMeetings.length !== 1 ? 's' : ''}</p>
+                    <p className="text-xs text-slate-500">{completedMeetings.length} completed meeting{completedMeetings.length !== 1 ? 's' : ''}</p>
                     <button
                       className="text-xs text-slate-400 hover:text-primary flex items-center gap-1 transition-colors"
                       type="button"
@@ -1445,13 +1701,13 @@ export default function Dashboard() {
                       <span className="material-icons animate-spin text-primary text-3xl">refresh</span>
                       <p className="text-slate-500 mt-2">Loading meetings...</p>
                     </div>
-                  ) : endedMeetings.length === 0 ? (
+                  ) : completedMeetings.length === 0 ? (
                     <div className="col-span-3 text-center py-12">
                       <span className="material-icons text-slate-600 text-4xl block mb-2">history</span>
-                      <p className="text-slate-500">No completed meetings yet.</p>
+                      <p className="text-slate-500">{q ? 'No completed meetings match your search.' : 'No completed meetings yet.'}</p>
                     </div>
                   ) : (
-                    endedMeetings.map((meeting) => (
+                    completedMeetings.map((meeting) => (
                       <div key={meeting._id} className="group bg-white dark:bg-surface-dark border border-slate-200 dark:border-border-dark rounded-xl p-5 hover:shadow-lg transition-all">
                         <div className="flex justify-between items-start mb-4">
                           <div className="w-10 h-10 bg-slate-100 dark:bg-slate-800 rounded-lg flex items-center justify-center text-slate-500">
@@ -1484,7 +1740,8 @@ export default function Dashboard() {
                   )}
                 </div>
                 </>
-              )}
+                );
+              })()}
 
               <div className="mt-12">
                 <div className="flex items-center justify-between mb-6">
@@ -1492,12 +1749,12 @@ export default function Dashboard() {
                   <button className="text-primary text-sm font-bold hover:underline" onClick={() => setActiveView('meetings')}>View All Meetings</button>
                 </div>
                 <div className="space-y-3">
-                  {[...liveMeetings, ...pendingMeetings].length === 0 ? (
+                  {[...activeMeetings, ...upcomingMeetings].length === 0 ? (
                     <div className="text-center py-8">
                       <p className="text-slate-500 text-sm">No meetings scheduled.</p>
                     </div>
                   ) : (
-                    [...liveMeetings, ...pendingMeetings].slice(0, 3).map((meeting) => (
+                    [...activeMeetings, ...upcomingMeetings].slice(0, 3).map((meeting) => (
                       <div key={meeting._id} className="flex items-center justify-between p-4 bg-[#111827] border border-[#1f2a3b] rounded-xl group hover:border-primary transition-all">
                         <div className="flex items-center space-x-4">
                           <div className={`w-12 h-12 ${meeting.status === 'live' ? 'bg-emerald-500/10' : 'bg-primary/10'} rounded-lg flex items-center justify-center ${meeting.status === 'live' ? 'text-emerald-400' : 'text-primary'}`}>
@@ -1514,7 +1771,15 @@ export default function Dashboard() {
                           {meeting.status === 'live' ? (
                             <button
                               className="px-4 py-2 bg-primary text-white text-xs font-bold rounded-lg hover:bg-primary/90 transition-all"
-                              onClick={() => navigate(`/meeting/${meeting.meetingId}`)}
+                              onClick={() => navigate(`/meeting/${meeting.meetingId}`, {
+                                state: {
+                                  meetingDbId: meeting._id,
+                                  meetingId: meeting.meetingId,
+                                  role: meeting.isHost ? 'host' : 'participant',
+                                  permission: meeting.isHost ? 'edit' : 'view',
+                                  status: meeting.status
+                                }
+                              })}
                             >
                               Join Now
                             </button>
@@ -1530,116 +1795,311 @@ export default function Dashboard() {
                 </div>
               </div>
                 </section>
+                </>
+                )}
               </>
             ) : activeView === 'meetings' ? (
               <>
-                {/* Active & Upcoming Meetings */}
-                <section className="mb-12">
-                  <div className="flex items-center mb-6">
-                    <div className="w-2 h-2 rounded-full bg-primary mr-3"></div>
-                    <h3 className="text-sm font-bold uppercase tracking-widest text-slate-500">Active & Upcoming</h3>
-                  </div>
-                  <div className="space-y-6">
-                    {isLoadingMeetings ? (
-                      <div className="text-center py-12">
-                        <span className="material-icons animate-spin text-primary text-3xl">refresh</span>
-                        <p className="text-slate-500 mt-2">Loading meetings...</p>
+                {(() => {
+                  const q = searchQuery.replace(/\s+/g, ' ').trim().toLowerCase();
+                  if (q && isSearching) {
+                    return (
+                      <div className="flex flex-col items-center justify-center py-20">
+                        <div className="relative w-12 h-12 mb-4">
+                          <div className="absolute inset-0 rounded-full border-4 border-[#1f2a3b]"></div>
+                          <div className="absolute inset-0 rounded-full border-4 border-primary border-t-transparent animate-spin"></div>
+                        </div>
+                        <p className="text-slate-400 text-sm">Searching...</p>
                       </div>
-                    ) : [...liveMeetings, ...pendingMeetings].length === 0 ? (
-                      <div className="text-center py-12">
-                        <span className="material-icons text-slate-600 text-5xl block mb-3">event_busy</span>
-                        <p className="text-slate-400 text-lg font-medium">No active or upcoming meetings</p>
-                        <p className="text-slate-500 text-sm mt-1">Create or schedule a meeting to get started</p>
-                      </div>
-                    ) : (
-                      [...liveMeetings, ...pendingMeetings].map((meeting) => (
-                        meeting.status === 'live' ? (
-                          <div key={meeting._id} className="relative group p-6 bg-[#1a242f] border-l-4 border-primary rounded-xl border border-[#2d3a4b]">
-                            <div className="absolute top-6 right-6 flex items-center bg-emerald-500/10 text-emerald-400 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider">
-                              <span className="relative flex h-2 w-2 mr-2">
-                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                              </span>
-                              Live Now
-                            </div>
-                            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
-                              <div className="flex-1">
-                                <h4 className="text-xl font-bold mb-2 text-start">{meeting.name}</h4>
-                                <div className="flex items-center text-slate-400 text-sm space-x-4">
-                                  <span className="flex items-center">
-                                    <span className="material-symbols-outlined text-sm mr-1">schedule</span>
-                                    {meeting.startTime ? new Date(meeting.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'In Progress'}
-                                  </span>
-                                  <span className="flex items-center">
-                                    <span className="material-symbols-outlined text-sm mr-1">tag</span>
-                                    {meeting.meetingId}
-                                  </span>
-                                </div>
-                                <div className="mt-4 flex items-center">
-                                  <span className="text-xs text-slate-500">
-                                    <span className="material-icons text-sm mr-1 align-middle">group</span>
-                                    {meeting.participants?.length || 0} Participants
-                                  </span>
-                                </div>
-                              </div>
-                              <div className="flex-shrink-0">
-                                <button
-                                  className="w-full md:w-auto px-8 py-4 bg-primary text-white font-bold rounded-xl hover:scale-105 transition-all shadow-xl shadow-primary/30 flex items-center justify-center"
-                                  type="button"
-                                  onClick={() => navigate(`/meeting/${meeting.meetingId}`)}
-                                >
-                                  <span className="material-icons mr-2">videocam</span>
-                                  Join Now
-                                </button>
-                              </div>
-                            </div>
+                    );
+                  }
+                  if (q && searchReady) {
+                    const allMeetings = [...activeMeetings, ...upcomingMeetings, ...endedMeetings];
+                    const matchedMeetings = allMeetings.filter(m => (m.name || '').toLowerCase().includes(q) || (m.meetingId || '').toLowerCase().includes(q));
+                    return (
+                      <div>
+                        <div className="flex items-center justify-between mb-6">
+                          <p className="text-sm text-slate-400">Results for "<span className="text-white font-semibold">{searchQuery.trim()}</span>" <span className="ml-2 text-slate-500">({matchedMeetings.length} found)</span></p>
+                          <button className="text-xs text-slate-400 hover:text-white transition-colors" onClick={() => setSearchQuery('')} type="button"><span className="material-icons text-sm align-middle mr-1">close</span>Clear search</button>
+                        </div>
+                        {matchedMeetings.length === 0 ? (
+                          <div className="text-center py-20">
+                            <span className="material-icons text-5xl text-slate-700 mb-3 block">search_off</span>
+                            <p className="text-slate-400 text-lg font-medium">No meetings found</p>
+                            <p className="text-slate-600 text-sm mt-1">Try a different search term</p>
                           </div>
                         ) : (
-                          <div key={meeting._id} className="p-6 bg-[#1a242f] rounded-xl border border-[#2d3a4b] hover:border-slate-600 transition-all">
-                            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
-                              <div className="flex-1">
-                                <div className="flex items-center mb-1">
-                                  <span className="text-[10px] font-bold text-primary uppercase tracking-widest mr-3">Scheduled</span>
-                                  <div className="h-px flex-1 bg-[#2d3a4b]"></div>
-                                </div>
-                                <h4 className="text-xl font-bold mb-2 text-start">{meeting.name}</h4>
-                                <div className="flex items-center text-slate-400 text-sm space-x-4">
-                                  <span className="flex items-center">
-                                    <span className="material-symbols-outlined text-sm mr-1">schedule</span>
-                                    {meeting.startTime ? new Date(meeting.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'TBD'}
-                                  </span>
-                                  <span className="flex items-center">
-                                    <span className="material-symbols-outlined text-sm mr-1">tag</span>
-                                    {meeting.meetingId}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {matchedMeetings.map((meeting) => (
+                              <div key={meeting._id} className={`group bg-[#1a242f] border border-[#2d3a4b] rounded-xl p-5 hover:shadow-lg transition-all border-l-4 ${meeting.status === 'live' ? 'border-l-emerald-500' : meeting.status === 'ended' ? 'border-l-slate-600' : 'border-l-primary'}`}>
+                                <div className="flex justify-between items-start mb-3">
+                                  <div className={`w-10 h-10 ${meeting.status === 'live' ? 'bg-emerald-500/10 text-emerald-500' : meeting.status === 'ended' ? 'bg-slate-500/10 text-slate-500' : 'bg-primary/10 text-primary'} rounded-lg flex items-center justify-center`}>
+                                    <span className="material-icons">{meeting.status === 'live' ? 'videocam' : meeting.status === 'ended' ? 'history' : 'event_available'}</span>
+                                  </div>
+                                  <span className={`px-2 py-1 text-[10px] font-bold rounded uppercase ${meeting.status === 'live' ? 'bg-emerald-900/30 text-emerald-400' : meeting.status === 'ended' ? 'bg-slate-800 text-slate-400' : 'bg-blue-900/30 text-blue-400'}`}>
+                                    {meeting.status === 'live' ? 'Live' : meeting.status === 'ended' ? 'Ended' : 'Scheduled'}
                                   </span>
                                 </div>
-                                <div className="mt-4 flex items-center">
-                                  <span className="text-xs text-slate-500">
-                                    <span className="material-icons text-sm mr-1 align-middle">group</span>
-                                    {meeting.participants?.length || 0} Participants
-                                  </span>
+                                <h4 className="font-bold text-base mb-1 text-start">{meeting.name}</h4>
+                                <p className="text-xs text-slate-500 mb-3">ID: {meeting.meetingId}</p>
+                                <div className="flex items-center justify-between pt-3 border-t border-[#2d3a4b]">
+                                  <span className="text-xs text-slate-500"><span className="material-icons text-sm mr-1 align-middle">group</span>{meeting.participants?.length || 0}</span>
+                                  <button className="text-primary text-xs font-bold hover:underline" type="button" onClick={() => {
+                                    if (meeting.status === 'ended') { navigate(`/meeting-notes/${meeting._id}`); }
+                                    else { navigate(`/meeting/${meeting.meetingId}`, { state: { meetingDbId: meeting._id, meetingId: meeting.meetingId, role: meeting.isHost ? 'host' : 'participant', permission: meeting.isHost ? 'edit' : 'view', status: meeting.status } }); }
+                                  }}>
+                                    {meeting.status === 'ended' ? 'View Notes' : meeting.status === 'live' ? 'Join Now' : 'View Details'} <span className="material-icons text-sm ml-1 align-middle">arrow_forward</span>
+                                  </button>
                                 </div>
                               </div>
-                              <div className="flex flex-col space-y-2">
-                                <button
-                                  className="px-6 py-2 bg-slate-800 text-white text-xs font-bold rounded-lg border border-[#2d3a4b] hover:bg-slate-700 transition-all"
-                                  type="button"
-                                  onClick={() => navigate(`/meeting/${meeting.meetingId}`)}
-                                >
-                                  Join Meeting
-                                </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
+                {!searchQuery.replace(/\s+/g, ' ').trim() && (
+                <>
+                {/* Active Meetings — categorized by backend */}
+                {(() => {
+                  const formatDate = (dt) => {
+                    if (!dt) return 'TBD';
+                    return new Date(dt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                  };
+                  const formatTime = (dt) => {
+                    if (!dt) return '';
+                    return new Date(dt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                  };
+                  return (
+                    <>
+                    <section className="mb-10">
+                      <div className="flex items-center mb-4">
+                        <div className="w-2 h-2 rounded-full bg-emerald-500 mr-3"></div>
+                        <h3 className="text-sm font-bold uppercase tracking-widest text-slate-500">Active ({activeMeetings.length})</h3>
+                      </div>
+                      <div className="space-y-3">
+                        {isLoadingMeetings ? (
+                          <div className="text-center py-10">
+                            <span className="material-icons animate-spin text-primary text-3xl">refresh</span>
+                            <p className="text-slate-500 mt-2 text-sm">Loading meetings...</p>
+                          </div>
+                        ) : activeMeetings.length === 0 ? (
+                          <div className="text-center py-10">
+                            <span className="material-icons text-slate-600 text-4xl block mb-2">event_busy</span>
+                            <p className="text-slate-400 font-medium">No active meetings right now</p>
+                            <p className="text-slate-500 text-xs mt-1">Meetings starting within 5 minutes will appear here</p>
+                          </div>
+                        ) : (
+                          activeMeetings.map((meeting) => {
+                            const isMeetingStarted = meeting.status === 'live';
+                            return (
+                            <div key={meeting._id} className="py-5 px-4 bg-[#1a242f] border-l-4 border-emerald-500 rounded-xl border border-[#2d3a4b]">
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <h4 className="text-sm font-bold truncate">{meeting.name}</h4>
+                                    <span className={`inline-flex items-center shrink-0 px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider ${isMeetingStarted ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'}`}>
+                                      <span className="relative flex h-1.5 w-1.5 mr-1">
+                                        <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${isMeetingStarted ? 'bg-emerald-400' : 'bg-amber-400'}`}></span>
+                                        <span className={`relative inline-flex rounded-full h-1.5 w-1.5 ${isMeetingStarted ? 'bg-emerald-500' : 'bg-amber-500'}`}></span>
+                                      </span>
+                                      {isMeetingStarted ? 'Meeting Started' : 'Starting Soon'}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center text-slate-500 text-[11px] gap-3">
+                                    <span className="flex items-center gap-1">
+                                      <span className="material-symbols-outlined text-[11px]">calendar_today</span>
+                                      {formatDate(meeting.startTime)}
+                                    </span>
+                                    <span className="flex items-center gap-1">
+                                      <span className="material-symbols-outlined text-[11px]">schedule</span>
+                                      {formatTime(meeting.startTime) || 'In Progress'}
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0">
+                                  {activeJoinMeetingId === meeting._id ? (
+                                    <div className="flex items-center gap-3 bg-[#0d1526] border border-slate-600/40 rounded-xl px-4 py-2.5 shadow-lg shadow-black/20">
+                                      <button
+                                        onClick={() => setActiveJoinAudio((prev) => !prev)}
+                                        className={`flex h-8 w-8 items-center justify-center rounded-full transition-all ${activeJoinAudio ? 'bg-emerald-500/20 text-emerald-400 ring-1 ring-emerald-400/40' : 'bg-rose-500/20 text-rose-400 ring-1 ring-rose-400/40'}`}
+                                        type="button"
+                                        title={activeJoinAudio ? 'Disable Audio' : 'Enable Audio'}
+                                      >
+                                        <span className="material-icons text-[15px]">{activeJoinAudio ? 'mic' : 'mic_off'}</span>
+                                      </button>
+                                      <button
+                                        onClick={() => setActiveJoinVideo((prev) => !prev)}
+                                        className={`flex h-8 w-8 items-center justify-center rounded-full transition-all ${activeJoinVideo ? 'bg-emerald-500/20 text-emerald-400 ring-1 ring-emerald-400/40' : 'bg-rose-500/20 text-rose-400 ring-1 ring-rose-400/40'}`}
+                                        type="button"
+                                        title={activeJoinVideo ? 'Disable Video' : 'Enable Video'}
+                                      >
+                                        <span className="material-icons text-[15px]">{activeJoinVideo ? 'videocam' : 'videocam_off'}</span>
+                                      </button>
+                                      <div className="w-px h-6 bg-slate-600/50"></div>
+                                      <button
+                                        className="h-8 px-4 bg-emerald-600 text-white text-[11px] font-bold rounded-lg hover:bg-emerald-500 transition-all inline-flex items-center justify-center gap-1.5"
+                                        type="button"
+                                        onClick={async () => {
+                                          try {
+                                            if (meeting.isHost && meeting.status === 'pending') {
+                                              await meetingAPI.start(meeting._id);
+                                            }
+                                            // Non-host: re-register via join API (handles rejoin after leave, resets leaveTime)
+                                            let joinData = null;
+                                            if (!meeting.isHost && meeting.shareLink) {
+                                              const linkToken = meeting.shareLink.split('/join-link/')[1];
+                                              if (linkToken) {
+                                                joinData = await meetingAPI.joinByLink(linkToken);
+                                              }
+                                            }
+                                            setActiveJoinMeetingId(null);
+                                            const label = meeting.isHost ? 'Starting meeting...' : 'Joining meeting...';
+                                            startMeetingTransition(label, () =>
+                                              navigate(`/meeting/${meeting.meetingId}`, {
+                                                state: {
+                                                  meetingDbId: meeting._id,
+                                                  meetingId: meeting.meetingId,
+                                                  meetingPassword: meeting.password || '',
+                                                  role: meeting.isHost ? 'host' : (joinData?.role || 'participant'),
+                                                  permission: meeting.isHost ? 'edit' : (joinData?.permission || 'view'),
+                                                  status: 'live',
+                                                  audioEnabled: activeJoinAudio,
+                                                  videoEnabled: activeJoinVideo,
+                                                }
+                                              })
+                                            );
+                                          } catch (err) {
+                                            console.error('Failed to start/join meeting:', err);
+                                            const msg = err?.response?.data?.message || 'Failed to join meeting';
+                                            setActiveJoinMeetingId(null);
+                                            showFlash('error', msg);
+                                          }
+                                        }}
+                                      >
+                                        <span className="material-icons text-sm">play_arrow</span>
+                                        Start
+                                      </button>
+                                      <button
+                                        className="h-8 px-3 bg-slate-700 text-slate-300 text-[11px] font-bold rounded-lg hover:bg-slate-600 transition-all inline-flex items-center justify-center gap-1"
+                                        type="button"
+                                        onClick={() => setActiveJoinMeetingId(null)}
+                                      >
+                                        <span className="material-icons text-sm">arrow_back</span>
+                                        Back
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <>
+                                      <button
+                                        className="h-8 px-3 bg-emerald-600 text-white text-[11px] font-bold rounded-lg hover:bg-emerald-500 transition-all inline-flex items-center justify-center gap-1"
+                                        type="button"
+                                        onClick={() => {
+                                          setActiveJoinAudio(true);
+                                          setActiveJoinVideo(true);
+                                          setActiveJoinMeetingId(meeting._id);
+                                        }}
+                                      >
+                                        <span className="material-icons text-xs">play_arrow</span>
+                                        {meeting.isHost ? 'Start Meeting' : 'Join Meeting'}
+                                      </button>
+                                      <button
+                                        className="h-8 px-2.5 bg-slate-700/80 text-slate-300 text-[11px] font-bold rounded-lg hover:bg-indigo-600 hover:text-white transition-all inline-flex items-center justify-center gap-1"
+                                        type="button"
+                                        onClick={() => setInviteMeeting(meeting)}
+                                      >
+                                        <span className="material-icons text-xs">person_add</span>
+                                        Invite
+                                      </button>
+                                      {meeting.isHost && (
+                                        <button
+                                          className="h-8 px-2.5 bg-slate-700/80 text-slate-300 text-[11px] font-bold rounded-lg hover:bg-rose-600 hover:text-white transition-all inline-flex items-center justify-center gap-1"
+                                          type="button"
+                                          onClick={() => setCancelConfirmMeetingId(meeting._id)}
+                                        >
+                                          <span className="material-icons text-xs">close</span>
+                                          Cancel
+                                        </button>
+                                      )}
+                                    </>
+                                  )}
+                                </div>
                               </div>
                             </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    </section>
+
+                    {/* Upcoming Meetings — more than 5 minutes away */}
+                    <section className="mb-10">
+                      <div className="flex items-center mb-4">
+                        <div className="w-2 h-2 rounded-full bg-primary mr-3"></div>
+                        <h3 className="text-sm font-bold uppercase tracking-widest text-slate-500">Upcoming ({upcomingMeetings.length})</h3>
+                      </div>
+                      <div className="space-y-3">
+                        {upcomingMeetings.length === 0 ? (
+                          <div className="text-center py-10">
+                            <span className="material-icons text-slate-600 text-4xl block mb-2">calendar_today</span>
+                            <p className="text-slate-400 font-medium">No upcoming meetings</p>
+                            <p className="text-slate-500 text-xs mt-1">Schedule a meeting to see it here</p>
                           </div>
-                        )
-                      ))
-                    )}
-                  </div>
-                </section>
+                        ) : (
+                          upcomingMeetings.map((meeting) => (
+                            <div key={meeting._id} className="py-5 px-4 bg-[#1a242f] border-l-4 border-primary rounded-xl border border-[#2d3a4b] hover:border-slate-600 transition-all">
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <h4 className="text-sm font-bold truncate">{meeting.name}</h4>
+                                    <span className="inline-flex items-center shrink-0 px-1.5 py-0.5 rounded-full text-[9px] font-bold text-primary uppercase tracking-wider bg-primary/10">Scheduled</span>
+                                  </div>
+                                  <div className="flex items-center text-slate-500 text-[11px] gap-3">
+                                    <span className="flex items-center gap-1">
+                                      <span className="material-symbols-outlined text-[11px]">calendar_today</span>
+                                      {formatDate(meeting.startTime)}
+                                    </span>
+                                    <span className="flex items-center gap-1">
+                                      <span className="material-symbols-outlined text-[11px]">schedule</span>
+                                      {formatTime(meeting.startTime) || 'TBD'}
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <button
+                                    className="h-8 px-2.5 bg-slate-700/80 text-slate-300 text-[11px] font-bold rounded-lg hover:bg-indigo-600 hover:text-white transition-all inline-flex items-center justify-center gap-1"
+                                    type="button"
+                                    onClick={() => setInviteMeeting(meeting)}
+                                  >
+                                    <span className="material-icons text-xs">person_add</span>
+                                    Invite
+                                  </button>
+                                  {meeting.isHost && (
+                                    <button
+                                      className="h-8 px-2.5 bg-slate-700/80 text-slate-300 text-[11px] font-bold rounded-lg hover:bg-rose-600 hover:text-white transition-all inline-flex items-center justify-center gap-1"
+                                      type="button"
+                                      onClick={() => setCancelConfirmMeetingId(meeting._id)}
+                                    >
+                                      <span className="material-icons text-xs">close</span>
+                                      Cancel
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </section>
+                    </>
+                  );
+                })()}
 
                 {/* Completed Meetings */}
                 <section>
-                  <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center">
                       <div className="w-2 h-2 rounded-full bg-slate-600 mr-3"></div>
                       <h3 className="text-sm font-bold uppercase tracking-widest text-slate-500">Completed ({endedMeetings.length})</h3>
@@ -1653,176 +2113,136 @@ export default function Dashboard() {
                       Refresh
                     </button>
                   </div>
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div className="space-y-3">
                     {endedMeetings.length === 0 ? (
-                      <div className="col-span-2 text-center py-8">
-                        <p className="text-slate-500">No completed meetings yet.</p>
+                      <div className="text-center py-8">
+                        <p className="text-slate-500 text-sm">No completed meetings yet.</p>
                       </div>
                     ) : (
                       endedMeetings.map((meeting) => (
-                        <div key={meeting._id} className="p-6 bg-[#1a242f] rounded-xl border border-[#2d3a4b] hover:border-slate-600 transition-all">
-                          <div className="flex items-start justify-between mb-4">
-                            <div className="p-3 bg-slate-500/10 rounded-lg">
-                              <span className="material-symbols-outlined text-slate-400">history</span>
-                            </div>
-                            <span className="px-2 py-1 bg-slate-800 text-slate-400 text-[10px] font-bold rounded uppercase">
-                              {meeting.endTime ? new Date(meeting.endTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'Ended'}
-                            </span>
-                          </div>
-                          <h4 className="text-lg font-bold mb-1 text-start">{meeting.name}</h4>
-                          <p className="text-xs text-slate-500 mb-4">Meeting ID: {meeting.meetingId}</p>
-                          <div className="flex items-center justify-between pt-4 border-t border-[#2d3a4b]">
-                            <div className="flex items-center text-xs text-slate-400">
-                              <span className="material-symbols-outlined text-sm mr-1">group</span>
-                              {meeting.participants?.length || 0} participants
-                            </div>
-                            <div className="flex items-center gap-3">
-                              <div className="flex items-center text-xs text-slate-400">
-                                <span className="material-symbols-outlined text-sm mr-1">schedule</span>
-                                {meeting.startTime && meeting.endTime
-                                  ? `${Math.round((new Date(meeting.endTime) - new Date(meeting.startTime)) / 60000)}m`
-                                  : 'N/A'}
+                        <div key={meeting._id} className="py-5 px-4 bg-[#1a242f] border-l-4 border-slate-600 rounded-xl border border-[#2d3a4b] hover:border-slate-600 transition-all">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <h4 className="text-sm font-bold truncate">{meeting.name}</h4>
+                                <span className="inline-flex items-center shrink-0 px-1.5 py-0.5 rounded-full text-[9px] font-bold text-slate-400 uppercase tracking-wider bg-slate-700/50">Ended</span>
                               </div>
-                              <button
-                                className="text-primary text-xs font-bold hover:underline flex items-center"
-                                type="button"
-                                onClick={() => navigate(`/meeting-notes/${meeting._id}`)}
-                              >
-                                View Notes <span className="material-symbols-outlined text-sm ml-1">description</span>
-                              </button>
+                              <div className="flex items-center text-slate-500 text-[11px] gap-3">
+                                <span className="flex items-center gap-1">
+                                  <span className="material-symbols-outlined text-[11px]">calendar_today</span>
+                                  {meeting.endTime ? new Date(meeting.endTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'Ended'}
+                                </span>
+                                <span className="flex items-center gap-1">
+                                  <span className="material-symbols-outlined text-[11px]">schedule</span>
+                                  {meeting.endTime ? new Date(meeting.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}
+                                </span>
+                                <span className="flex items-center gap-1">
+                                  <span className="material-symbols-outlined text-[11px]">tag</span>
+                                  {meeting.meetingId}
+                                </span>
+                                <span className="flex items-center gap-1">
+                                  <span className="material-icons text-[11px]">group</span>
+                                  {meeting.participants?.length || 0}
+                                </span>
+                                <span className="flex items-center gap-1">
+                                  <span className="material-symbols-outlined text-[11px]">timer</span>
+                                  {meeting.startTime && meeting.endTime
+                                    ? `${Math.round((new Date(meeting.endTime) - new Date(meeting.startTime)) / 60000)}m`
+                                    : 'N/A'}
+                                </span>
+                              </div>
                             </div>
+                            <button
+                              className="px-3 py-1.5 text-primary text-[11px] font-bold rounded-lg border border-primary/30 hover:bg-primary/10 transition-all flex items-center gap-1 shrink-0"
+                              type="button"
+                              onClick={() => navigate(`/meeting-notes/${meeting._id}`)}
+                            >
+                              <span className="material-symbols-outlined text-xs">description</span>
+                              View Notes
+                            </button>
                           </div>
                         </div>
                       ))
                     )}
                   </div>
                 </section>
+                </>
+                )}
               </>
             ) : activeView === 'notifications' ? (
               <>
                 <div className="max-w-4xl mx-auto">
                   <div className="flex items-center justify-between mb-8">
                     <div>
-                      <h1 className="text-2xl font-bold text-white mb-1 text-start">Recent Activity</h1>
-                      <p className="text-slate-500 text-sm">Stay updated with your team's collaboration</p>
+                      <h1 className="text-2xl font-bold text-white mb-1 text-start">Notifications</h1>
+                      <p className="text-slate-500 text-sm text-start">Meeting reminders</p>
                     </div>
-                    <button className="text-xs font-semibold text-primary hover:underline transition-all" type="button">
-                      Mark all as read
-                    </button>
+                    {notifications.length > 0 && (
+                      <button
+                        className="text-xs font-semibold text-primary hover:underline transition-all"
+                        type="button"
+                        onClick={markAllNotificationsRead}
+                      >
+                        Mark all as read
+                      </button>
+                    )}
                   </div>
                   <div className="space-y-3">
-                    <div className="group flex items-center p-5 bg-[#1a242f] border border-[#2d3a4b] rounded-xl hover:border-primary/50 transition-all relative overflow-hidden">
-                      <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary"></div>
-                      <div className="flex-shrink-0 w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mr-4">
-                        <img
-                          alt="Sarah"
-                          className="w-full h-full rounded-full"
-                          src="https://lh3.googleusercontent.com/aida-public/AB6AXuDqTfywyR1V-K_AIjWqiOpMkL5HqSbth_mGsQcF68NS0z93K1S6BUVP0lqSnWROCkio9XUfSI18giEkbkPLo_W23mJ-k0X_w7EkGW1Dew_eQHHSfMx0u2oiT5gHyh97czYjZXFtmWtQT6X_d6vDduce1MqiC3odtK22ShLDLaA6q4FsSZERi21w-kCoM-xTt9Q99dhAqT4ybTq_zUr_E4KiMaI5GvwJSfk2i0xNPBWytcC0AuTgUvcRChDtHaKevbzhcFlp0dPNyiU"
-                        />
+                    {notifications.length === 0 ? (
+                      <div className="text-center py-16">
+                        <span className="material-symbols-outlined text-5xl text-slate-700 mb-4 block">notifications_off</span>
+                        <p className="text-slate-400 text-lg font-medium">No notifications yet</p>
+                        <p className="text-slate-600 text-sm mt-1">Meeting reminders will appear here when it's time</p>
                       </div>
-                      <div className="flex-1 min-w-0 text-start">
-                        <p className="text-sm font-medium text-slate-200">
-                          <span className="font-bold text-white">Sarah</span> joined the{' '}
-                          <span className="text-primary font-semibold">Q4 Roadmap</span> canvas
-                        </p>
-                        <p className="text-xs text-slate-500 mt-1">2m ago</p>
-                      </div>
-                      <div className="ml-4 flex-shrink-0 ">
-                        <button className="px-4 py-2 bg-primary/10 text-primary text-xs font-bold rounded-lg hover:bg-primary hover:text-white transition-all" type="button">
-                          View
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="group flex items-center p-5 bg-[#1a242f] border border-[#2d3a4b] rounded-xl hover:border-primary/50 transition-all relative overflow-hidden">
-                      <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary"></div>
-                      <div className="flex-shrink-0 w-12 h-12 bg-emerald-500/10 rounded-full flex items-center justify-center mr-4">
-                        <span className="material-symbols-outlined text-emerald-400">calendar_today</span>
-                      </div>
-                      <div className="flex-1 min-w-0 text-start">
-                        <p className="text-sm font-medium text-slate-200">
-                          New meeting invite: <span className="font-bold text-white">Frontend Sync</span>
-                        </p>
-                        <p className="text-xs text-slate-500 mt-1">15m ago</p>
-                      </div>
-                      <div className="ml-4 flex-shrink-0 flex space-x-2">
-                        <button
-                          className="px-4 py-2 bg-slate-800 text-white text-xs font-bold rounded-lg border border-[#2d3a4b] hover:bg-slate-700 transition-all"
-                          type="button"
+                    ) : (
+                      notifications.map((n) => (
+                        <div
+                          key={n._id}
+                          className={`group flex items-center p-5 bg-[#1a242f] border rounded-xl transition-all relative overflow-hidden ${
+                            n.read
+                              ? 'border-[#2d3a4b] opacity-70 hover:opacity-100'
+                              : 'border-primary/50 hover:border-primary'
+                          }`}
                         >
-                          Decline
-                        </button>
-                        <button className="px-4 py-2 bg-primary text-white text-xs font-bold rounded-lg hover:brightness-110 transition-all" type="button">
-                          Accept
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="group flex items-center p-5 bg-[#1a242f] border border-[#2d3a4b] rounded-xl hover:border-slate-600 transition-all">
-                      <div className="flex-shrink-0 w-12 h-12 bg-amber-500/10 rounded-full flex items-center justify-center mr-4">
-                        <span className="material-symbols-outlined text-amber-400">timer</span>
-                      </div>
-                      <div className="flex-1 min-w-0 text-start">
-                        <p className="text-sm font-medium text-slate-200">
-                          Reminder: <span className="font-bold text-white">Project Retrospective</span> starts in 10 mins
-                        </p>
-                        <p className="text-xs text-slate-500 mt-1">1h ago</p>
-                      </div>
-                      <div className="ml-4 flex-shrink-0">
-                        <button
-                          className="px-4 py-2 bg-primary text-white text-xs font-bold rounded-lg hover:brightness-110 transition-all flex items-center"
-                          type="button"
-                        >
-                          <span className="material-icons text-sm mr-1">videocam</span>
-                          Join
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="group flex items-center p-5 bg-[#1a242f] border border-[#2d3a4b] rounded-xl hover:border-slate-600 transition-all">
-                      <div className="flex-shrink-0 w-12 h-12 bg-purple-500/10 rounded-full flex items-center justify-center mr-4">
-                        <span className="material-symbols-outlined text-purple-400">share</span>
-                      </div>
-                      <div className="flex-1 min-w-0 text-start">
-                        <p className="text-sm font-medium text-slate-200">
-                          Canvas <span className="font-bold text-white">"Brand Identity"</span> was shared with you
-                        </p>
-                        <p className="text-xs text-slate-500 mt-1">3h ago</p>
-                      </div>
-                      <div className="ml-4 flex-shrink-0">
-                        <button
-                          className="px-4 py-2 bg-slate-800 text-white text-xs font-bold rounded-lg border border-[#2d3a4b] hover:bg-slate-700 transition-all"
-                          type="button"
-                        >
-                          Open Canvas
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="mt-8 mb-4">
-                      <h3 className="text-xs font-bold uppercase tracking-widest text-slate-600">Yesterday</h3>
-                    </div>
-
-                    <div className="group flex items-center p-5 bg-[#1a242f]/40 border border-[#2d3a4b]/50 rounded-xl grayscale opacity-70 hover:grayscale-0 hover:opacity-100 transition-all">
-                      <div className="flex-shrink-0 w-12 h-12 bg-slate-500/10 rounded-full flex items-center justify-center mr-4">
-                        <img
-                          alt="User"
-                          className="w-full h-full rounded-full"
-                          src="https://lh3.googleusercontent.com/aida-public/AB6AXuBP3Jffw2Ed86qLcQBO1a05mSUUVVKiWWIFMs5eaQUtbgZZ4WJ_YsRgPDXetsYBMgE5cwexXnXHnLy5tzdCTEB8Lm88P7PDk6cb1yiWobJMGU54wKA656FbzmD0HUDm-twu2t2QlQzMcGo83A8g14CN7wfS42kaCoMq3HghIJpfzsIxlw9F0-qfuyjFhl4rn7v7NuVj2swvt3ceKSi_dsi9dsHo3-V702VS9fDUJNATljFvadY7ZQRFxGEH2hKU4YrnGYmKET_jfD0"
-                        />
-                      </div>
-                      <div className="flex-1 min-w-0 text-start">
-                        <p className="text-sm font-medium text-slate-400">
-                          <span className="font-bold text-slate-300">Marcus</span> left a comment on your canvas
-                        </p>
-                        <p className="text-xs text-slate-600 mt-1">24h ago</p>
-                      </div>
-                      <div className="ml-4 flex-shrink-0">
-                        <button className="px-4 py-2 text-slate-500 text-xs font-bold hover:text-white transition-all" type="button">
-                          Reply
-                        </button>
-                      </div>
-                    </div>
+                          {!n.read && <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary"></div>}
+                          <div className="flex-shrink-0 w-12 h-12 bg-amber-500/10 rounded-full flex items-center justify-center mr-4">
+                            <span className="material-symbols-outlined text-amber-400">timer</span>
+                          </div>
+                          <div className="flex-1 min-w-0 text-start">
+                            <p className="text-sm font-medium text-slate-200">
+                              Reminder: <span className="font-bold text-white">{n.name}</span>
+                            </p>
+                            <p className="text-xs text-slate-500 mt-1">
+                              {new Date(n.startTime).toLocaleString('en-US', {
+                                month: 'short', day: 'numeric',
+                                hour: 'numeric', minute: '2-digit', hour12: true
+                              })}
+                            </p>
+                          </div>
+                          <div className="ml-4 flex-shrink-0 flex items-center gap-2">
+                            {!n.read && (
+                              <button
+                                className="px-3 py-2 bg-slate-800 text-slate-300 text-xs font-bold rounded-lg border border-[#2d3a4b] hover:bg-slate-700 hover:text-white transition-all"
+                                type="button"
+                                onClick={() => markNotificationRead(n._id)}
+                              >
+                                Mark as read
+                              </button>
+                            )}
+                            <button
+                              className="px-4 py-2 bg-primary text-white text-xs font-bold rounded-lg hover:brightness-110 transition-all flex items-center"
+                              type="button"
+                              onClick={() => {
+                                setActiveView('meetings');
+                              }}
+                            >
+                              <span className="material-icons text-sm mr-1">videocam</span>
+                              Join Now
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
                   </div>
                 </div>
               </>
@@ -2044,6 +2464,65 @@ export default function Dashboard() {
               </>
             ) : (
               <>
+                {(() => {
+                  const q = searchQuery.replace(/\s+/g, ' ').trim().toLowerCase();
+                  if (q && isSearching) {
+                    return (
+                      <div className="flex flex-col items-center justify-center py-20">
+                        <div className="relative w-12 h-12 mb-4">
+                          <div className="absolute inset-0 rounded-full border-4 border-[#1f2a3b]"></div>
+                          <div className="absolute inset-0 rounded-full border-4 border-primary border-t-transparent animate-spin"></div>
+                        </div>
+                        <p className="text-slate-400 text-sm">Searching...</p>
+                      </div>
+                    );
+                  }
+                  if (q && searchReady) {
+                    const matchedCanvases = savedCanvases.filter(c => (c.title || '').toLowerCase().includes(q));
+                    return (
+                      <div>
+                        <div className="flex items-center justify-between mb-6">
+                          <p className="text-sm text-slate-400">Results for "<span className="text-white font-semibold">{searchQuery.trim()}</span>" <span className="ml-2 text-slate-500">({matchedCanvases.length} found)</span></p>
+                          <button className="text-xs text-slate-400 hover:text-white transition-colors" onClick={() => setSearchQuery('')} type="button"><span className="material-icons text-sm align-middle mr-1">close</span>Clear search</button>
+                        </div>
+                        {matchedCanvases.length === 0 ? (
+                          <div className="text-center py-20">
+                            <span className="material-icons text-5xl text-slate-700 mb-3 block">search_off</span>
+                            <p className="text-slate-400 text-lg font-medium">No canvases found</p>
+                            <p className="text-slate-600 text-sm mt-1">Try a different search term</p>
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                            {matchedCanvases.map((canvas) => (
+                              <div key={canvas._id} className={`group bg-[#111827] border border-[#1f2a3b] rounded-xl overflow-hidden hover:shadow-lg transition-all border-b-4 ${canvas.isMeetingCanvas ? 'border-b-amber-400/60' : 'border-b-emerald-400/60'}`}>
+                                <div className="h-40 bg-[#0b1220] relative overflow-hidden">
+                                  <div className={`absolute inset-0 bg-gradient-to-br ${canvas.isMeetingCanvas ? 'from-amber-500/10' : 'from-emerald-500/10'} to-transparent`}></div>
+                                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 backdrop-blur-sm">
+                                    <button className="px-4 py-2 bg-primary text-white text-xs font-bold rounded-lg shadow-lg" onClick={() => navigate(canvas.isMeetingCanvas ? `/meeting-canvas/${canvas._id}` : `/paint/${canvas._id}`)} type="button">Open Editor</button>
+                                  </div>
+                                  <img alt={`${canvas.title} Preview`} className="absolute inset-0 w-full h-full object-cover opacity-50 pointer-events-none" src={canvas.thumbnail || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='200'%3E%3Crect fill='%23111827' width='400' height='200'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%234b5563' font-family='sans-serif' font-size='16'%3ENo Preview%3C/text%3E%3C/svg%3E"} />
+                                  {canvas.isMeetingCanvas && (
+                                    <div className="absolute top-3 right-3 z-10"><span className="px-2 py-1 bg-[#101922]/80 text-[10px] font-bold rounded border uppercase text-amber-400 border-amber-400/30">Meeting</span></div>
+                                  )}
+                                </div>
+                                <div className="p-4">
+                                  <h4 className="font-bold text-sm truncate mb-1">{canvas.title || 'Untitled Canvas'}</h4>
+                                  <div className="flex items-center text-xs text-slate-500 space-x-2">
+                                    <span className="material-icons text-sm">schedule</span>
+                                    <span>{new Date(canvas.updatedAt).toLocaleString()}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
+                {!searchQuery.replace(/\s+/g, ' ').trim() && (
+                <>
                 {activeFolder ? (
                   <>
                     <div className="flex items-end justify-between mb-8">
@@ -2418,7 +2897,15 @@ export default function Dashboard() {
                         )}
                       </button>
 
-                      {filteredAllCanvases.map((canvas) => (
+                      {(() => {
+                        const q = searchQuery.replace(/\s+/g, ' ').trim().toLowerCase();
+                        const searchedCanvases = filteredAllCanvases.filter(c => !q || c.title.toLowerCase().includes(q));
+                        return searchedCanvases.length === 0 ? (
+                          <div className="col-span-3 text-center py-12">
+                            <span className="material-icons text-slate-600 text-4xl block mb-2">search_off</span>
+                            <p className="text-slate-500">{q ? 'No canvases match your search.' : 'No canvases yet.'}</p>
+                          </div>
+                        ) : searchedCanvases.map((canvas) => (
                         <div
                           key={canvas.id}
                           className={`group bg-[#1a242f] border border-[#2d3a4b] rounded-xl hover:shadow-2xl transition-all border-b-4 relative ${canvas.border}`}
@@ -2526,15 +3013,126 @@ export default function Dashboard() {
                             </div>
                           </div>
                         </div>
-                      ))}
+                      ));
+                      })()}
                     </div>
                   </>
+                )}
+                </>
                 )}
               </>
             )}
           </div>
         </main>
       </div>
+
+      {/* Cancel Meeting Confirmation Modal */}
+      {cancelConfirmMeetingId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-sm">
+          <div className="relative w-full max-w-sm rounded-2xl border border-white/10 bg-[#0f172a] p-6 shadow-2xl">
+            <div className="text-center mb-5">
+              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-rose-500/15">
+                <span className="material-icons text-rose-400 text-2xl">warning</span>
+              </div>
+              <h3 className="text-lg font-bold text-white">Cancel Meeting?</h3>
+              <p className="text-slate-400 text-sm mt-1">This will permanently delete this meeting. This action cannot be undone.</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                className="flex-1 py-2.5 rounded-lg bg-slate-700 text-white text-sm font-semibold hover:bg-slate-600 transition-all"
+                type="button"
+                onClick={() => setCancelConfirmMeetingId(null)}
+              >
+                Keep Meeting
+              </button>
+              <button
+                className="flex-1 py-2.5 rounded-lg bg-rose-600 text-white text-sm font-semibold hover:bg-rose-500 transition-all"
+                type="button"
+                onClick={() => handleCancelMeeting(cancelConfirmMeetingId)}
+              >
+                Cancel Meeting
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Invite Meeting Modal */}
+      {inviteMeeting && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-sm">
+          <div className="relative w-full max-w-md rounded-2xl border border-white/10 bg-[#0f172a] p-6 shadow-2xl">
+            <button
+              onClick={() => setInviteMeeting(null)}
+              className="absolute right-4 top-4 text-white/50 hover:text-white"
+              type="button"
+            >
+              <span className="material-icons">close</span>
+            </button>
+            <div className="text-center mb-5">
+              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-indigo-500/15">
+                <span className="material-icons text-indigo-400 text-2xl">person_add</span>
+              </div>
+              <h3 className="text-lg font-bold text-white">Invite to Meeting</h3>
+              <p className="text-slate-400 text-sm mt-1">Share these details with participants</p>
+            </div>
+            <div className="space-y-3">
+              <div className="rounded-lg border border-white/10 bg-white/5 p-3 flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-0.5">Meeting ID</p>
+                  <p className="text-sm font-mono text-white">{inviteMeeting.meetingId}</p>
+                </div>
+                <button
+                  className="text-slate-400 hover:text-white transition-colors p-1.5 rounded-lg hover:bg-white/10"
+                  type="button"
+                  onClick={() => { navigator.clipboard.writeText(inviteMeeting.meetingId); }}
+                  title="Copy Meeting ID"
+                >
+                  <span className="material-icons text-sm">content_copy</span>
+                </button>
+              </div>
+              {inviteMeeting.password && (
+                <div className="rounded-lg border border-white/10 bg-white/5 p-3 flex items-center justify-between">
+                  <div>
+                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-0.5">Password</p>
+                    <p className="text-sm font-mono text-white">{inviteMeeting.password}</p>
+                  </div>
+                  <button
+                    className="text-slate-400 hover:text-white transition-colors p-1.5 rounded-lg hover:bg-white/10"
+                    type="button"
+                    onClick={() => { navigator.clipboard.writeText(inviteMeeting.password); }}
+                    title="Copy Password"
+                  >
+                    <span className="material-icons text-sm">content_copy</span>
+                  </button>
+                </div>
+              )}
+              {inviteMeeting.shareLink && (
+                <div className="rounded-lg border border-white/10 bg-white/5 p-3 flex items-center justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-0.5">Shareable Link</p>
+                    <p className="text-xs font-mono text-white truncate">{inviteMeeting.shareLink}</p>
+                  </div>
+                  <button
+                    className="text-slate-400 hover:text-white transition-colors p-1.5 rounded-lg hover:bg-white/10 shrink-0"
+                    type="button"
+                    onClick={() => { navigator.clipboard.writeText(inviteMeeting.shareLink); }}
+                    title="Copy Link"
+                  >
+                    <span className="material-icons text-sm">content_copy</span>
+                  </button>
+                </div>
+              )}
+            </div>
+            <button
+              className="w-full mt-5 py-2.5 rounded-lg bg-slate-700 text-white text-sm font-semibold hover:bg-slate-600 transition-all"
+              type="button"
+              onClick={() => setInviteMeeting(null)}
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      )}
 
       {showJoinMeeting && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-sm">
@@ -2617,7 +3215,7 @@ export default function Dashboard() {
                 className="w-full rounded-lg bg-emerald-600 py-3 font-bold text-white transition-all hover:bg-emerald-500"
                 type="button"
               >
-                Host Meeting
+                Join Meeting
               </button>
             </div>
           </div>
