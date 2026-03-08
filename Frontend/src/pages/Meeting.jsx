@@ -40,6 +40,7 @@ function Meeting() {
     location.state?.meetingPassword ? location.state.meetingPassword : (sessionStorage.getItem('meetingPassword') || '')
   );
   const [shareLink, setShareLink] = useState('');
+  const [sharedCanvasLink, setSharedCanvasLink] = useState(null);
   const _initialRole = location.state?.role || sessionStorage.getItem('meetingRole') || 'participant';
   const [effectiveRole, setEffectiveRole] = useState(_initialRole);
   const meetingRole = effectiveRole;
@@ -196,6 +197,12 @@ useEffect(() => {
           }
         }
         if (response.success && response.meeting?.status) {
+          if (response.meeting.status === 'ended') {
+            // Meeting is ended — kick user out (handles browser 'back' button to expired meeting)
+            sessionStorage.removeItem('meetingDbId');
+            navigate('/dashboard', { state: { flash: { type: 'error', message: 'This meeting has already ended.' } } });
+            return;
+          }
           setMeetingStatus(response.meeting.status);
           sessionStorage.setItem('meetingStatus', response.meeting.status);
         }
@@ -206,8 +213,18 @@ useEffect(() => {
             ...response.meeting.hostSettings
           }));
         }
+        // Load shared canvas link
+        if (response.success && response.meeting?.sharedCanvasLink) {
+          setSharedCanvasLink(response.meeting.sharedCanvasLink);
+        }
+
+        if (!response.success || !response.meeting) {
+          // Invalid meeting — kick out
+          navigate('/dashboard', { state: { flash: { type: 'error', message: 'Meeting not found or invalid.' } } });
+        }
       } catch (error) {
         console.error('Error fetching meeting details:', error);
+        navigate('/dashboard', { state: { flash: { type: 'error', message: 'Error loading meeting.' } } });
       }
     };
 
@@ -1082,6 +1099,9 @@ const handleUserJoined = (data) => {
     socket.on('recording_stopped', handleRecordingStopped);
     socket.on('recording_denied', handleRecordingDenied);
     socket.on('recording_force_stopped', handleRecordingForceStopped);
+    socket.on('canvas_link_updated', (data) => {
+      setSharedCanvasLink(data?.sharedCanvasLink || null);
+    });
 
     console.log('✅ Event listeners attached');
 
@@ -1104,6 +1124,7 @@ const handleUserJoined = (data) => {
       socket.off('recording_stopped', handleRecordingStopped);
       socket.off('recording_denied', handleRecordingDenied);
       socket.off('recording_force_stopped', handleRecordingForceStopped);
+      socket.off('canvas_link_updated');
     };
   }, [socket]);
 
@@ -2306,6 +2327,7 @@ const handleUserJoined = (data) => {
           onToggleEditPermission={handleToggleEditPermission}
           isChatEnabled={hostSettings.isChatEnabled}
           raisedHands={raisedHands}
+          sharedCanvasLink={sharedCanvasLink}
         />
       </main>
       <Footer

@@ -106,7 +106,7 @@ exports.generateInstantMeetingCredentials = async (req, res) => {
     const meetingId = uuidv4().slice(0, 8); // e.g., "a1b2-c3d4"
     const password = crypto.randomBytes(3).toString('hex'); // e.g., "a7f39b"
     const linkToken = crypto.randomBytes(32).toString('hex'); // Generate link token
-    const clientUrl = process.env.CLIENT_URL || 'http://localhost:3000';
+    const clientUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
     const shareLink = `${clientUrl}/join-link/${linkToken}`;
     
     res.status(200).json({
@@ -127,7 +127,7 @@ exports.generateInstantMeetingCredentials = async (req, res) => {
 // @access  Private (Host)
 exports.createInstantMeeting = async (req, res) => {
   try {
-    const { title, meetingId, password, name } = req.body;
+    const { title, meetingId, password, name, linkToken: providedLinkToken } = req.body;
 
     // Check if user is already in an active meeting
     const existingMeeting = await checkUserInActiveMeeting(req.user._id);
@@ -147,9 +147,9 @@ exports.createInstantMeeting = async (req, res) => {
       isMeetingCanvas: true
     });
     
-    // 2. Generate Secure Link Token
-    const linkToken = crypto.randomBytes(32).toString('hex'); 
-    const clientUrl = process.env.CLIENT_URL || 'http://localhost:3000';
+    // 2. Reuse the linkToken from generateCredentials if provided, otherwise generate a new one
+    const linkToken = providedLinkToken || crypto.randomBytes(32).toString('hex'); 
+    const clientUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
 
     // 3. Create Meeting with LIVE status (instant meetings go live immediately)
     const meeting = await Meeting.create({
@@ -293,7 +293,7 @@ exports.createMeeting = async (req, res) => {
     
     // 3. Generate Secure Link Token
     const linkToken = crypto.randomBytes(32).toString('hex'); 
-    const clientUrl = process.env.CLIENT_URL || 'http://localhost:3000';
+    const clientUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
 
     // 4. Determine status and start time
     let meetingStatus = 'live';
@@ -539,30 +539,13 @@ exports.endMeeting = async (req, res) => {
       await hostCanvas.save();
     }
 
-    // 2. Duplicate the canvas for every participant (excluding the host)
+    // 2. Extract participant IDs for socket notifications
     const participantUserIds = meeting.participants
       .map(p => p.user?._id || p.user)
       .filter(uid => uid && uid.toString() !== req.user._id.toString());
 
     // Remove duplicate user IDs (a user may have joined/left multiple times)
     const uniqueParticipantIds = [...new Set(participantUserIds.map(id => id.toString()))];
-
-    const canvasTitle = hostCanvas ? hostCanvas.title : 'Meeting Canvas';
-    const canvasData = hostCanvas ? hostCanvas.data : { elements: elements || [] };
-
-    // Create a copy for each participant
-    await Promise.all(
-      uniqueParticipantIds.map(participantId =>
-        Canvas.create({
-          title: canvasTitle,
-          owner: participantId,
-          data: canvasData,
-          folder: null,
-          isMeetingCanvas: true,
-          thumbnail: hostCanvas?.thumbnail || ''
-        })
-      )
-    );
 
     // 3. Mark meeting as ended
     meeting.status = 'ended';
@@ -760,7 +743,8 @@ exports.getMeetingDetails = async (req, res) => {
           isChatEnabled: meeting.isChatEnabled ?? true,
           isScreenRecordingAllowed: meeting.isScreenRecordingAllowed ?? false
         },
-        recordingPath: meeting.recordingPath || null
+        recordingPath: meeting.recordingPath || null,
+        sharedCanvasLink: meeting.sharedCanvasLink || null
       }
     });
 
@@ -978,9 +962,43 @@ exports.getMeetingNotes = async (req, res) => {
           _id: meeting.recordedBy._id,
           username: meeting.recordedBy.username || meeting.recordedBy.name
         } : null,
-        messages: chat ? chat.messages : []
+        messages: chat ? chat.messages : [],
+        sharedCanvasLink: meeting.sharedCanvasLink || null
       }
     });
+  } catch (error) {
+    res.status(500).json({ message: 'Server Error', error: error.message });
+  }
+};
+
+// @desc    Update shared canvas link for a meeting (host only)
+// @route   PUT /api/meetings/:id/canvas-link
+// @access  Private (host only)
+exports.updateSharedCanvasLink = async (req, res) => {
+  try {
+    const meeting = await Meeting.findById(req.params.id);
+    if (!meeting) {
+      return res.status(404).json({ message: 'Meeting not found' });
+    }
+
+    if (meeting.host.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'Only the host can update the canvas link' });
+    }
+
+    const { sharedCanvasLink } = req.body;
+    meeting.sharedCanvasLink = sharedCanvasLink || null;
+    await meeting.save();
+
+    // Emit real-time update to all participants in the meeting room
+    if (req.app && req.app.get('io')) {
+      const io = req.app.get('io');
+      // Emit to the meeting room (joined by DB _id in socketHandler)
+      io.to(meeting._id.toString()).emit('canvas_link_updated', {
+        sharedCanvasLink: meeting.sharedCanvasLink
+      });
+    }
+
+    res.status(200).json({ success: true, sharedCanvasLink: meeting.sharedCanvasLink });
   } catch (error) {
     res.status(500).json({ message: 'Server Error', error: error.message });
   }

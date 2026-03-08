@@ -1,6 +1,10 @@
 const bcrypt = require('bcryptjs');
 const User = require('../models/User');
 const ActivityLog = require('../models/ActivityLog');
+const Canvas = require('../models/Canvas');
+const Folder = require('../models/Folder');
+const Meeting = require('../models/Meeting');
+const mongoose = require('mongoose');
 const {
   signAccessToken,
   signRefreshToken,
@@ -158,10 +162,91 @@ const getUserActivityLogs = async (req, res) => {
   }
 };
 
+// @desc    Delete user account and all associated data
+// @route   DELETE /api/users/me
+// @access  Private
+const deleteAccount = async (req, res) => {
+  try {
+    const { password } = req.body;
+    const userId = req.user._id;
+
+    if (!password) {
+      return res.status(400).json({ message: "Password is required to delete your account." });
+    }
+
+    // 1. Find user and verify password
+    const user = await User.findById(userId).select('+password');
+    if (!user) {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(401).json({ message: "Incorrect password. Account deletion aborted." });
+    }
+
+    // 2. Cascade Delete All User Data
+    const promises = [
+      Canvas.deleteMany({ owner: userId }),
+      Folder.deleteMany({ owner: userId }),
+      ActivityLog.deleteMany({ user: userId }),
+      Meeting.deleteMany({ host: userId }),
+      // Remove user from participant lists in meetings they were part of (but didn't host)
+      Meeting.updateMany(
+        { participants: { $elemMatch: { user: userId } } },
+        { $pull: { participants: { user: userId } } }
+      ),
+      // Assuming a Notification model exists or might exist later, safe to wrap if it doesn't
+      mongoose.models.Notification ? mongoose.models.Notification.deleteMany({ recipient: userId }) : Promise.resolve(),
+      User.findByIdAndDelete(userId)
+    ];
+
+    await Promise.all(promises);
+
+    // 3. Clear Auth Cookies
+    res.cookie('accessToken', '', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      expires: new Date(0)
+    });
+
+    res.cookie('refreshToken', '', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      expires: new Date(0)
+    });
+
+    res.status(200).json({ success: true, message: "Account successfully deleted." });
+
+  } catch (error) {
+    console.error("Delete Account Error:", error.message);
+    return res.status(500).json({ message: "Server Error during account deletion." });
+  }
+};
+
+// @desc    Get current logged in user
+// @route   GET /api/users/me
+// @access  Private
+const getMe = async (req, res) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: "Not authorized" });
+    }
+    return res.status(200).json({ user: req.user });
+  } catch (error) {
+    console.error("Get Me Error:", error.message);
+    return res.status(500).json({ message: "Server Error" });
+  }
+};
+
 module.exports = {
   updateUserProfile,
   updatePassword,
   getUserActivityLogs,
+  getMe,
+  deleteAccount,
 };  
 
 

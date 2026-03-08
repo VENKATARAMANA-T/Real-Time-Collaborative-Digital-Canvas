@@ -1,4 +1,4 @@
-function Toolbar({ activeTool, setActiveTool, onUndo, onRedo, canUndo, canRedo, canEdit = true, onImportImage, onExportCanvas }) {
+function Toolbar({ activeTool, setActiveTool, onUndo, onRedo, canUndo, canRedo, canEdit = true, onImportImage, onExportCanvas, onShare }) {
   
   const tools = [
     { id: 'selector', icon: 'arrow_selector_tool', title: 'Selector' },
@@ -57,6 +57,16 @@ function Toolbar({ activeTool, setActiveTool, onUndo, onRedo, canUndo, canRedo, 
       >
         <span className="material-symbols-outlined">ios_share</span>
       </button>
+
+      {onShare && (
+        <button
+          onClick={onShare}
+          className="w-10 h-10 flex items-center justify-center rounded-xl transition-all shrink-0 text-slate-400 hover:bg-white/5 hover:text-white"
+          title="Share Canvas"
+        >
+          <span className="material-symbols-outlined">share</span>
+        </button>
+      )}
 
       <div className="h-[1px] w-8 bg-white/10 my-1 shrink-0"></div>
 

@@ -15,6 +15,40 @@ module.exports = (io) => {
     });
 
     // =================================================================
+    // 0.1 ACCOUNT ACTIVATION ROOM (Real-time activation across browsers)
+    // =================================================================
+    socket.on('join_activation_waiting', (data) => {
+      const { email } = data || {};
+      if (!email) return;
+      socket.join(`activation_waiting_${email}`);
+      console.log(`Socket ${socket.id} joined activation waiting room for: ${email}`);
+    });
+
+    socket.on('leave_activation_waiting', (data) => {
+      const { email } = data || {};
+      if (!email) return;
+      socket.leave(`activation_waiting_${email}`);
+      console.log(`Socket ${socket.id} left activation waiting room for: ${email}`);
+    });
+
+    // =================================================================
+    // 0.2 PASSWORD RESET ROOM (Real-time password reset across browsers)
+    // =================================================================
+    socket.on('join_password_reset_waiting', (data) => {
+      const { email } = data || {};
+      if (!email) return;
+      socket.join(`password_reset_waiting_${email}`);
+      console.log(`Socket ${socket.id} joined password reset waiting room for: ${email}`);
+    });
+
+    socket.on('leave_password_reset_waiting', (data) => {
+      const { email } = data || {};
+      if (!email) return;
+      socket.leave(`password_reset_waiting_${email}`);
+      console.log(`Socket ${socket.id} left password reset waiting room for: ${email}`);
+    });
+
+    // =================================================================
     // 1. GLOBAL ROOM MANAGEMENT
     // =================================================================
     

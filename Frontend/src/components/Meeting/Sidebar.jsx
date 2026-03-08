@@ -141,7 +141,8 @@ function Sidebar({
   remoteVideoStreams,
   onToggleEditPermission,
   isChatEnabled = true,
-  raisedHands = {}
+  raisedHands = {},
+  sharedCanvasLink = null
 }) {
   const displayName = currentUser?.username || currentUser?.name || 'You';
   const currentUserId = currentUser?._id || currentUser?.id;
@@ -343,6 +344,19 @@ function Sidebar({
                         );
                       })()
                     ))}
+
+                    {/* Shared Canvas Link */}
+                    {sharedCanvasLink && (
+                      <div className="mt-4 pt-4 border-t border-white/5">
+                        <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-2">Meeting Canvas Link</h4>
+                        <button
+                          onClick={() => window.location.href = sharedCanvasLink}
+                          className="text-primary hover:text-blue-400 underline text-sm break-all transition-colors text-left bg-none border-none cursor-pointer p-0"
+                        >
+                          {sharedCanvasLink}
+                        </button>
+                      </div>
+                    )}
                   </>
                 )}
               </div>

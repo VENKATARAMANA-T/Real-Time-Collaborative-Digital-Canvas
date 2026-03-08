@@ -81,6 +81,11 @@ export default function UserProfileUI() {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   
+  // Delete Account state
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
+  
   // Activity logs state
   const [activityLogs, setActivityLogs] = useState([]);
   const [activityLoading, setActivityLoading] = useState(false);
@@ -137,7 +142,7 @@ export default function UserProfileUI() {
         ...prev,
         [tab]: { show: false, type: '', message: '' },
       }));
-    }, 5000);
+    }, 3000);
   };
 
   const closeFlash = () => {
@@ -240,6 +245,33 @@ export default function UserProfileUI() {
   const handleLogout = async () => {
     await logout();
     navigate('/');
+  };
+
+  // Handle Account Deletion
+  const handleDeleteAccount = async (e) => {
+    e.preventDefault();
+    if (!deletePassword) {
+      showFlash('security', 'error', 'Password is required to delete your account');
+      return;
+    }
+
+    setIsDeleting(true);
+    try {
+      await userAPI.deleteAccount(deletePassword);
+      // Backend automatically clears the cookies
+      // Clear local state without showing logout flash
+      setShowDeleteModal(false);
+      localStorage.removeItem('user');
+      localStorage.removeItem('accessToken');
+      // Redirect to home without showing logout flash message
+      window.location.href = '/';
+    } catch (error) {
+      setIsDeleting(false);
+      setDeletePassword('');
+      const errorMsg = error.response?.data?.message || 'Failed to delete account';
+      showFlash('security', 'error', errorMsg);
+      setShowDeleteModal(false);
+    }
   };
 
   const tabs = [
@@ -598,10 +630,20 @@ export default function UserProfileUI() {
               <div className="glass bg-slate-900/40 border border-red-500/20 backdrop-blur-xl rounded-2xl p-8">
                 <h3 className="text-xl font-bold text-red-400 mb-2">Danger Zone</h3>
                 <p className="text-slate-400 text-sm mb-6">Permanently delete your account and all of your content.</p>
-                <div className="flex justify-between items-center">
-                  <div className="text-sm text-slate-500">Once you delete your account, there is no going back.</div>
-                  <button className="px-6 py-2 bg-red-500/10 text-red-500 border border-red-500/50 rounded-lg hover:bg-red-500 hover:text-white transition-all text-sm font-bold">
-                    Delete Account
+                <div className="space-y-4">
+                  <p className="text-sm text-slate-300 leading-relaxed">
+                    Once you delete your account, there is no going back. All your canvases, folders, meetings, and data will be permanently removed.
+                  </p>
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      console.log('Delete Account button clicked');
+                      setShowDeleteModal(true);
+                    }}
+                    className="w-full px-8 py-4 bg-red-600 hover:bg-red-500 text-white font-bold rounded-lg transition-all shadow-lg hover:shadow-red-500/40 flex items-center justify-center gap-3 text-base"
+                  >
+                    <Trash2 className="w-5 h-5" />
+                    Delete Account Permanently
                   </button>
                 </div>
               </div>
@@ -834,6 +876,83 @@ export default function UserProfileUI() {
 
         </main>
       </div>
+
+      {/* --- DELETE ACCOUNT MODAL --- */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-slate-900 border border-red-500/30 rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl relative"
+               style={{backgroundColor: '#0f172a', zIndex: 51}}>
+            <button 
+              type="button"
+              onClick={() => {
+                console.log('Close button clicked');
+                setShowDeleteModal(false);
+              }}
+              className="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors"
+              disabled={isDeleting}
+            >
+              <X className="w-5 h-5" />
+            </button>
+            
+            <div className="flex items-center gap-4 mb-6">
+              <div className="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center flex-shrink-0 text-red-500">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-white">Delete Account</h3>
+                <p className="text-sm text-red-400">This action is permanent.</p>
+              </div>
+            </div>
+
+            <p className="text-slate-300 text-sm mb-6 leading-relaxed">
+              You are about to permanently delete your account, all your canvases, folders, and meetings. 
+              <strong> You cannot undo this action.</strong>
+            </p>
+
+            <form onSubmit={handleDeleteAccount}>
+              <div className="space-y-2 mb-6">
+                <label className="text-xs font-semibold text-slate-400 uppercase tracking-widest">Confirm Password</label>
+                <input 
+                  type="password"
+                  value={deletePassword}
+                  onChange={(e) => setDeletePassword(e.target.value)}
+                  placeholder="Enter your password"
+                  className="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-red-500 transition-all placeholder:text-slate-600"
+                  required
+                  disabled={isDeleting}
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4 border-t border-white/5">
+                <button 
+                  type="button"
+                  onClick={() => setShowDeleteModal(false)}
+                  className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-sm font-bold text-white transition-all disabled:opacity-50"
+                  disabled={isDeleting}
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit"
+                  disabled={isDeleting || !deletePassword}
+                  className="px-5 py-2.5 bg-red-600 hover:bg-red-500 rounded-lg text-sm font-bold text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  {isDeleting ? (
+                    <>
+                      <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Deleting...
+                    </>
+                  ) : 'Permanently Delete'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

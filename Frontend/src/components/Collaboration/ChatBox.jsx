@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { chatAPI } from '../../services/api';
 
 const formatTime = (timestamp) => {
@@ -10,6 +10,7 @@ function ChatBox({ meetingDbId, socket, currentUsername, isChatEnabled = true, c
 	const [messages, setMessages] = useState([]);
 	const [inputValue, setInputValue] = useState('');
 	const [flash, setFlash] = useState(null);
+	const messagesEndRef = useRef(null);
 
 	const normalizedUsername = useMemo(() => currentUsername || 'Me', [currentUsername]);
 	const isHost = currentRole === 'host';
@@ -68,6 +69,10 @@ function ChatBox({ meetingDbId, socket, currentUsername, isChatEnabled = true, c
 		};
 	}, [socket]);
 
+	useEffect(() => {
+		messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+	}, [messages]);
+
 	const handleSend = () => {
 		const trimmed = inputValue.trim();
 		if (!trimmed || !socket || !meetingDbId) return;
@@ -115,6 +120,7 @@ function ChatBox({ meetingDbId, socket, currentUsername, isChatEnabled = true, c
 						</div>
 					);
 				})}
+				<div ref={messagesEndRef} />
 			</div>
 
 			<div className="p-4 border-t border-border-dark bg-background-dark">

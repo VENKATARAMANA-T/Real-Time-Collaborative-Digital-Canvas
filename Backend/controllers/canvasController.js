@@ -1,6 +1,8 @@
 const Canvas = require('../models/Canvas.js');
 const ActivityLog = require('../models/ActivityLog.js');
 const Meeting = require('../models/Meeting.js');
+const Folder = require('../models/Folder.js');
+const crypto = require('crypto');
 const { uploadToCloudinary, deleteFromCloudinary } = require('../config/cloudinary.js');
 
 // Helper: Upload images embedded in canvas elements to Cloudinary
@@ -675,3 +677,98 @@ exports.importCanvas = async (req, res) => {
     res.status(500).json({ message: 'Server Error', error: error.message });
   }
 };   
+
+// @desc    Generate a share token for a canvas
+// @route   POST /api/canvases/:id/share
+// @access  Private (owner only)
+exports.generateShareToken = async (req, res) => {
+  try {
+    const canvas = await Canvas.findOne({ _id: req.params.id, owner: req.user._id });
+    if (!canvas) {
+      return res.status(404).json({ message: 'Canvas not found or access denied' });
+    }
+
+    // Generate token if not already present
+    if (!canvas.shareToken) {
+      canvas.shareToken = crypto.randomBytes(32).toString('hex');
+      await canvas.save();
+    }
+
+    res.status(200).json({ shareToken: canvas.shareToken });
+  } catch (error) {
+    res.status(500).json({ message: 'Server Error', error: error.message });
+  }
+};
+
+// @desc    Get shared canvas by share token (read-only, any authenticated user)
+// @route   GET /api/canvases/shared/:shareToken
+// @access  Private (any authenticated user)
+exports.getSharedCanvas = async (req, res) => {
+  try {
+    const canvas = await Canvas.findOne({ shareToken: req.params.shareToken })
+      .populate('owner', 'name email');
+
+    if (!canvas) {
+      return res.status(404).json({ message: 'Shared canvas not found or link is invalid' });
+    }
+
+    // Return canvas data for read-only viewing
+    const responseCanvas = canvas.toObject();
+    if (responseCanvas.pixelDataUrl) {
+      if (!responseCanvas.data) responseCanvas.data = {};
+      responseCanvas.data.pixelData = responseCanvas.pixelDataUrl;
+    }
+
+    res.status(200).json(responseCanvas);
+  } catch (error) {
+    res.status(500).json({ message: 'Server Error', error: error.message });
+  }
+};
+
+// @desc    Clone a shared canvas into the current user's Personal Sketches folder
+// @route   POST /api/canvases/shared/:shareToken/clone
+// @access  Private (any authenticated user)
+exports.cloneSharedCanvas = async (req, res) => {
+  try {
+    const originalCanvas = await Canvas.findOne({ shareToken: req.params.shareToken });
+    if (!originalCanvas) {
+      return res.status(404).json({ message: 'Shared canvas not found or link is invalid' });
+    }
+
+    // Find or create "Personal Sketches" folder for this user
+    let folder = await Folder.findOne({ name: 'Personal Sketches', owner: req.user._id });
+    if (!folder) {
+      folder = await Folder.create({ name: 'Personal Sketches', owner: req.user._id });
+    }
+
+    // Deep clone canvas data
+    const clonedData = JSON.parse(JSON.stringify(originalCanvas.data || {}));
+
+    const newCanvas = new Canvas({
+      title: originalCanvas.title,
+      owner: req.user._id,
+      folder: folder._id,
+      data: clonedData,
+      thumbnail: originalCanvas.thumbnail || '',
+      pixelDataUrl: originalCanvas.pixelDataUrl || '',
+      isMeetingCanvas: originalCanvas.isMeetingCanvas || false,
+    });
+
+    const savedCanvas = await newCanvas.save();
+
+    // Add canvas to folder
+    folder.canvases.push(savedCanvas._id);
+    await folder.save();
+
+    // Log activity
+    try {
+      await ActivityLog.create({ user: req.user._id, action: 'CREATE_CANVAS' });
+    } catch (logError) {
+      console.error('Logging failed:', logError);
+    }
+
+    res.status(201).json(savedCanvas);
+  } catch (error) {
+    res.status(500).json({ message: 'Server Error', error: error.message });
+  }
+};

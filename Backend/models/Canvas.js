@@ -45,6 +45,11 @@ const canvasSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  shareToken: {
+    type: String,
+    default: null,
+    index: true
+  },
   versions: [{
     data: Object,
     timestamp: {
