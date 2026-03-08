@@ -56,42 +56,16 @@ exports.registerUser = async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    // 4. Generate activation token
-    const activationToken = crypto.randomBytes(32).toString('hex');
-    const activationTokenHash = crypto.createHash('sha256').update(activationToken).digest('hex');
+    // 4. Create stateless Activation JWT (expires in 5 minutes)
+    // We do NOT save the user to the database yet.
+    const activationPayload = { username, email, hashedPassword };
+    const activationToken = jwt.sign(
+      activationPayload, 
+      process.env.JWT_SECRET || 'fallback_secret', 
+      { expiresIn: '5m' }
+    );
 
-    // 5. Create User Instance with isVerified = false
-    const user = new User({
-      username,
-      email,
-      password: hashedPassword,
-      isVerified: false,
-      activationTokenHash,
-      activationTokenExpire: new Date(Date.now() + 5 * 60 * 1000) // 5 minutes
-    });
-
-    // 6. Explicitly Save User to Database
-    await user.save();
-
-    // 7. Log Activity (Create -> Save)
-    const log = new ActivityLog({
-      user: user._id,
-      action: 'REGISTER_USER',
-    });
-    await log.save();
-
-    // 8. Create default "Personal Sketches" folder for the new user
-    try {
-      await Folder.create({
-        name: 'Personal Sketches',
-        owner: user._id,
-        isDefault: true
-      });
-    } catch (folderErr) {
-      console.warn('[Register] Failed to create default folder:', folderErr.message);
-    }
-
-    // 9. Send activation email
+    // 5. Send activation email
     const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
     const activationLink = `${baseUrl}/activate/${activationToken}`;
 
@@ -152,47 +126,96 @@ exports.activateAccount = async (req, res) => {
       return res.status(400).json({ message: 'Activation token is required' });
     }
 
-    const activationTokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    try {
+      // 1. Verify the JWT Token
+      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback_secret');
+      
+      const { username, email, hashedPassword } = decoded;
 
-    // First check if token exists at all (even if expired)
-    const user = await User.findOne({ activationTokenHash });
+      // 2. Check if user already exists (maybe they clicked it twice or registered before with same email)
+      const existingUser = await User.findOne({ $or: [{ email }, { username }] });
+      if (existingUser) {
+        if (existingUser.isVerified) {
+          // Emit socket event even for already-verified users
+          const io = req.app?.get('io');
+          if (io) {
+            io.to(`activation_waiting_${email}`).emit('account_activated', {
+              email,
+              success: true,
+              message: 'Your account has already been activated! You can now login.'
+            });
+          }
+          return res.status(200).json({ success: true, message: 'Your account has already been activated! You can now login.' });
+        } else {
+          // Edge case: an old unverified account is in the DB but they used the new stateless link.
+          // We can delete the old one or just override it. We'll override by deleting the old unverified one.
+          await User.deleteOne({ _id: existingUser._id });
+        }
+      }
 
-    if (!user) {
+      // 3. Create the User now (stateless registration pattern)
+      const user = new User({
+        username,
+        email,
+        password: hashedPassword,
+        isVerified: true,
+        // Since we already hashed the password in register route, we don't want the pre-save hook 
+        // in User schema to hash it again. But mongoose hooks run on .save(). 
+        // Actually, if the User model has a pre('save') hook that checks `if(!this.isModified('password')) return next();`
+        // we need to be careful. However, since we are creating it, it WILL be modified.
+        // Wait, the register logic previously did: await bcrypt.hash(password, salt) AND the model also has a pre-save hook?
+        // Let's check if the model hashes it in pre-save. If yes, we SHOULD NOT hash it in authController!
+        // But for now, we'll assume we can use create() and if the model hashes, we should just pass plain text in JWT.
+        // Wait, passing plaintext password in JWT is bad! We pass the hash.
+        // Let me verify if there's a pre-save hook in the User model in a moment.
+      });
+
+      // Let's override the hash directly using updateOne and upsert to bypass pre-save hook,
+      // OR we just save it. If the old code did `password: hashedPassword` and `user.save()`, 
+      // then the model might NOT have a pre-save hash hook, or it would've been double-hashed.
+      // So `user.save()` is safe here based on the previous implementation.
+      await user.save();
+
+      // 4. Log Activity
+      const log = new ActivityLog({
+        user: user._id,
+        action: 'REGISTER_USER', // Or ACCOUNT_ACTIVATED
+      });
+      await log.save();
+
+      // 5. Create default folder
+      try {
+        await Folder.create({
+          name: 'Personal Sketches',
+          owner: user._id,
+          isDefault: true
+        });
+      } catch (folderErr) {
+        console.warn('[Activation] Failed to create default folder:', folderErr.message);
+      }
+
+      // 6. Emit real-time socket event to notify waiting browsers
+      const io = req.app?.get('io');
+      if (io) {
+        io.to(`activation_waiting_${email}`).emit('account_activated', {
+          email,
+          success: true,
+          message: 'Your account has been activated successfully!'
+        });
+        console.log(`📧 Socket event emitted for account activation: ${email}`);
+      }
+
+      res.status(200).json({
+        success: true,
+        message: 'Your account has been activated successfully! You can now login.'
+      });
+
+    } catch (err) {
+      if (err.name === 'TokenExpiredError') {
+        return res.status(410).json({ message: 'This activation link has expired. Please register again.', expired: true });
+      }
       return res.status(400).json({ message: 'Invalid activation link. Please register again.', expired: false });
     }
-
-    // Check if the link has expired
-    if (user.activationTokenExpire && user.activationTokenExpire < new Date()) {
-      // Clean up: delete unverified user whose link expired
-      if (!user.isVerified) {
-        const Folder = require('../models/Folder.js');
-        await Folder.deleteMany({ owner: user._id });
-        await ActivityLog.deleteMany({ user: user._id });
-        await User.deleteOne({ _id: user._id });
-      }
-      return res.status(410).json({ message: 'This activation link has expired. Please register again.', expired: true });
-    }
-
-    // If already verified, still show success until the link expires
-    if (user.isVerified) {
-      return res.status(200).json({ success: true, message: 'Your account has been activated successfully! You can now login.' });
-    }
-
-    // Activate the user — keep token so link works until expiry
-    user.isVerified = true;
-    await user.save();
-
-    // Log activation activity
-    const log = new ActivityLog({
-      user: user._id,
-      action: 'ACCOUNT_ACTIVATED',
-    });
-    await log.save();
-
-    res.status(200).json({
-      success: true,
-      message: 'Your account has been activated successfully! You can now login.'
-    });
 
   } catch (error) {
     console.error(error);
@@ -389,6 +412,16 @@ exports.forgotPassword = async (req, res) => {
 
     await sendEmail({ to: user.email, subject, text, html });
 
+    // Emit socket event to notify all browsers for this email about password reset request
+    const io = req.app?.get('io');
+    if (io) {
+      io.to(`password_reset_waiting_${email}`).emit('password_reset_requested', {
+        email,
+        message: 'Password reset link has been sent to your email.'
+      });
+      console.log(`📧 Socket event emitted for password reset request: ${email}`);
+    }
+
     res.status(200).json({ message: 'Reset link sent to your email' });
   } catch (error) {
     console.error(error);
@@ -427,6 +460,17 @@ exports.resetPassword = async (req, res) => {
     await user.save();
 
     clearAuthCookies(res);
+
+    // Emit real-time socket event to notify waiting browsers about password reset completion
+    const io = req.app?.get('io');
+    if (io && user.email) {
+      io.to(`password_reset_waiting_${user.email}`).emit('password_reset_completed', {
+        email: user.email,
+        success: true,
+        message: 'Your password has been reset successfully!'
+      });
+      console.log(`✅ Socket event emitted for password reset completion: ${user.email}`);
+    }
 
     return res.status(200).json({ message: 'Password reset successful' });
   } catch (error) {

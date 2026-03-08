@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { meetingAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext.jsx';
 import VideoPlayer from '../components/Meeting/VideoPlayer.jsx';
+import { useSocket } from '../hooks/useSocket.js';
 
 const formatTime = (timestamp) => {
   if (!timestamp) return '';
@@ -18,6 +19,16 @@ export default function MeetingNotes() {
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('chat');
   const chatEndRef = useRef(null);
+  const [canvasLinkInput, setCanvasLinkInput] = useState('');
+  const [canvasLinkSaving, setCanvasLinkSaving] = useState(false);
+  const [canvasLinkMsg, setCanvasLinkMsg] = useState('');
+
+  // Socket for real-time updates
+  const socket = useSocket({
+    meetingId: id,
+    userId: user?._id || user?.id,
+    username: user?.username
+  });
 
   useEffect(() => {
     const fetchNotes = async () => {
@@ -26,6 +37,7 @@ export default function MeetingNotes() {
         const response = await meetingAPI.getMeetingNotes(id);
         if (response.success) {
           setMeeting(response.meeting);
+          setCanvasLinkInput(response.meeting.sharedCanvasLink || '');
         }
       } catch (err) {
         console.error('Error fetching meeting notes:', err);
@@ -42,6 +54,21 @@ export default function MeetingNotes() {
       chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [activeTab]);
+
+  // Listen for real-time canvas link updates
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleCanvasLinkUpdate = (data) => {
+      setMeeting(prev => prev ? { ...prev, sharedCanvasLink: data.sharedCanvasLink } : null);
+    };
+
+    socket.on('canvas_link_updated', handleCanvasLinkUpdate);
+
+    return () => {
+      socket.off('canvas_link_updated', handleCanvasLinkUpdate);
+    };
+  }, [socket]);
 
   if (loading) {
     return (
@@ -468,6 +495,110 @@ export default function MeetingNotes() {
                 )}
               </div>
             </div>
+
+            {/* Meeting Canvas Link Card */}
+            {(() => {
+              const isHost = user && meeting.host?._id === (user._id || user.id);
+              const handleSaveCanvasLink = async () => {
+                setCanvasLinkSaving(true);
+                setCanvasLinkMsg('');
+                try {
+                  await meetingAPI.updateCanvasLink(meeting._id, canvasLinkInput.trim() || null);
+                  setMeeting(prev => ({ ...prev, sharedCanvasLink: canvasLinkInput.trim() || null }));
+                  setCanvasLinkMsg('Saved!');
+                  setTimeout(() => setCanvasLinkMsg(''), 2000);
+                } catch {
+                  setCanvasLinkMsg('Failed to save');
+                  setTimeout(() => setCanvasLinkMsg(''), 3000);
+                } finally {
+                  setCanvasLinkSaving(false);
+                }
+              };
+              const handleRemoveCanvasLink = async () => {
+                setCanvasLinkSaving(true);
+                setCanvasLinkMsg('');
+                try {
+                  await meetingAPI.updateCanvasLink(meeting._id, null);
+                  setCanvasLinkInput('');
+                  setMeeting(prev => ({ ...prev, sharedCanvasLink: null }));
+                  setCanvasLinkMsg('Removed!');
+                  setTimeout(() => setCanvasLinkMsg(''), 2000);
+                } catch {
+                  setCanvasLinkMsg('Failed to remove');
+                  setTimeout(() => setCanvasLinkMsg(''), 3000);
+                } finally {
+                  setCanvasLinkSaving(false);
+                }
+              };
+
+              return (
+                <div className="rounded-2xl border border-border-dark bg-surface-dark/30 overflow-hidden">
+                  <div className="px-5 py-3 border-b border-border-dark/70 bg-surface-dark/50 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="material-symbols-outlined text-orange-400 text-[18px]">palette</span>
+                      <h3 className="text-sm font-semibold text-slate-300">Meeting Canvas</h3>
+                    </div>
+                    {canvasLinkMsg && (
+                      <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${canvasLinkMsg === 'Saved!' || canvasLinkMsg === 'Removed!' ? 'text-emerald-400 bg-emerald-500/10' : 'text-red-400 bg-red-500/10'}`}>
+                        {canvasLinkMsg}
+                      </span>
+                    )}
+                  </div>
+                  <div className="p-5">
+                    {isHost ? (
+                      <div className="space-y-3">
+                        <p className="text-[11px] text-slate-500">Share the meeting canvas with participants by pasting its shared link below.</p>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={canvasLinkInput}
+                            onChange={(e) => setCanvasLinkInput(e.target.value)}
+                            placeholder="Paste meeting canvas shared link..."
+                            className="flex-1 px-3.5 py-2.5 rounded-lg bg-background-dark border border-border-dark text-sm text-white placeholder:text-slate-600 focus:outline-none focus:ring-1 focus:ring-primary/30 focus:border-primary/40 transition-all font-mono text-[12px]"
+                          />
+                          <button
+                            onClick={handleSaveCanvasLink}
+                            disabled={canvasLinkSaving}
+                            className="px-4 py-2.5 rounded-lg bg-primary hover:bg-blue-600 text-white text-xs font-bold transition-all disabled:opacity-50 flex items-center gap-1.5"
+                          >
+                            <span className="material-symbols-outlined text-[14px]">save</span>
+                            Save
+                          </button>
+                        </div>
+                        {meeting.sharedCanvasLink && (
+                          <button
+                            onClick={handleRemoveCanvasLink}
+                            disabled={canvasLinkSaving}
+                            className="text-[11px] text-red-400 hover:text-red-300 font-medium transition-colors flex items-center gap-1"
+                          >
+                            <span className="material-symbols-outlined text-[14px]">delete</span>
+                            Remove canvas link
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      <div>
+                        {meeting.sharedCanvasLink ? (
+                          <div className="space-y-2">
+                            <h4 className="text-sm font-semibold text-slate-300">Meeting Canvas Link</h4>
+                            <button
+                              onClick={() => window.location.href = meeting.sharedCanvasLink}
+                              className="text-primary hover:text-blue-400 underline text-sm break-all text-left bg-none border-none cursor-pointer p-0"
+                            >
+                              {meeting.sharedCanvasLink}
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="text-sm text-slate-500">
+                            No canvas shared
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Back button */}
             <button

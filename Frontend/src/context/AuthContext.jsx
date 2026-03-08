@@ -15,19 +15,30 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
-  // Check if user is logged in on mount
+  // Check if user is logged in on mount securely via backend
   useEffect(() => {
-    const storedUser = localStorage.getItem('user');
-    if (storedUser) {
+    const verifySession = async () => {
       try {
-        setUser(JSON.parse(storedUser));
+        // Actually ping the backend to verify the token is valid (using HTTP-Only cookies)
+        const data = await authAPI.getMe();
+        if (data && data.user) {
+          setUser(data.user);
+          localStorage.setItem('user', JSON.stringify(data.user)); // Sync local storage cache
+        }
       } catch (err) {
-        console.error('Failed to parse stored user:', err);
+        console.warn('Session verification failed:', err);
+        // Token invalid or expired — clear cache entirely so protected routes kick in immediately
+        setUser(null);
         localStorage.removeItem('user');
+        localStorage.removeItem('accessToken');
+      } finally {
+        setLoading(false);
       }
-    }
-    setLoading(false);
+    };
+    
+    verifySession();
   }, []);
 
   // Register function
@@ -76,6 +87,7 @@ export const AuthProvider = ({ children }) => {
 
   // Logout function
   const logout = async () => {
+    setIsLoggingOut(true);
     try {
       await authAPI.logout();
     } catch (err) {
@@ -84,6 +96,32 @@ export const AuthProvider = ({ children }) => {
       setUser(null);
       localStorage.removeItem('user');
       localStorage.removeItem('accessToken');
+      
+      // Clear any activation-related flags so home page shows clean
+      localStorage.removeItem('collab_activationSent');
+      localStorage.removeItem('collab_activationEmail');
+      localStorage.removeItem('collab_activationSentTime');
+      localStorage.removeItem('collab_activationCompleted');
+      localStorage.removeItem('collab_linkExpired');
+      localStorage.removeItem('collab_timeLeft');
+      
+      // Clear password reset related flags
+      localStorage.removeItem('collab_resetSent');
+      localStorage.removeItem('collab_resetEmail');
+      localStorage.removeItem('collab_resetSentTime');
+      localStorage.removeItem('collab_resetCompleted');
+      localStorage.removeItem('collab_resetLinkExpired');
+      
+      // Set logout flash message flag
+      localStorage.setItem('logoutFlash', JSON.stringify({
+        type: 'success',
+        message: 'You have been logged out successfully.'
+      }));
+      
+      // Wait for logout animation before redirecting
+      setTimeout(() => {
+        window.location.href = '/';
+      }, 1500);
     }
   };
 
@@ -111,6 +149,7 @@ export const AuthProvider = ({ children }) => {
     updateUser,
     clearError,
     isAuthenticated: !!user,
+    isLoggingOut,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

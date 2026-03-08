@@ -16,7 +16,8 @@ const {
   getMeetingDetails,
   getUserMeetings,
   uploadRecording,
-  getMeetingNotes
+  getMeetingNotes,
+  updateSharedCanvasLink
 } = require('../controllers/meetingController');
 const { authMiddleware } = require('../middleware/authMiddleware');
 
@@ -81,5 +82,8 @@ router.post('/:id/recording', recordingUpload.single('recording'), uploadRecordi
 
 // Get Meeting Notes (Chat + Recording info for ended meetings)
 router.get('/:id/notes', getMeetingNotes);
+
+// Update shared canvas link (Host Only)
+router.put('/:id/canvas-link', updateSharedCanvasLink);
 
 module.exports = router;

@@ -9,16 +9,51 @@ import CTASlide from './CTASlide';
 import NavDots from './NavDots';
 import AuthModal from './AuthModal';
 
-export default function CollabCanvasApp() {
-  const { user } = useAuth();
+// Logout Loading Overlay
+function LogoutOverlay({ isLoggingOut }) {
+  if (!isLoggingOut) return null;
+  return (
+    <div className="fixed inset-0 z-[999] flex items-center justify-center bg-slate-900/80 backdrop-blur-sm">
+      <div className="flex items-center gap-4 rounded-2xl border border-white/10 bg-[#0f172a] px-8 py-8 shadow-2xl">
+        <div className="h-10 w-10 animate-spin rounded-full border-2 border-slate-600 border-t-primary"></div>
+        <p className="text-sm font-semibold text-slate-100">Logging out...</p>
+      </div>
+    </div>
+  );
+}
+
+export default function CollabCanvasApp({ initialShowAuth = false, initialAuthMode = 'login' }) {
+  const { user, isLoggingOut } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [currentSlide, setCurrentSlide] = useState(0);
-  const [showAuth, setShowAuth] = useState(false);
-  const [authMode, setAuthMode] = useState('login');
+  const [showAuth, setShowAuth] = useState(initialShowAuth);
+  const [authMode, setAuthMode] = useState(initialAuthMode);
   const [isLoading, setIsLoading] = useState(false);
   const [flash, setFlash] = useState(null);
   const lastScrollTime = useRef(0);
+
+  // Auto-open modal to register view if user is in the middle of activating via locally stored flag
+  useEffect(() => {
+    // Check for logout flash message
+    const logoutFlashStr = localStorage.getItem('logoutFlash');
+    if (logoutFlashStr) {
+      try {
+        const logoutFlashData = JSON.parse(logoutFlashStr);
+        setFlash(logoutFlashData);
+        localStorage.removeItem('logoutFlash');
+        return; // Don't show auth modal if logout flash exists
+      } catch (e) {
+        console.error('Error parsing logout flash:', e);
+      }
+    }
+    
+    // Auto-open modal for activation (only if no logout flash)
+    if (localStorage.getItem('collab_activationSent') === 'true') {
+      setAuthMode('register');
+      setShowAuth(true);
+    }
+  }, []);
 
   // Scroll wheel navigation
   useEffect(() => {
@@ -56,6 +91,20 @@ export default function CollabCanvasApp() {
 
   const handleAuthClose = () => {
     setShowAuth(false);
+    if (['/login', '/register', '/forgot-password'].includes(location.pathname)) {
+      navigate('/', { replace: true });
+    }
+  };
+
+  const handleLoginSuccess = () => {
+    setShowAuth(false);
+    const redirectPath = localStorage.getItem('redirectAfterLogin');
+    if (redirectPath) {
+      localStorage.removeItem('redirectAfterLogin');
+      navigate(redirectPath, { replace: true });
+    } else {
+      navigate('/dashboard', { replace: true });
+    }
   };
 
   useEffect(() => {
@@ -80,6 +129,9 @@ export default function CollabCanvasApp() {
 
   return (
     <div className="bg-[#0f172a] text-white min-h-screen font-sans selection:bg-purple-500/30 overflow-hidden">
+      {/* Logout Loading Overlay */}
+      <LogoutOverlay isLoggingOut={isLoggingOut} />
+
       {/* Background Ambience */}
       <BackgroundAmbience />
 
@@ -125,6 +177,7 @@ export default function CollabCanvasApp() {
         mode={authMode}
         onModeChange={setAuthMode}
         isLoading={isLoading}
+        onLoginSuccess={handleLoginSuccess}
       />
 
     </div>

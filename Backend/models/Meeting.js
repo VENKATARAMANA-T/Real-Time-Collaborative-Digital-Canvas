@@ -135,6 +135,12 @@ const meetingSchema = new mongoose.Schema({
   endTime: {
     type: Date,
     default: null
+  },
+
+  // 🔗 Meeting canvas share link (set by host after meeting ends)
+  sharedCanvasLink: {
+    type: String,
+    default: null
   }
 
 }, { timestamps: true });

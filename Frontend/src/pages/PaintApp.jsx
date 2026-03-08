@@ -1,16 +1,19 @@
 import React, { useState, useRef, useEffect, useCallback, useLayoutEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { Plus, Scissors, Copy, Clipboard, LayoutDashboard } from 'lucide-react';
 import TopMenu from '../components/Canvas/TopMenu';
 import Toolbar from '../components/Canvas/Toolbar';
 import PropertiesPanel from '../components/Canvas/PropertiesPanel';
-import StatusBar from '../components/Canvas/StatusBar';
 import PaintCanvas from '../components/Canvas/PaintCanvas';
 import LayerPanel from '../components/Canvas/LayerPanel';
 import usePaintHistory from '../hooks/usePaintHistory';
 import usePaintTools from '../hooks/usePaintTools';
 import { getElementBounds } from '../utils/canvasHelpers';
+import { canvasAPI } from '../services/api';
 
 const PaintApp = () => {
+  const { id: canvasId } = useParams();
+  const navigate = useNavigate();
   const canvasRef = useRef(null);
   const tempCanvasRef = useRef(null);
   const contextRef = useRef(null);
@@ -18,6 +21,7 @@ const PaintApp = () => {
   const textAreaRef = useRef(null);
   const workspaceRef = useRef(null);
   const mainContainerRef = useRef(null);
+  const initialStateSaved = useRef(false);
 
   const [zoom, setZoom] = useState(100);
   const [canvasSize, setCanvasSize] = useState({ x: 0, y: 0, width: 1920, height: 1080 });
@@ -45,6 +49,11 @@ const PaintApp = () => {
   const [lastSavedStep, setLastSavedStep] = useState(-1);
   const [notifications, setNotifications] = useState([]);
   const [pasteOffset, setPasteOffset] = useState({ x: 0, y: 0 });
+  const [showSavePrompt, setShowSavePrompt] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [shareLink, setShareLink] = useState('');
+  const [shareCopied, setShareCopied] = useState(false);
+  const [navigatingToDashboard, setNavigatingToDashboard] = useState(false);
 
   const {
     tool,
@@ -86,6 +95,42 @@ const PaintApp = () => {
   const fontSizes = [8, 9, 10, 11, 12, 14, 16, 18, 20, 22, 24, 26, 28, 36, 48, 72];
 
   const isTextToolActive = tool === 'text' || (selectedId && elements.find(e => e.id === selectedId)?.type === 'text');
+
+  // Load canvas data from DB on mount
+  useEffect(() => {
+    if (canvasId) {
+      canvasAPI.getById(canvasId).then(canvas => {
+        if (canvas && canvas.data) {
+          const data = canvas.data;
+          if (data.elements) {
+            // Restore image elements
+            const restored = data.elements.map(el => {
+              if (el.type === 'raster-fill' && el.dataUrl && !el.image) {
+                const img = new Image();
+                img.src = el.dataUrl;
+                return { ...el, image: img };
+              }
+              return el;
+            });
+            setElements(restored);
+          }
+          if (data.layers) setLayers(data.layers);
+          if (data.activeLayerId) setActiveLayerId(data.activeLayerId);
+          if (data.canvasBgColor) setCanvasBgColor(data.canvasBgColor);
+          if (data.showCheckerboard !== undefined) setShowCheckerboard(data.showCheckerboard);
+        }
+      }).catch(err => console.error('Failed to load canvas:', err));
+    }
+  }, [canvasId]);
+
+  // Save initial state for undo (so first operation can be undone)
+  useEffect(() => {
+    if (!initialStateSaved.current) {
+      initialStateSaved.current = true;
+      saveState(elements, layers, activeLayerId, canvasBgColor, showCheckerboard);
+      setLastSavedStep(0);
+    }
+  }, []);
 
   useEffect(() => {
     if (editingId && textAreaRef.current) {
@@ -434,9 +479,83 @@ const PaintApp = () => {
     }
   };
 
-  const handleSave = () => {
-    // Just internally mark as saved — no download!
+  const handleSave = async () => {
+    if (canvasId) {
+      try {
+        // Prepare elements without non-serializable image objects
+        const serializableElements = elements.map(el => {
+          const clone = { ...el };
+          if (el.points) clone.points = [...el.points];
+          delete clone.image; // Remove HTMLImageElement (not serializable)
+          return clone;
+        });
+        await canvasAPI.update(canvasId, {
+          data: {
+            elements: serializableElements,
+            layers,
+            activeLayerId,
+            canvasBgColor,
+            showCheckerboard
+          }
+        });
+      } catch (err) {
+        console.error('Failed to save canvas:', err);
+      }
+    }
     setLastSavedStep(historyStep);
+  };
+
+  const handleDashboardClick = () => {
+    const hasUnsavedChanges = historyStep !== lastSavedStep;
+    if (hasUnsavedChanges) {
+      setShowSavePrompt(true);
+    } else {
+      goToDashboard();
+    }
+  };
+
+  const goToDashboard = () => {
+    setShowSavePrompt(false);
+    setNavigatingToDashboard(true);
+    setTimeout(() => navigate('/dashboard'), 600);
+  };
+
+  const handleSaveAndGo = async () => {
+    await handleSave();
+    goToDashboard();
+  };
+
+  const handleShare = async () => {
+    if (!canvasId) return;
+    // Auto-save before sharing
+    await handleSave();
+    try {
+      const { shareToken } = await canvasAPI.generateShareToken(canvasId);
+      const link = `${window.location.origin}/shared/${shareToken}`;
+      setShareLink(link);
+      setShareCopied(false);
+      setShowShareModal(true);
+    } catch (err) {
+      console.error('Failed to generate share link:', err);
+    }
+  };
+
+  const handleCopyShareLink = async () => {
+    try {
+      await navigator.clipboard.writeText(shareLink);
+      setShareCopied(true);
+      setTimeout(() => setShareCopied(false), 3000);
+    } catch {
+      // Fallback
+      const input = document.createElement('input');
+      input.value = shareLink;
+      document.body.appendChild(input);
+      input.select();
+      document.execCommand('copy');
+      document.body.removeChild(input);
+      setShareCopied(true);
+      setTimeout(() => setShareCopied(false), 3000);
+    }
   };
 
   const handleExport = () => {
@@ -629,6 +748,8 @@ const PaintApp = () => {
         isDirty={historyStep !== lastSavedStep}
         currentView={currentView}
         setCurrentView={setCurrentView}
+        onDashboardClick={handleDashboardClick}
+        onShare={handleShare}
       />
 
       {currentView === 'dashboard' ? (
@@ -765,8 +886,107 @@ const PaintApp = () => {
         </>
       )}
 
-      {showStatusBar && currentView === 'canvas' && (
-        <StatusBar currPos={currPos} canvasSize={canvasSize} zoom={zoom} setZoom={setZoom} />
+
+
+      {/* ── Loading overlay for dashboard transition ─────────────────────── */}
+      {navigatingToDashboard && (
+        <div className="fixed inset-0 z-[300] flex flex-col items-center justify-center bg-[#09090b] animate-fadeIn">
+          <div className="relative mb-6">
+            <div className="w-16 h-16 border-4 border-zinc-700 border-t-blue-500 rounded-full animate-spin" />
+          </div>
+          <p className="text-zinc-300 text-lg font-semibold">Returning to Dashboard</p>
+          <p className="text-zinc-500 text-sm mt-1">Please wait...</p>
+        </div>
+      )}
+
+      {/* ── Save / Don't Save Modal ────────────────────────────────────────── */}
+      {showSavePrompt && (
+        <div className="fixed inset-0 z-[250] flex items-center justify-center bg-black/70 backdrop-blur-sm">
+          <div className="relative w-full max-w-sm rounded-2xl border border-white/10 bg-[#0f172a] p-8 shadow-2xl">
+            <button
+              onClick={() => setShowSavePrompt(false)}
+              className="absolute right-4 top-4 text-white/50 hover:text-white transition-colors"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+            <div className="text-center mb-6">
+              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-amber-500/20">
+                <svg className="w-6 h-6 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" /></svg>
+              </div>
+              <h3 className="text-xl font-bold text-white">Unsaved Changes</h3>
+              <p className="text-slate-400 text-sm mt-2">You have unsaved changes on this canvas. Would you like to save before leaving?</p>
+            </div>
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={handleSaveAndGo}
+                className="w-full rounded-lg bg-blue-600 py-3 font-bold text-white transition-all hover:bg-blue-500 flex items-center justify-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                Save & Go to Dashboard
+              </button>
+              <button
+                onClick={goToDashboard}
+                className="w-full rounded-lg border border-white/10 py-3 font-bold text-zinc-300 transition-all hover:bg-white/5"
+              >
+                Don't Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Share Modal ────────────────────────────────────────────────────── */}
+      {showShareModal && (
+        <div className="fixed inset-0 z-[250] flex items-center justify-center bg-black/70 backdrop-blur-sm">
+          <div className="relative w-full max-w-md rounded-2xl border border-white/10 bg-[#0f172a] p-8 shadow-2xl">
+            <button
+              onClick={() => setShowShareModal(false)}
+              className="absolute right-4 top-4 text-white/50 hover:text-white transition-colors"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+            <div className="text-center mb-6">
+              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-blue-500/20">
+                <svg className="w-6 h-6 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /></svg>
+              </div>
+              <h3 className="text-xl font-bold text-white">Share Canvas</h3>
+              <p className="text-slate-400 text-sm mt-2">Anyone with this link can view your canvas (read-only). They'll need an account to access it.</p>
+            </div>
+            <div className="mb-4">
+              <label className="block text-xs font-semibold text-slate-400 uppercase mb-2">Shareable Link</label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={shareLink}
+                  readOnly
+                  className="flex-1 px-4 py-3 rounded-lg bg-[#1e293b] border border-white/10 text-white text-sm font-mono truncate"
+                  onClick={(e) => e.target.select()}
+                />
+                <button
+                  onClick={handleCopyShareLink}
+                  className={`px-4 py-3 rounded-lg font-bold text-sm transition-all ${
+                    shareCopied
+                      ? 'bg-green-500/20 border border-green-500/30 text-green-400'
+                      : 'bg-blue-600 hover:bg-blue-500 text-white'
+                  }`}
+                >
+                  {shareCopied ? 'Copied!' : 'Copy'}
+                </button>
+              </div>
+            </div>
+            <div className="rounded-lg bg-slate-800/50 border border-slate-700/50 p-3">
+              <p className="text-xs text-slate-400 leading-relaxed">
+                <span className="font-semibold text-slate-300">Note:</span> Recipients must be registered and logged in to view this canvas. They can download a copy to their Personal Sketches folder to edit.
+              </p>
+            </div>
+            <button
+              onClick={() => setShowShareModal(false)}
+              className="w-full mt-4 rounded-lg border border-white/10 py-3 font-bold text-white transition-all hover:bg-white/5"
+            >
+              Done
+            </button>
+          </div>
+        </div>
       )}
 
       {/* ── Toast Notifications ────────────────────────────────────────────── */}
@@ -885,6 +1105,14 @@ const PaintApp = () => {
         }
 
         .no-scrollbar::-webkit-scrollbar { display: none; }
+        
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        .animate-fadeIn {
+          animation: fadeIn 0.3s ease-out forwards;
+        }
       `}</style>
     </div>
   );

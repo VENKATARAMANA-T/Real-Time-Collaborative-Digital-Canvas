@@ -11,7 +11,10 @@ const {
   updateMeetingCanvas,
   renameCanvas,
   exportCanvas,
-  importCanvas
+  importCanvas,
+  generateShareToken,
+  getSharedCanvas,
+  cloneSharedCanvas
 } = require('../controllers/canvasController.js');
 const { authMiddleware } = require('../middleware/authMiddleware.js');
 const { upload } = require('../middleware/uploadMiddleware.js');
@@ -21,6 +24,10 @@ router.use(authMiddleware);
 
 // Import canvas from JSON file
 router.post('/import', upload.single('canvas'), importCanvas);
+
+// Share routes (must be before /:id to avoid conflict)
+router.get('/shared/:shareToken', getSharedCanvas);
+router.post('/shared/:shareToken/clone', cloneSharedCanvas);
 
 router.route('/')
   .post(createCanvas)   // POST: Create blank canvas
@@ -37,6 +44,10 @@ router.route('/:id')
 
 router.route('/:id/duplicate')
   .post(duplicateCanvas); // POST: Duplicate a canvas
+
+// Share a canvas (generate token)
+router.post('/:id/share', generateShareToken);
+
 // Rename canvas
 router.patch('/:id/rename', renameCanvas);
 

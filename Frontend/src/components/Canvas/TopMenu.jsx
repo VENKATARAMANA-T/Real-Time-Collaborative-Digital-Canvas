@@ -39,10 +39,12 @@ const TopMenu = ({
   historyStep,
   historyLength,
   currentView,
-  setCurrentView
+  setCurrentView,
+  onDashboardClick,
+  onShare
 }) => {
   return (
-    <nav className="h-12 flex items-center px-6 gap-8 text-sm border-b border-zinc-800/40 bg-gradient-to-r from-[#09090b] to-[#18181b] relative z-[100] backdrop-blur-md shadow-lg">
+    <nav className="h-12 flex items-center px-2 gap-8 text-sm border-b border-zinc-800/40 bg-gradient-to-r from-[#09090b] to-[#18181b] relative z-[100] backdrop-blur-md shadow-lg">
 
 
       <div className={`flex gap-1 relative ${currentView === 'dashboard' ? 'opacity-0 pointer-events-none' : ''}`}>
@@ -50,7 +52,7 @@ const TopMenu = ({
         <button
           onClick={(e) => {
             e.stopPropagation();
-            // User requested to stay in canvas space
+            if (onDashboardClick) onDashboardClick();
           }}
           className="flex items-center gap-2 px-3 py-1 rounded-md transition-colors hover:bg-zinc-800 text-zinc-300 group"
           title="Back to Dashboard"
@@ -90,11 +92,7 @@ const TopMenu = ({
                 icon={Share2}
                 label="Share"
                 onClick={() => {
-                  if (navigator.share) {
-                    navigator.share({ title: 'My Work', text: 'Check out my drawing!', url: window.location.href });
-                  } else {
-                    alert("Sharing is not supported on this browser.");
-                  }
+                  if (onShare) onShare();
                   setIsFileMenuOpen(false);
                 }}
               />
@@ -194,7 +192,7 @@ const TopMenu = ({
               />
               <MenuDivider />
               <MenuItem icon={Maximize2} label="Full screen" shortcut="F11" onClick={handleFullScreen} />
-              <MenuItem icon={ImageIcon} label="Thumbnail" />
+
             </div>
           )}
         </div>

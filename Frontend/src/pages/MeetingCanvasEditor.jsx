@@ -22,6 +22,12 @@ function MeetingCanvasEditor() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
+  const [showSavePrompt, setShowSavePrompt] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [shareLink, setShareLink] = useState('');
+  const [shareCopied, setShareCopied] = useState(false);
+  const [navigatingToDashboard, setNavigatingToDashboard] = useState(false);
+  const [lastSavedElements, setLastSavedElements] = useState(null);
 
   // Canvas Elements & History
   const [elements, setElements] = useState([]);
@@ -95,6 +101,7 @@ function MeetingCanvasEditor() {
           setCanvasTitle(canvas.title || 'Meeting Canvas');
           const loadedElements = canvas?.data?.elements || [];
           setElements(loadedElements);
+          setLastSavedElements(loadedElements);
         }
       } catch (error) {
         console.error('Failed to load meeting canvas:', error);
@@ -131,6 +138,7 @@ function MeetingCanvasEditor() {
         thumbnail: ''
       };
       await canvasAPI.update(canvasId, payload);
+      setLastSavedElements(elements);
 
       if (!silent) {
         setSaveMessage('Saved!');
@@ -144,6 +152,57 @@ function MeetingCanvasEditor() {
       }
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleDashboardClick = () => {
+    const hasUnsavedChanges = elements !== lastSavedElements;
+    if (hasUnsavedChanges) {
+      setShowSavePrompt(true);
+    } else {
+      goToDashboard();
+    }
+  };
+
+  const goToDashboard = () => {
+    setShowSavePrompt(false);
+    setNavigatingToDashboard(true);
+    setTimeout(() => navigate('/dashboard'), 600);
+  };
+
+  const handleSaveAndGo = async () => {
+    await handleSave();
+    goToDashboard();
+  };
+
+  const handleShare = async () => {
+    if (!canvasId) return;
+    await handleSave();
+    try {
+      const { shareToken } = await canvasAPI.generateShareToken(canvasId);
+      const link = `${window.location.origin}/shared/${shareToken}`;
+      setShareLink(link);
+      setShareCopied(false);
+      setShowShareModal(true);
+    } catch (err) {
+      console.error('Failed to generate share link:', err);
+    }
+  };
+
+  const handleCopyShareLink = async () => {
+    try {
+      await navigator.clipboard.writeText(shareLink);
+      setShareCopied(true);
+      setTimeout(() => setShareCopied(false), 3000);
+    } catch {
+      const input = document.createElement('input');
+      input.value = shareLink;
+      document.body.appendChild(input);
+      input.select();
+      document.execCommand('copy');
+      document.body.removeChild(input);
+      setShareCopied(true);
+      setTimeout(() => setShareCopied(false), 3000);
     }
   };
 
@@ -324,7 +383,7 @@ function MeetingCanvasEditor() {
       <header className="h-14 border-b border-border-dark flex items-center justify-between px-6 bg-background-dark z-50 shrink-0">
         <div className="flex items-center gap-4">
           <button
-            onClick={() => navigate('/dashboard')}
+            onClick={handleDashboardClick}
             className="w-9 h-9 flex items-center justify-center rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-all"
             title="Back to Dashboard"
           >
@@ -422,6 +481,7 @@ function MeetingCanvasEditor() {
           canEdit={true}
           onImportImage={handleImportClick}
           onExportCanvas={handleExport}
+          onShare={handleShare}
         />
 
         <ToolSettings
@@ -454,6 +514,106 @@ function MeetingCanvasEditor() {
           onSelectElement={handleSelectionChange}
         />
       </main>
+
+      {/* Navigating overlay */}
+      {navigatingToDashboard && (
+        <div className="fixed inset-0 z-[300] flex items-center justify-center bg-[#0a0a0c]/90 backdrop-blur-md transition-opacity">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-blue-500 mx-auto mb-4"></div>
+            <p className="text-slate-400 text-sm font-medium">Returning to dashboard...</p>
+          </div>
+        </div>
+      )}
+
+      {/* Save / Don't Save Modal */}
+      {showSavePrompt && (
+        <div className="fixed inset-0 z-[250] flex items-center justify-center bg-black/70 backdrop-blur-sm">
+          <div className="relative w-full max-w-sm rounded-2xl border border-white/10 bg-[#0f172a] p-8 shadow-2xl">
+            <button
+              onClick={() => setShowSavePrompt(false)}
+              className="absolute right-4 top-4 text-white/50 hover:text-white transition-colors"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+            <div className="text-center mb-6">
+              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-amber-500/20">
+                <svg className="w-6 h-6 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" /></svg>
+              </div>
+              <h3 className="text-xl font-bold text-white">Unsaved Changes</h3>
+              <p className="text-slate-400 text-sm mt-2">You have unsaved changes on this canvas. Would you like to save before leaving?</p>
+            </div>
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={handleSaveAndGo}
+                className="w-full rounded-lg bg-blue-600 py-3 font-bold text-white transition-all hover:bg-blue-500 flex items-center justify-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                Save & Go to Dashboard
+              </button>
+              <button
+                onClick={goToDashboard}
+                className="w-full rounded-lg border border-white/10 py-3 font-bold text-zinc-300 transition-all hover:bg-white/5"
+              >
+                Don't Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Share Modal */}
+      {showShareModal && (
+        <div className="fixed inset-0 z-[250] flex items-center justify-center bg-black/70 backdrop-blur-sm">
+          <div className="relative w-full max-w-md rounded-2xl border border-white/10 bg-[#0f172a] p-8 shadow-2xl">
+            <button
+              onClick={() => setShowShareModal(false)}
+              className="absolute right-4 top-4 text-white/50 hover:text-white transition-colors"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+            <div className="text-center mb-6">
+              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-blue-500/20">
+                <svg className="w-6 h-6 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /></svg>
+              </div>
+              <h3 className="text-xl font-bold text-white">Share Canvas</h3>
+              <p className="text-slate-400 text-sm mt-2">Anyone with this link can view your canvas (read-only). They'll need an account to access it.</p>
+            </div>
+            <div className="mb-4">
+              <label className="block text-xs font-semibold text-slate-400 uppercase mb-2">Shareable Link</label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={shareLink}
+                  readOnly
+                  className="flex-1 px-4 py-3 rounded-lg bg-[#1e293b] border border-white/10 text-white text-sm font-mono truncate"
+                  onClick={(e) => e.target.select()}
+                />
+                <button
+                  onClick={handleCopyShareLink}
+                  className={`px-4 py-3 rounded-lg font-bold text-sm transition-all ${
+                    shareCopied
+                      ? 'bg-green-500/20 border border-green-500/30 text-green-400'
+                      : 'bg-blue-600 hover:bg-blue-500 text-white'
+                  }`}
+                >
+                  {shareCopied ? 'Copied!' : 'Copy'}
+                </button>
+              </div>
+            </div>
+            <div className="rounded-lg bg-slate-800/50 border border-slate-700/50 p-3">
+              <p className="text-xs text-slate-400 leading-relaxed">
+                <span className="font-semibold text-slate-300">Note:</span> Recipients must be registered and logged in to view this canvas. They can download a copy to their Personal Sketches folder to edit.
+              </p>
+            </div>
+            <button
+              onClick={() => setShowShareModal(false)}
+              className="w-full mt-4 rounded-lg border border-white/10 py-3 font-bold text-white transition-all hover:bg-white/5"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

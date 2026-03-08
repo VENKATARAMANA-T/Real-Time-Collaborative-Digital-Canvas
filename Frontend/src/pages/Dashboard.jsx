@@ -103,6 +103,9 @@ export default function Dashboard() {
   const [flash, setFlash] = useState(null);
   const [isProfileSaving, setIsProfileSaving] = useState(false);
   const [isPasswordSaving, setIsPasswordSaving] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
   const [savedCanvases, setSavedCanvases] = useState([]);
   const [isLoadingCanvases, setIsLoadingCanvases] = useState(false);
   const [showJoinMeeting, setShowJoinMeeting] = useState(false);
@@ -481,7 +484,7 @@ export default function Dashboard() {
     tag: cv.isMeetingCanvas ? 'Meeting' : 'Private',
     tagColor: cv.isMeetingCanvas ? 'amber' : 'emerald',
     border: cv.isMeetingCanvas ? 'border-b-amber-400/60' : 'border-b-emerald-400/60',
-    preview: cv.thumbnail || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='200'%3E%3Crect fill='%23111827' width='400' height='200'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%234b5563' font-family='sans-serif' font-size='16'%3ENo Preview%3C/text%3E%3C/svg%3E",
+    preview: cv.thumbnail || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='200'%3E%3Crect fill='%23111827' width='400' height='200'/%3E%3C/svg%3E",
     isMeetingCanvas: cv.isMeetingCanvas || false
   }));
   const activeFolder = folders.find((folder) => folder._id === activeFolderId) || null;
@@ -493,7 +496,7 @@ export default function Dashboard() {
     tag: cv.isMeetingCanvas ? 'Meeting' : 'Private',
     tagColor: cv.isMeetingCanvas ? 'amber' : 'emerald',
     border: cv.isMeetingCanvas ? 'border-b-amber-400/60' : 'border-b-emerald-400/60',
-    preview: cv.thumbnail || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='200'%3E%3Crect fill='%23111827' width='400' height='200'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%234b5563' font-family='sans-serif' font-size='16'%3ENo Preview%3C/text%3E%3C/svg%3E",
+    preview: cv.thumbnail || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='200'%3E%3Crect fill='%23111827' width='400' height='200'/%3E%3C/svg%3E",
     isMeetingCanvas: cv.isMeetingCanvas || false
   }));
 
@@ -526,6 +529,7 @@ export default function Dashboard() {
 
   const showFlash = (type, message, scope = 'general') => {
     setFlash({ type, message, scope });
+    window.setTimeout(() => setFlash(null), 3000);
   };
 
   const showMeetingFlash = (setter, message) => {
@@ -563,6 +567,7 @@ export default function Dashboard() {
         id: data.meetingId,
         password: data.password,
         shareLink: data.shareLink,
+        linkToken: data.linkToken,
         meetingDbId: null,
         role: 'host',
         permission: 'edit',
@@ -737,7 +742,8 @@ export default function Dashboard() {
         const data = await meetingAPI.createInstant({
           meetingId: instantMeetingDetails.id,
           password: instantMeetingDetails.password,
-          name: meetingName.trim()
+          name: meetingName.trim(),
+          linkToken: instantMeetingDetails.linkToken
         });
         const meetingData = {
           id: data.meetingId,
@@ -834,6 +840,33 @@ export default function Dashboard() {
       showFlash('error', message, 'settings-password');
     } finally {
       setIsPasswordSaving(false);
+    }
+  };
+
+  const handleDeleteAccount = async (event) => {
+    event.preventDefault();
+    if (!deletePassword) {
+      showFlash('error', 'Password is required to delete your account', 'settings-account');
+      return;
+    }
+
+    setIsDeleting(true);
+    try {
+      await userAPI.deleteAccount(deletePassword);
+      showFlash('success', 'Account deleted successfully.', 'settings-account');
+      setShowDeleteModal(false);
+      localStorage.removeItem('user');
+      localStorage.removeItem('accessToken');
+      // Redirect after a short delay
+      setTimeout(() => {
+        window.location.href = '/';
+      }, 1500);
+    } catch (error) {
+      setIsDeleting(false);
+      setDeletePassword('');
+      const errorMsg = error.response?.data?.message || 'Failed to delete account';
+      showFlash('error', errorMsg, 'settings-account');
+      setShowDeleteModal(false);
     }
   };
 
@@ -1359,9 +1392,9 @@ export default function Dashboard() {
                                       <div className="h-40 bg-[#0b1220] relative overflow-hidden">
                                         <div className={`absolute inset-0 bg-gradient-to-br ${canvas.isMeetingCanvas ? 'from-amber-500/10' : 'from-emerald-500/10'} to-transparent`}></div>
                                         <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 backdrop-blur-sm">
-                                          <button className="px-4 py-2 bg-primary text-white text-xs font-bold rounded-lg shadow-lg" onClick={() => navigate(canvas.isMeetingCanvas ? `/meeting-canvas/${canvas._id}` : `/paint/${canvas._id}`)} type="button">Open Editor</button>
+                                          <button className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold rounded-xl shadow-xl shadow-blue-600/30 transition-all" onClick={() => navigate(canvas.isMeetingCanvas ? `/meeting-canvas/${canvas._id}` : `/paint/${canvas._id}`)} type="button">Open Editor</button>
                                         </div>
-                                        <img alt={`${canvas.title} Preview`} className="absolute inset-0 w-full h-full object-cover opacity-50 pointer-events-none" src={canvas.thumbnail || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='200'%3E%3Crect fill='%23111827' width='400' height='200'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%234b5563' font-family='sans-serif' font-size='16'%3ENo Preview%3C/text%3E%3C/svg%3E"} />
+                                        <img alt={`${canvas.title} Preview`} className="absolute inset-0 w-full h-full object-cover opacity-50 pointer-events-none" src={canvas.thumbnail || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='200'%3E%3Crect fill='%23111827' width='400' height='200'/%3E%3C/svg%3E"} />
                                         {canvas.isMeetingCanvas && (
                                           <div className="absolute top-3 right-3 z-10"><span className="px-2 py-1 bg-[#101922]/80 text-[10px] font-bold rounded border uppercase text-amber-400 border-amber-400/30">Meeting</span></div>
                                         )}
@@ -1526,7 +1559,7 @@ export default function Dashboard() {
                         <div className={`absolute inset-0 bg-gradient-to-br ${canvas.isMeetingCanvas ? 'from-amber-500/10' : 'from-emerald-500/10'} to-transparent`}></div>
                         <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 backdrop-blur-sm">
                           <button
-                            className="px-4 py-2 bg-primary  text-white text-xs font-bold rounded-lg shadow-lg"
+                            className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold rounded-xl shadow-xl shadow-blue-600/30 transition-all"
                             onClick={() => navigate(canvas.isMeetingCanvas ? `/meeting-canvas/${canvas._id}` : `/paint/${canvas._id}`)}
                             type="button"
                           >
@@ -1536,7 +1569,7 @@ export default function Dashboard() {
                         <img
                           alt={`${canvas.title} Preview`}
                           className="absolute inset-0 w-full h-full object-cover opacity-50 pointer-events-none group-hover:scale-110 transition-transform duration-500"
-                          src={canvas.thumbnail || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='200'%3E%3Crect fill='%23111827' width='400' height='200'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%234b5563' font-family='sans-serif' font-size='16'%3ENo Preview%3C/text%3E%3C/svg%3E"}
+                          src={canvas.thumbnail || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='200'%3E%3Crect fill='%23111827' width='400' height='200'/%3E%3C/svg%3E"}
                         />
                         {canvas.isMeetingCanvas && (
                           <div className="absolute top-3 right-3 z-10">
@@ -2454,7 +2487,11 @@ export default function Dashboard() {
                           <p className="text-sm font-semibold  text-rose-400 text-start mb-1">Delete account</p>
                           <p className="text-xs text-rose-300 ">This action is permanent and cannot be undone.</p>
                         </div>
-                        <button className="px-5 py-2 bg-rose-500 text-white text-xs font-bold rounded-lg hover:brightness-110 transition-all" type="button">
+                        <button 
+                          className="px-5 py-2 bg-rose-500 text-white text-xs font-bold rounded-lg hover:brightness-110 transition-all" 
+                          type="button"
+                          onClick={() => setShowDeleteModal(true)}
+                        >
                           Delete
                         </button>
                       </div>
@@ -2500,7 +2537,7 @@ export default function Dashboard() {
                                   <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 backdrop-blur-sm">
                                     <button className="px-4 py-2 bg-primary text-white text-xs font-bold rounded-lg shadow-lg" onClick={() => navigate(canvas.isMeetingCanvas ? `/meeting-canvas/${canvas._id}` : `/paint/${canvas._id}`)} type="button">Open Editor</button>
                                   </div>
-                                  <img alt={`${canvas.title} Preview`} className="absolute inset-0 w-full h-full object-cover opacity-50 pointer-events-none" src={canvas.thumbnail || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='200'%3E%3Crect fill='%23111827' width='400' height='200'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%234b5563' font-family='sans-serif' font-size='16'%3ENo Preview%3C/text%3E%3C/svg%3E"} />
+                                  <img alt={`${canvas.title} Preview`} className="absolute inset-0 w-full h-full object-cover opacity-50 pointer-events-none" src={canvas.thumbnail || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='200'%3E%3Crect fill='%23111827' width='400' height='200'/%3E%3C/svg%3E"} />
                                   {canvas.isMeetingCanvas && (
                                     <div className="absolute top-3 right-3 z-10"><span className="px-2 py-1 bg-[#101922]/80 text-[10px] font-bold rounded border uppercase text-amber-400 border-amber-400/30">Meeting</span></div>
                                   )}
@@ -2620,7 +2657,7 @@ export default function Dashboard() {
                             <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent"></div>
                             <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-[#101922]/60 backdrop-blur-sm z-20">
                               <button
-                                className="px-4 py-2 bg-primary text-white text-xs font-bold rounded-lg shadow-lg"
+                                className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold rounded-xl shadow-xl shadow-blue-600/30 transition-all"
                                 type="button"
                                 onClick={() => navigate(canvas.isMeetingCanvas ? `/meeting-canvas/${canvas.id}` : `/paint/${canvas.id}`)}
                               >
@@ -2914,7 +2951,7 @@ export default function Dashboard() {
                             <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent"></div>
                             <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-[#101922]/60 backdrop-blur-sm z-20">
                               <button
-                                className="px-4 py-2 bg-primary text-white text-xs font-bold rounded-lg shadow-lg"
+                                className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold rounded-xl shadow-xl shadow-blue-600/30 transition-all"
                                 onClick={() => navigate(canvas.isMeetingCanvas ? `/meeting-canvas/${canvas.id}` : `/paint/${canvas.id}`)}
                                 type="button"
                               >
@@ -3737,6 +3774,66 @@ export default function Dashboard() {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE ACCOUNT MODAL */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-[#0f172a] border border-rose-500/30 rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl">
+            <div className="flex items-center gap-4 mb-6">
+              <div className="w-12 h-12 rounded-full bg-rose-500/20 flex items-center justify-center flex-shrink-0 text-rose-500">
+                <span className="material-icons">warning</span>
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-white">Delete Account</h3>
+                <p className="text-sm text-rose-400">This action is permanent.</p>
+              </div>
+            </div>
+
+            <p className="text-slate-300 text-sm mb-6 leading-relaxed">
+              You are about to permanently delete your account, all your canvases, folders, and meetings. 
+              <strong> You cannot undo this action.</strong>
+            </p>
+
+            <form onSubmit={handleDeleteAccount}>
+              <div className="space-y-2 mb-6">
+                <label className="text-xs font-semibold text-slate-400 uppercase tracking-widest">Confirm Password</label>
+                <input 
+                  type="password"
+                  value={deletePassword}
+                  onChange={(e) => setDeletePassword(e.target.value)}
+                  placeholder="Enter your password"
+                  className="w-full bg-[#101922]/40 border border-[#2d3a4b] rounded-lg px-4 py-3 text-white focus:outline-none focus:border-rose-500 transition-all placeholder:text-slate-600"
+                  required
+                  disabled={isDeleting}
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4 border-t border-white/5">
+                <button 
+                  type="button"
+                  onClick={() => setShowDeleteModal(false)}
+                  className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-sm font-bold text-white transition-all disabled:opacity-50"
+                  disabled={isDeleting}
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit"
+                  disabled={isDeleting || !deletePassword}
+                  className="px-5 py-2.5 bg-rose-600 hover:bg-rose-500 rounded-lg text-sm font-bold text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  {isDeleting ? (
+                    <>
+                      <span className="inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                      Deleting...
+                    </>
+                  ) : 'Permanently Delete'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

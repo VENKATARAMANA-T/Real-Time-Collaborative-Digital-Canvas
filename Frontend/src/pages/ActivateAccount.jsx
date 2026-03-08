@@ -19,12 +19,15 @@ export default function ActivateAccount() {
         if (data.success) {
           setStatus('success');
           setMessage(data.message || 'Your account has been activated successfully!');
+          
           // Notify the original registration tab via BroadcastChannel
           try {
             const channel = new BroadcastChannel('collabcanvas_activation');
             channel.postMessage({ type: 'ACCOUNT_ACTIVATED', success: true });
             channel.close();
           } catch (e) { /* BroadcastChannel not supported */ }
+          // Also set localStorage flag as fallback for BroadcastChannel
+          localStorage.setItem('collab_activationComplete', 'true');
         } else {
           setStatus('error');
           setMessage(data.message || 'Activation failed. Please try again.');

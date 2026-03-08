@@ -60,12 +60,15 @@ api.interceptors.response.use(
         localStorage.removeItem('accessToken');
         localStorage.removeItem('user');
 
-        const isPublicPath = ['/', '/home', '/reset-password'].includes(window.location.pathname);
+        const isPublicPath = [
+          '/', '/home', '/login', '/register', '/forgot-password', '/reset-password'
+        ].some(p => window.location.pathname === p || window.location.pathname.startsWith('/shared') || window.location.pathname.startsWith('/join-link'));
+
         const hasRedirected = sessionStorage.getItem('authRedirected') === 'true';
 
         if (!isPublicPath && !hasRedirected) {
           sessionStorage.setItem('authRedirected', 'true');
-          window.location.replace('/');
+          window.location.replace('/login');
         }
 
         return Promise.reject(refreshError);
@@ -99,6 +102,11 @@ export const authAPI = {
     const response = await api.post('/auth/logout');
     localStorage.removeItem('accessToken');
     localStorage.removeItem('user');
+    return response.data;
+  },
+
+  getMe: async () => {
+    const response = await api.get('/users/me');
     return response.data;
   },
 
@@ -156,6 +164,21 @@ export const canvasAPI = {
     const response = await api.post(`/canvases/${id}/duplicate`);
     return response.data;
   },
+
+  generateShareToken: async (id) => {
+    const response = await api.post(`/canvases/${id}/share`);
+    return response.data;
+  },
+
+  getSharedCanvas: async (shareToken) => {
+    const response = await api.get(`/canvases/shared/${shareToken}`);
+    return response.data;
+  },
+
+  cloneSharedCanvas: async (shareToken) => {
+    const response = await api.post(`/canvases/shared/${shareToken}/clone`);
+    return response.data;
+  },
 };
 
 // User API endpoints (placeholder for future use)
@@ -183,6 +206,11 @@ export const userAPI = {
 
   getActivityLogs: async (userId) => {
     const response = await api.get(`/users/${userId}/activity-logs`);
+    return response.data;
+  },
+
+  deleteAccount: async (password) => {
+    const response = await api.delete('/users/me', { data: { password } });
     return response.data;
   },
 };
@@ -268,6 +296,11 @@ export const meetingAPI = {
 
   getMeetingNotes: async (meetingDbId) => {
     const response = await api.get(`/meetings/${meetingDbId}/notes`);
+    return response.data;
+  },
+
+  updateCanvasLink: async (meetingDbId, sharedCanvasLink) => {
+    const response = await api.put(`/meetings/${meetingDbId}/canvas-link`, { sharedCanvasLink });
     return response.data;
   },
 
