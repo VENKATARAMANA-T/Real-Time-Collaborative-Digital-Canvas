@@ -30,15 +30,15 @@ const ShapeBtn = ({ shape, active, onClick }) => {
       </button>
 
       {/* Tooltip — renders BELOW the button */}
-      <div className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-[calc(100%+8px)] z-[300]
+      <div className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-[calc(100%+10px)] z-[300]
         opacity-0 group-hover:opacity-100 scale-95 group-hover:scale-100
         transition-all duration-200 origin-top">
         {/* Arrow pointing UP */}
         <div className="absolute left-1/2 -translate-x-1/2 -top-[5px] w-2.5 h-2.5
-          bg-[#0f1924] border-l border-t border-[#2d3a4b] rotate-45" />
-        <div className="bg-[#0f1924] border border-[#2d3a4b] rounded-xl shadow-2xl px-3 py-2 min-w-[160px] w-max max-w-[220px]">
-          <p className="text-white text-[11.5px] font-semibold leading-tight">{label}</p>
-          <p className="text-zinc-400 text-[10.5px] leading-snug mt-0.5 whitespace-normal break-words">{desc}</p>
+          bg-[#111827] border-l border-t border-[#374151] rotate-45" />
+        <div className="bg-gradient-to-b from-[#111827] to-[#0d1117] border border-[#374151]/80 rounded-xl px-3.5 py-2.5 min-w-[160px] w-max max-w-[220px]" style={{ boxShadow: '0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(55,65,81,0.3)' }}>
+          <p className="text-[#e5e7eb] text-[11.5px] font-semibold leading-tight tracking-wide">{label}</p>
+          <p className="text-[#9ca3af] text-[10.5px] leading-snug mt-1 whitespace-normal break-words">{desc}</p>
         </div>
       </div>
     </div>

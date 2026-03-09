@@ -26,15 +26,15 @@ const ColorSwatch = ({ c, active, onClick }) => (
       style={{ backgroundColor: c }}
     />
     {/* Swatch tooltip — renders BELOW */}
-    <div className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-[calc(100%+6px)] z-[300]
+    <div className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-[calc(100%+8px)] z-[300]
       opacity-0 group-hover:opacity-100 scale-90 group-hover:scale-100
       transition-all duration-150 origin-top">
       <div className="absolute left-1/2 -translate-x-1/2 -top-[5px] w-2 h-2
-        bg-[#0f1924] border-l border-t border-[#2d3a4b] rotate-45" />
-      <div className="bg-[#0f1924] border border-[#2d3a4b] rounded-lg shadow-xl px-2.5 py-1.5 flex flex-col items-center gap-0.5">
+        bg-[#111827] border-l border-t border-[#374151] rotate-45" />
+      <div className="bg-gradient-to-b from-[#111827] to-[#0d1117] border border-[#374151]/80 rounded-lg px-2.5 py-2 flex flex-col items-center gap-0.5" style={{ boxShadow: '0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(55,65,81,0.3)' }}>
         <div className="w-5 h-5 rounded-md border border-white/10 shadow-sm" style={{ backgroundColor: c }} />
-        <p className="text-white text-[10.5px] font-semibold whitespace-nowrap leading-tight">{getColorLabel(c)}</p>
-        <p className="text-zinc-400 text-[9.5px] font-mono whitespace-nowrap">{c.toUpperCase()}</p>
+        <p className="text-[#e5e7eb] text-[10.5px] font-semibold whitespace-nowrap leading-tight">{getColorLabel(c)}</p>
+        <p className="text-[#9ca3af] text-[9.5px] font-mono whitespace-nowrap">{c.toUpperCase()}</p>
       </div>
     </div>
   </div>
@@ -54,15 +54,15 @@ const ColorPalette = ({ color, updateColor, palette }) => (
         className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
       />
       {/* Picker tooltip — renders BELOW */}
-      <div className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-[calc(100%+8px)] z-[300]
+      <div className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-[calc(100%+10px)] z-[300]
         opacity-0 group-hover:opacity-100 scale-90 group-hover:scale-100
         transition-all duration-200 origin-top">
         <div className="absolute left-1/2 -translate-x-1/2 -top-[5px] w-2.5 h-2.5
-          bg-[#0f1924] border-l border-t border-[#2d3a4b] rotate-45" />
-        <div className="bg-[#0f1924] border border-[#2d3a4b] rounded-xl shadow-2xl px-3 py-2 w-40">
-          <p className="text-white text-[11.5px] font-semibold">Custom Color</p>
-          <p className="text-zinc-400 text-[10.5px] mt-0.5">Click to open color picker</p>
-          <p className="text-[#137fec] text-[10px] font-mono mt-1">{color.toUpperCase()}</p>
+          bg-[#111827] border-l border-t border-[#374151] rotate-45" />
+        <div className="bg-gradient-to-b from-[#111827] to-[#0d1117] border border-[#374151]/80 rounded-xl px-3.5 py-2.5 w-40" style={{ boxShadow: '0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(55,65,81,0.3)' }}>
+          <p className="text-[#e5e7eb] text-[11.5px] font-semibold tracking-wide">Custom Color</p>
+          <p className="text-[#9ca3af] text-[10.5px] mt-1">Click to open color picker</p>
+          <p className="text-blue-400 text-[10px] font-mono mt-1.5">{color.toUpperCase()}</p>
         </div>
       </div>
     </div>

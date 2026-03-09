@@ -17,6 +17,7 @@ const userRoutes = require('./routes/userRoutes.js');
 const chatRoutes = require('./routes/chatRoutes.js');
 const folderRoutes = require('./routes/folderRoutes.js');
 const botRoutes = require('./routes/botRoutes.js');
+const feedbackRoutes = require('./routes/feedbackRoutes.js');
 
 const { notFound, errorHandler } = require('./middleware/errorMiddleware.js');
 
@@ -70,6 +71,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/folders', folderRoutes);
 app.use('/api/bot', botRoutes);
+app.use('/api/feedback', feedbackRoutes);
 
 // === ERROR MIDDLEWARE (MUST BE LAST) ===
 app.use(notFound);

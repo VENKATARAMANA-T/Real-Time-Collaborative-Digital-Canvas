@@ -42,6 +42,15 @@ const PaintCanvas = ({
   const [dragMode, setDragMode] = useState(null);
   const dragOffset = useRef({ x: 0, y: 0 });
   const isStickyResize = useRef(false);
+  
+  // Multi-select state
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [selectionRect, setSelectionRect] = useState(null);
+  const multiDragOffsets = useRef({});
+  
+  // Pencil drawing state (decoupled from selection)
+  const pencilPoints = useRef([]);
+  const activeDrawingId = useRef(null);
 
   const initCanvas = useCallback((preserveData = false) => {
     const canvas = canvasRef.current;
@@ -173,8 +182,33 @@ const PaintCanvas = ({
       if (el.fill) { ctx.fillStyle = fillCol; ctx.fill(); }
       ctx.strokeStyle = strokeCol; ctx.stroke();
     } else if (el.type === 'star') drawStarShape(ctx, el.x, el.y, el.w, el.h, el.fill, fillCol, strokeCol);
-    else if (el.type === 'arrow') drawArrowShape(ctx, el.x, el.y, el.w, el.h, el.fill, fillCol, strokeCol);
-    else if (el.type === 'text') {
+    else if (el.type === 'arrow') drawArrowShape(ctx, el.x, el.y, el.w, el.h, el.fill, fillCol, strokeCol);    else if (el.type === 'path') {
+      if (el.points && el.points.length > 0) {
+        ctx.save();
+        ctx.strokeStyle = strokeCol;
+        ctx.lineJoin = 'round';
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(el.points[0].x, el.points[0].y);
+        for (let i = 1; i < el.points.length - 2; i++) {
+          const xc = (el.points[i].x + el.points[i + 1].x) / 2;
+          const yc = (el.points[i].y + el.points[i + 1].y) / 2;
+          ctx.quadraticCurveTo(el.points[i].x, el.points[i].y, xc, yc);
+        }
+        if (el.points.length > 2) {
+          ctx.quadraticCurveTo(
+            el.points[el.points.length - 2].x,
+            el.points[el.points.length - 2].y,
+            el.points[el.points.length - 1].x,
+            el.points[el.points.length - 1].y
+          );
+        } else if (el.points.length === 2) {
+          ctx.lineTo(el.points[1].x, el.points[1].y);
+        }
+        ctx.stroke();
+        ctx.restore();
+      }
+    }    else if (el.type === 'text') {
       if (!isEditing) {
         const fontSize = el.fontSize || 24;
         const lineHeight = fontSize * 1.2;
@@ -254,8 +288,24 @@ const PaintCanvas = ({
     const tCtx = tempContextRef.current;
     if (!tCtx) return;
     tCtx.clearRect(0, 0, 2304, 1296);
-    elements.forEach(el => drawElement(tCtx, el, el.id === selectedId, el.id === editingId));
-  }, [elements, selectedId, editingId, zoom, canvasSize]);
+    elements.forEach(el => {
+      const isSel = el.id === selectedId || selectedIds.has(el.id);
+      drawElement(tCtx, el, isSel, el.id === editingId);
+    });
+    
+    // Draw selection rectangle
+    if (selectionRect) {
+      tCtx.save();
+      tCtx.setLineDash([4, 4]);
+      tCtx.strokeStyle = '#3b82f6';
+      tCtx.lineWidth = 1;
+      tCtx.fillStyle = 'rgba(59, 130, 246, 0.08)';
+      tCtx.fillRect(selectionRect.x, selectionRect.y, selectionRect.w, selectionRect.h);
+      tCtx.strokeRect(selectionRect.x, selectionRect.y, selectionRect.w, selectionRect.h);
+      tCtx.setLineDash([]);
+      tCtx.restore();
+    }
+  }, [elements, selectedId, selectedIds, editingId, zoom, canvasSize, selectionRect]);
 
   const getCoords = (e) => {
     const rect = tempCanvasRef.current.getBoundingClientRect();
@@ -276,6 +326,7 @@ const PaintCanvas = ({
 
     const coords = getCoords(e);
     setStartPos(coords);
+    const shiftKey = e.shiftKey;
 
     if (tool === 'select' || tool === 'eraser') {
       if (tool === 'eraser') {
@@ -285,13 +336,15 @@ const PaintCanvas = ({
           setElements(nextElements);
           if (selectedId === hit.id) setSelectedId(null);
           if (editingId === hit.id) setEditingId(null);
+          setSelectedIds(prev => { const n = new Set(prev); n.delete(hit.id); return n; });
           saveState(nextElements);
           return;
         }
       }
 
       if (tool === 'select') {
-        if (selectedId) {
+        // Check resize handle on single selected element
+        if (selectedId && selectedIds.size <= 1) {
           const el = elements.find(item => item.id === selectedId);
           if (el) {
             const bounds = getElementBounds(el);
@@ -309,18 +362,67 @@ const PaintCanvas = ({
 
         const hit = [...elements].reverse().find(el => isPointInElement(coords.x, coords.y, el));
         if (hit) {
+          if (shiftKey) {
+            // Shift-click: toggle in multi-select
+            setSelectedIds(prev => {
+              const n = new Set(prev);
+              if (n.has(hit.id)) { n.delete(hit.id); } else { n.add(hit.id); }
+              return n;
+            });
+            setSelectedId(hit.id);
+            return;
+          }
+
+          // If clicking an already-selected element in a multi-selection, start multi-drag
+          if (selectedIds.has(hit.id) && selectedIds.size > 1) {
+            multiDragOffsets.current = {};
+            elements.forEach(el => {
+              if (selectedIds.has(el.id)) {
+                multiDragOffsets.current[el.id] = { x: coords.x - el.x, y: coords.y - el.y };
+              }
+            });
+            setDragMode('multi-moving');
+            return;
+          }
+
+          // Single click without shift: select only this element
           setSelectedId(hit.id);
+          setSelectedIds(new Set([hit.id]));
           setDragMode('moving');
           dragOffset.current = { x: coords.x - hit.x, y: coords.y - hit.y };
           return;
         } else {
+          // Clicked empty space: start rubber-band selection
           setSelectedId(null);
+          setSelectedIds(new Set());
           setEditingId(null);
+          setSelectionRect({ x: coords.x, y: coords.y, w: 0, h: 0 });
+          setDragMode('selecting');
         }
       }
     }
 
-    if (tool === 'pencil' || tool === 'eraser') {
+    if (tool === 'pencil') {
+      setIsDrawing(true);
+      setSelectedId(null);
+      setSelectedIds(new Set());
+      pencilPoints.current = [{ x: coords.x, y: coords.y }];
+      const newId = Date.now();
+      activeDrawingId.current = newId;
+      const newPath = {
+        id: newId,
+        type: 'path',
+        points: [{ x: coords.x, y: coords.y }],
+        x: coords.x, y: coords.y, w: 0, h: 0,
+        color, strokeWidth, opacity,
+        fill: false
+      };
+      setElements(prev => [...prev, newPath]);
+      setDragMode('creating');
+      return;
+    }
+
+    if (tool === 'eraser') {
       setIsDrawing(true);
       if (contextRef.current) {
         contextRef.current.beginPath();
@@ -376,25 +478,66 @@ const PaintCanvas = ({
     const coords = getCoords(e);
     setCurrPos(coords);
 
-    if (dragMode === 'moving' && selectedId) {
-      setElements(elements.map(el => el.id === selectedId ? { ...el, x: coords.x - dragOffset.current.x, y: coords.y - dragOffset.current.y } : el));
+    if (dragMode === 'multi-moving') {
+      setElements(prev => prev.map(el => {
+        if (!selectedIds.has(el.id)) return el;
+        const off = multiDragOffsets.current[el.id];
+        if (!off) return el;
+        const nx = coords.x - off.x;
+        const ny = coords.y - off.y;
+        if (el.type === 'path' && el.points) {
+          const dx = nx - el.x;
+          const dy = ny - el.y;
+          return { ...el, x: nx, y: ny, points: el.points.map(p => ({ x: p.x + dx, y: p.y + dy })) };
+        }
+        return { ...el, x: nx, y: ny };
+      }));
+    } else if (dragMode === 'moving' && selectedId) {
+      setElements(prev => prev.map(el => {
+        if (el.id !== selectedId) return el;
+        const nx = coords.x - dragOffset.current.x;
+        const ny = coords.y - dragOffset.current.y;
+        if (el.type === 'path' && el.points) {
+          const dx = nx - el.x;
+          const dy = ny - el.y;
+          return { ...el, x: nx, y: ny, points: el.points.map(p => ({ x: p.x + dx, y: p.y + dy })) };
+        }
+        return { ...el, x: nx, y: ny };
+      }));
     } else if (dragMode === 'resizing' && selectedId) {
       setElements(elements.map(el => {
         if (el.id !== selectedId) return el;
         return { ...el, w: coords.x - el.x, h: coords.y - el.y };
       }));
+    } else if (dragMode === 'selecting') {
+      setSelectionRect(prev => prev ? {
+        ...prev,
+        w: coords.x - prev.x,
+        h: coords.y - prev.y
+      } : null);
+    } else if (dragMode === 'creating' && activeDrawingId.current && tool === 'pencil') {
+      setElements(prev => prev.map(el => {
+        if (el.id !== activeDrawingId.current) return el;
+        pencilPoints.current.push({ x: coords.x, y: coords.y });
+        const pts = [...pencilPoints.current];
+        const xs = pts.map(p => p.x);
+        const ys = pts.map(p => p.y);
+        const minX = Math.min(...xs), minY = Math.min(...ys);
+        const maxX = Math.max(...xs), maxY = Math.max(...ys);
+        return { ...el, points: pts, x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+      }));
     } else if (dragMode === 'creating' && selectedId) {
-      setElements(elements.map(el => {
+      setElements(prev => prev.map(el => {
         if (el.id !== selectedId) return el;
         if (el.type === 'text') {
           return { ...el, w: Math.abs(coords.x - startPos.x), h: Math.abs(coords.y - startPos.y) };
         }
         return { ...el, w: coords.x - el.x, h: coords.y - el.y };
       }));
-    } else if (isDrawing && (tool === 'pencil' || tool === 'eraser')) {
+    } else if (isDrawing && tool === 'eraser') {
       const ctx = contextRef.current;
       if (ctx) {
-        ctx.strokeStyle = tool === 'eraser' ? 'white' : color;
+        ctx.strokeStyle = 'white';
         ctx.lineWidth = strokeWidth;
         ctx.globalAlpha = opacity;
         ctx.lineTo(coords.x, coords.y);
@@ -405,6 +548,38 @@ const PaintCanvas = ({
 
   const handleMouseUp = () => {
     if (isStickyResize.current) return;
+
+    if (dragMode === 'selecting' && selectionRect) {
+      // Normalize the rectangle (handle negative w/h from dragging up-left)
+      const rx = selectionRect.w < 0 ? selectionRect.x + selectionRect.w : selectionRect.x;
+      const ry = selectionRect.h < 0 ? selectionRect.y + selectionRect.h : selectionRect.y;
+      const rw = Math.abs(selectionRect.w);
+      const rh = Math.abs(selectionRect.h);
+
+      const ids = new Set();
+      elements.forEach(el => {
+        const b = getElementBounds(el);
+        // Check if element bounds intersect the selection rectangle
+        if (b.x < rx + rw && b.x + b.w > rx && b.y < ry + rh && b.y + b.h > ry) {
+          ids.add(el.id);
+        }
+      });
+      setSelectedIds(ids);
+      if (ids.size === 1) {
+        setSelectedId([...ids][0]);
+      } else if (ids.size > 1) {
+        setSelectedId([...ids][0]);
+      }
+      setSelectionRect(null);
+      setDragMode(null);
+      return;
+    }
+
+    if (dragMode === 'creating' && tool === 'pencil' && activeDrawingId.current) {
+      // Finalize pencil path — don't select it, keep canvas clean
+      pencilPoints.current = null;
+      activeDrawingId.current = null;
+    }
 
     if (dragMode === 'creating' && tool === 'text' && selectedId) {
       setEditingId(selectedId);
