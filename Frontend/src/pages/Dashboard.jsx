@@ -853,14 +853,13 @@ export default function Dashboard() {
     setIsDeleting(true);
     try {
       await userAPI.deleteAccount(deletePassword);
-      showFlash('success', 'Account deleted successfully.', 'settings-account');
-      setShowDeleteModal(false);
+      // Backend automatically clears the cookies
       localStorage.removeItem('user');
       localStorage.removeItem('accessToken');
-      // Redirect after a short delay
+      // Redirect silently to home without flash message
       setTimeout(() => {
         window.location.href = '/';
-      }, 1500);
+      }, 1000);
     } catch (error) {
       setIsDeleting(false);
       setDeletePassword('');
@@ -871,11 +870,13 @@ export default function Dashboard() {
   };
 
   const handleLogout = async () => {
-    await logout();
     setIsLoggingOut(true);
-    setTimeout(() => {
-      navigate('/', { state: { flash: { type: 'success', message: 'Logged out successfully.' } } });
-    }, 2000);
+    await logout();
+    // logout() from AuthContext will handle the redirect to home page
+  };
+
+  const handleHelpClick = () => {
+    navigate('/help');
   };
 
   const showCreateCanvasCardFlash = (message) => {
@@ -1244,7 +1245,11 @@ export default function Dashboard() {
                     </span>
                   )}
                 </button>
-                <button className="p-2 text-slate-400 hover:bg-[#111827] rounded-full transition-all">
+                <button
+                  className="p-2 text-slate-400 hover:bg-[#111827] rounded-full transition-all"
+                  onClick={handleHelpClick}
+                  type="button"
+                >
                   <span className="material-icons">help_outline</span>
                 </button>
               </div>
@@ -3779,7 +3784,7 @@ export default function Dashboard() {
       )}
 
       {/* DELETE ACCOUNT MODAL */}
-      {showDeleteModal && (
+      {showDeleteModal && !isDeleting && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="bg-[#0f172a] border border-rose-500/30 rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl">
             <div className="flex items-center gap-4 mb-6">
@@ -3834,6 +3839,19 @@ export default function Dashboard() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ACCOUNT DELETION LOADING OVERLAY */}
+      {isDeleting && (
+        <div className="fixed inset-0 z-[999] flex items-center justify-center bg-slate-900/80 backdrop-blur-md">
+          <div className="flex flex-col items-center gap-6 rounded-2xl border border-white/10 bg-[#0f172a] px-12 py-12 shadow-2xl">
+            <div className="relative w-16 h-16">
+              <div className="absolute inset-0 rounded-full border-4 border-rose-500/20"></div>
+              <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-rose-500 animate-spin"></div>
+            </div>
+            <p className="text-sm font-semibold text-slate-100">Deleting your account...</p>
           </div>
         </div>
       )}

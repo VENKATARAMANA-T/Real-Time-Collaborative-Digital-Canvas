@@ -20,14 +20,14 @@ export default function ActivateAccount() {
           setStatus('success');
           setMessage(data.message || 'Your account has been activated successfully!');
           
-          // Notify the original registration tab via BroadcastChannel
+          // Notify the original registration tab via BroadcastChannel only
           try {
             const channel = new BroadcastChannel('collabcanvas_activation');
             channel.postMessage({ type: 'ACCOUNT_ACTIVATED', success: true });
             channel.close();
-          } catch (e) { /* BroadcastChannel not supported */ }
-          // Also set localStorage flag as fallback for BroadcastChannel
-          localStorage.setItem('collab_activationComplete', 'true');
+          } catch (e) { 
+            console.warn('BroadcastChannel not supported'); 
+          }
         } else {
           setStatus('error');
           setMessage(data.message || 'Activation failed. Please try again.');
@@ -86,7 +86,7 @@ export default function ActivateAccount() {
 
         {/* Success State */}
         {status === 'success' && (
-          <div className="bg-[#0f172a] rounded-2xl p-10 shadow-2xl border border-green-500/30 text-center animate-fadeIn">
+          <div className="bg-[#0f172a] rounded-2xl p-10 shadow-2xl border border-green-500/30 text-center">
             <div className="flex justify-center mb-6">
               <div className="w-20 h-20 bg-green-500/10 rounded-full flex items-center justify-center border-2 border-green-500/30">
                 <svg className="w-10 h-10 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
@@ -94,16 +94,13 @@ export default function ActivateAccount() {
                 </svg>
               </div>
             </div>
-            <h2 className="text-2xl font-bold text-white mb-2">You Are Registered! 🎉</h2>
-            <p className="text-green-300 text-sm mb-6">{message}</p>
-            <p className="text-slate-400 text-sm mb-8">
-              Your account is now active. You can close this tab and login from the sign up page, or click below to go to the home page.
-            </p>
+            <h2 className="text-2xl font-bold text-white mb-2">Your Account is Activated</h2>
+            <p className="text-slate-400 text-sm mb-8">You can now login to your account.</p>
             <button
               onClick={() => navigate('/')}
-              className="w-full py-3.5 rounded-lg bg-purple-600 hover:bg-purple-500 font-bold text-white transition-all shadow-lg hover:shadow-purple-500/25"
+              className="w-full py-3.5 rounded-lg bg-green-600 hover:bg-green-500 font-bold text-white transition-all shadow-lg hover:shadow-green-500/25"
             >
-              Go to Home Page
+              Go Back to Home Page
             </button>
           </div>
         )}

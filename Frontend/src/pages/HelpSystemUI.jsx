@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   HelpCircle, Search, BookOpen, Lightbulb, Zap, MessageSquare, 
   ChevronRight, ChevronDown, X, PlayCircle, Info, Settings, Video, 
@@ -7,6 +8,7 @@ import {
 } from 'lucide-react';
 
 export default function HelpSystemUI() {
+  const navigate = useNavigate();
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [walkthroughStep, setWalkthroughStep] = useState(0);
@@ -598,6 +600,15 @@ export default function HelpSystemUI() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center space-x-4">
+              <button
+                onClick={() => navigate('/dashboard')}
+                className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors duration-200 mr-2"
+                title="Back to Dashboard"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
               <div className={`${isDarkMode ? 'bg-indigo-600' : 'bg-gradient-to-r from-indigo-600 to-purple-600'} p-2 rounded-lg transition-colors duration-300`}><BookOpen className="w-6 h-6 text-white" /></div>
               <h1 className="text-xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">Help Center</h1>
             </div>

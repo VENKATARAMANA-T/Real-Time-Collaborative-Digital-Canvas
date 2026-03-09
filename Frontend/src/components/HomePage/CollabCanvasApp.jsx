@@ -13,9 +13,13 @@ import AuthModal from './AuthModal';
 function LogoutOverlay({ isLoggingOut }) {
   if (!isLoggingOut) return null;
   return (
-    <div className="fixed inset-0 z-[999] flex items-center justify-center bg-slate-900/80 backdrop-blur-sm">
-      <div className="flex items-center gap-4 rounded-2xl border border-white/10 bg-[#0f172a] px-8 py-8 shadow-2xl">
-        <div className="h-10 w-10 animate-spin rounded-full border-2 border-slate-600 border-t-primary"></div>
+    <div className="fixed inset-0 z-[999] flex items-center justify-center bg-slate-900/80 backdrop-blur-md">
+      <div className="flex flex-col items-center gap-6 rounded-2xl border border-white/10 bg-[#0f172a] px-12 py-12 shadow-2xl">
+        {/* Animated spinner */}
+        <div className="relative w-16 h-16">
+          <div className="absolute inset-0 rounded-full border-4 border-purple-500/20"></div>
+          <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-purple-500 animate-spin"></div>
+        </div>
         <p className="text-sm font-semibold text-slate-100">Logging out...</p>
       </div>
     </div>
@@ -35,16 +39,19 @@ export default function CollabCanvasApp({ initialShowAuth = false, initialAuthMo
 
   // Auto-open modal to register view if user is in the middle of activating via locally stored flag
   useEffect(() => {
-    // Check for logout flash message
+    // Check for logout flash message FIRST
     const logoutFlashStr = localStorage.getItem('logoutFlash');
     if (logoutFlashStr) {
       try {
         const logoutFlashData = JSON.parse(logoutFlashStr);
         setFlash(logoutFlashData);
         localStorage.removeItem('logoutFlash');
-        return; // Don't show auth modal if logout flash exists
+        // Don't show auth modal and return early if logout flash exists
+        setShowAuth(false);
+        return;
       } catch (e) {
         console.error('Error parsing logout flash:', e);
+        localStorage.removeItem('logoutFlash');
       }
     }
     
