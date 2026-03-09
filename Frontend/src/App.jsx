@@ -7,7 +7,6 @@ import MeetingCanvasEditor from './pages/MeetingCanvasEditor.jsx';
 import MeetingNotes from './pages/MeetingNotes.jsx';
 import HelpSystemUI from './pages/HelpSystemUI.jsx'; 
 import CollabCanvasApp from './components/HomePage/CollabCanvasApp.jsx';
-import UserProfileUI from './pages/UserProfileUI.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import ResetPassword from './pages/ResetPassword.jsx';
 import ActivateAccount from './pages/ActivateAccount.jsx';
@@ -34,7 +33,6 @@ function App() {
 
         {/* Protected Routes */}
         <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-        <Route path="/profile" element={<ProtectedRoute><UserProfileUI /></ProtectedRoute>} />
         <Route path="/help" element={<ProtectedRoute><HelpSystemUI /></ProtectedRoute>} />
         <Route path="/paint/:id" element={<ProtectedRoute><PaintApp /></ProtectedRoute>} />
         <Route path="/paint" element={<ProtectedRoute><PaintApp /></ProtectedRoute>} />

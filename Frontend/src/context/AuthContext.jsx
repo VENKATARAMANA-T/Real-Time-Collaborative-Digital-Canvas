@@ -112,13 +112,8 @@ export const AuthProvider = ({ children }) => {
       localStorage.removeItem('collab_resetCompleted');
       localStorage.removeItem('collab_resetLinkExpired');
       
-      // Set logout flash message flag
-      localStorage.setItem('logoutFlash', JSON.stringify({
-        type: 'success',
-        message: 'You have been logged out successfully.'
-      }));
-      
-      // Wait for logout animation before redirecting
+      // Don't set logout flash message - just redirect silently
+      // Redirect to home page after logout animation
       setTimeout(() => {
         window.location.href = '/';
       }, 1500);

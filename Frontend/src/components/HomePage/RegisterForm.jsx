@@ -124,8 +124,6 @@ export default function RegisterForm({ onClose, onModeChange, onActivationStateC
         console.log('Account activated event received:', data);
         if (data.success && data.email === activationEmail) {
           setActivationComplete(true);
-          // Also set the localStorage flag for fallback
-          localStorage.setItem('collab_activationComplete', 'true');
         }
       });
 
@@ -140,7 +138,9 @@ export default function RegisterForm({ onClose, onModeChange, onActivationStateC
     };
   }, [activationSent, activationComplete, linkExpired, activationEmail]);
 
-  // Listen for activation success from the other tab via BroadcastChannel or localStorage
+  // Listen for activation success from the other tab via BroadcastChannel or via Socket.io
+  // IMPORTANT: ONLY trust socket events from server, not localStorage
+  // This prevents false activations from spurious localStorage changes
   useEffect(() => {
     if (!activationSent || activationComplete || linkExpired) return;
 
@@ -154,25 +154,8 @@ export default function RegisterForm({ onClose, onModeChange, onActivationStateC
       };
     } catch (e) { /* BroadcastChannel not supported */ }
 
-    // Check if already completed in localStorage (fallback for same-tab or slow BroadcastChannel)
-    if (localStorage.getItem('collab_activationComplete') === 'true') {
-      setActivationComplete(true);
-      localStorage.removeItem('collab_activationComplete');
-    }
-
-    // Listen for storage changes from other tabs
-    const handleStorageChange = (e) => {
-      if (e.key === 'collab_activationComplete' && e.newValue === 'true') {
-        setActivationComplete(true);
-        localStorage.removeItem('collab_activationComplete');
-      }
-    };
-
-    window.addEventListener('storage', handleStorageChange);
-
     return () => {
       try { channel?.close(); } catch (e) {}
-      window.removeEventListener('storage', handleStorageChange);
     };
   }, [activationSent, activationComplete, linkExpired]);
 
@@ -192,12 +175,6 @@ export default function RegisterForm({ onClose, onModeChange, onActivationStateC
       setTimeLeft((prev) => {
         if (prev <= 1) {
           clearInterval(timerInterval);
-          // Check one more time if activation completed before marking as expired
-          if (localStorage.getItem('collab_activationComplete') === 'true') {
-            setActivationComplete(true);
-            localStorage.removeItem('collab_activationComplete');
-            return 300;
-          }
           setLinkExpired(true);
           return 0;
         }
@@ -205,19 +182,8 @@ export default function RegisterForm({ onClose, onModeChange, onActivationStateC
       });
     }, 1000);
 
-    // Poll for activation completion every 2 seconds (for different browsers)
-    const pollInterval = setInterval(() => {
-      if (localStorage.getItem('collab_activationComplete') === 'true') {
-        setActivationComplete(true);
-        localStorage.removeItem('collab_activationComplete');
-        clearInterval(timerInterval);
-        clearInterval(pollInterval);
-      }
-    }, 2000);
-
     return () => {
       clearInterval(timerInterval);
-      clearInterval(pollInterval);
     };
   }, [activationSent, activationComplete, linkExpired, onActivationStateChange]);
 
