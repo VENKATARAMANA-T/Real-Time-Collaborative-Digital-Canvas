@@ -13,7 +13,7 @@ import ActivateAccount from './pages/ActivateAccount.jsx';
 import JoinByLink from './pages/JoinByLink.jsx';
 import ProtectedRoute from './components/ProtectedRoute.jsx';
 import NotFoundWindow from './pages/NotFoundWindow.jsx';
-
+ 
 function App() {
   
 
