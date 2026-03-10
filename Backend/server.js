@@ -1,8 +1,11 @@
 const express = require('express');
+const dotenv = require('dotenv');
+// Load env vars early so all modules see them
+dotenv.config();
+
 const connectDB = require('./config/db.js');
 const cookieParser = require('cookie-parser');
 const cors = require('cors');
-const dotenv = require('dotenv');
 const http = require('http');
 const path = require('path');
 const { Server } = require('socket.io');
@@ -14,22 +17,23 @@ const userRoutes = require('./routes/userRoutes.js');
 const chatRoutes = require('./routes/chatRoutes.js');
 const folderRoutes = require('./routes/folderRoutes.js');
 const uploadRoutes = require('./routes/uploadRoutes.js');
+const botRoutes = require('./routes/botRoutes.js');
 
 const { notFound, errorHandler } = require('./middleware/errorMiddleware.js');
 
 const socketHandler = require('./socket/socketHandler');
-
-// Load env vars
-dotenv.config();
 
 const app = express();
 
 // Wrap Express app with HTTP Server
 const server = http.createServer(app);
 // Initialize Socket.io with CORS settings
+// Accept any localhost origin (handles port drift 5173/5174/5175/…)
+const isLocalOrigin = (origin) => !origin || /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+
 const io = new Server(server, {
   cors: {
-    origin: process.env.FRONTEND_URL || "http://localhost:5173",
+    origin: (origin, cb) => cb(null, isLocalOrigin(origin)),
     methods: ["GET", "POST"],
     credentials: true,
     allowEIO3: true
@@ -39,7 +43,7 @@ app.set('io', io);
 socketHandler(io);
 
 app.use(cors({
-  origin: process.env.FRONTEND_URL,   // read from .env
+  origin: (origin, cb) => cb(null, isLocalOrigin(origin)),
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE"],
 }));
@@ -59,6 +63,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/folders', folderRoutes);
 app.use('/api/upload', uploadRoutes);
+app.use('/api/bot', botRoutes);
 
 const notificationRoutes = require('./routes/notificationRoutes');
 app.use('/api/notifications', notificationRoutes);

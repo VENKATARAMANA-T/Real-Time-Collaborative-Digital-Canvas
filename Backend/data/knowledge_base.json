@@ -1,0 +1,294 @@
+[
+  {
+    "question": "How do I register or create an account?",
+    "answer": "To create an account: 1. Go to the home page and click 'Get Started' or 'Sign Up'. 2. Fill in your username, email address, and a password (minimum 6 characters). 3. Click 'Register'. 4. An activation email will be sent to the email address you provided. 5. Open your email and click the 'Activate My Account' link. 6. Once activated, you can log in with your credentials. Note: Your account must be activated via email before you can log in."
+  },
+  {
+    "question": "How do I log in to the application?",
+    "answer": "To log in: 1. Go to the home page and click 'Login'. 2. Enter your registered email and password. 3. Click 'Login'. You will be redirected to your Dashboard. If your account has not been activated yet, you will be prompted to check your email first."
+  },
+  {
+    "question": "How do I reset or recover my forgotten password?",
+    "answer": "To reset a forgotten password: 1. On the login page, click 'Forgot password?'. 2. Enter your registered email address and click 'Send Reset Link'. 3. Check your email for a password reset link. 4. Click the link in the email to open the reset page. 5. Enter and confirm your new password (minimum 6 characters). 6. Click 'Reset Password'. You can now log in with the new password."
+  },
+  {
+    "question": "How do I log out?",
+    "answer": "To log out, click the 'Logout' button at the bottom of the left sidebar in the Dashboard. A brief logout animation will play, then you will be redirected to the home page."
+  },
+  {
+    "question": "What is the Dashboard and how do I navigate it?",
+    "answer": "The Dashboard is your main workspace. The left sidebar has navigation buttons: Home (overview and recent activity), My Canvases (all your canvases and folders), Meetings (create, join, manage meetings), Notifications (meeting reminders), Activity (your full activity log), and Settings (profile, password, account). Click any of these to switch views. There is also a Help button and a Logout button at the bottom of the sidebar."
+  },
+  {
+    "question": "What can I see on the Home page of the Dashboard?",
+    "answer": "The Home view shows a quick overview: recent canvases you can open instantly, quick action cards (create a new canvas, go to notifications, open the help center), and a summary of your upcoming meetings. You can click 'View All Meetings' to go to the full Meetings view."
+  },
+  {
+    "question": "How do I create a new canvas?",
+    "answer": "To create a new canvas: 1. In the Dashboard, click 'My Canvases' in the left sidebar. 2. Click the '+ New Canvas' button (or the create card). 3. A modal will appear — type a name for your canvas and click 'Create'. 4. Your new canvas will open in the paint editor."
+  },
+  {
+    "question": "How do I open an existing canvas?",
+    "answer": "In the Dashboard, click 'My Canvases' in the left sidebar. You will see all your saved canvases. Click on any canvas card to open it in the paint editor. You can also use the Home view to open recently edited canvases."
+  },
+  {
+    "question": "How do I rename a canvas?",
+    "answer": "To rename a canvas: 1. Go to 'My Canvases' in the Dashboard. 2. Hover over the canvas card to reveal a three-dot menu (⋮) button. 3. Click the menu and select 'Rename'. 4. Enter the new name and confirm. The canvas title will be updated."
+  },
+  {
+    "question": "How do I duplicate or copy a canvas?",
+    "answer": "To duplicate a canvas: 1. Go to 'My Canvases' in the Dashboard. 2. Hover over the canvas card and click the three-dot menu (⋮). 3. Select 'Duplicate'. A copy of the canvas will be created with the same content and a new name."
+  },
+  {
+    "question": "How do I delete a canvas?",
+    "answer": "To delete a canvas: 1. Go to 'My Canvases' in the Dashboard. 2. Hover over the canvas and click the three-dot menu (⋮). 3. Select 'Delete'. Confirm the deletion. The canvas and all its data will be permanently removed."
+  },
+  {
+    "question": "How do I export a canvas?",
+    "answer": "To export a canvas: 1. Open the canvas in the paint editor. 2. Click 'Options' in the top menu bar. 3. Select 'Export File'. The canvas will be downloaded. You can export as a JSON file (to re-import later) or as an image. This action is also tracked in your Activity log."
+  },
+  {
+    "question": "How do I import a canvas?",
+    "answer": "To import a canvas: 1. Open the paint editor. 2. Click 'Options' in the top menu bar. 3. Select 'Import File'. 4. Choose a JSON canvas file from your computer. The canvas content will be loaded into the editor. This replaces the current content, so save first if needed."
+  },
+  {
+    "question": "How do I share a canvas with someone?",
+    "answer": "To share a canvas: 1. Open the canvas in the paint editor. 2. Click 'Options' in the top menu bar. 3. Select 'Share'. A unique shareable link will be generated. 4. Copy and send this link to anyone. Recipients can open the link to view or clone the shared canvas. Each canvas has one permanent share link."
+  },
+  {
+    "question": "How do I mark a canvas as a favorite?",
+    "answer": "To favorite a canvas, hover over the canvas card in 'My Canvases' and click the star (★) icon in the three-dot menu or directly on the card. Favorited canvases are tracked in your activity log. You can use the filter buttons at the top of My Canvases to filter by 'All', 'Meeting', or 'Private' canvases."
+  },
+  {
+    "question": "How do I organize canvases into folders?",
+    "answer": "To organize canvases into folders: 1. Go to 'My Canvases' in the Dashboard. 2. Click the '+ New Folder' button to create a folder. 3. Enter a folder name and confirm. 4. To move a canvas into a folder, use the three-dot menu (⋮) on a canvas card and select 'Move to Folder'. A default folder called 'Personal Sketches' is created automatically for you."
+  },
+  {
+    "question": "How do I rename or delete a folder?",
+    "answer": "To rename a folder, hover over the folder and click its three-dot menu (⋮), then select 'Rename' and enter a new name. To delete a folder, select 'Delete' from the same menu. Note: Deleting a folder does not delete the canvases inside it — they will remain in your canvas library."
+  },
+  {
+    "question": "How do I filter my canvases?",
+    "answer": "In 'My Canvases', use the filter buttons at the top to filter: 'All' shows every canvas, 'Meeting' shows only canvases linked to meetings, 'Private' shows only personal canvases, and 'Recent' shows the 4 most recently edited canvases. You can also use the search bar at the top to search canvases by name."
+  },
+  {
+    "question": "How does the canvas save my work?",
+    "answer": "The application auto-saves your canvas as you work. You can also manually save by clicking 'Save' in the top Options menu (File section) or using the keyboard shortcut Ctrl+S. The canvas last-saved time is shown in the status bar at the bottom."
+  },
+  {
+    "question": "What drawing tools are available in the paint editor?",
+    "answer": "The paint editor includes these tools in the left toolbar: Pencil (thin precise lines), Brush (smooth freehand strokes), Eraser (erase parts of your drawing), Select (click and drag to select and move elements), Hand/Pan (drag the canvas to pan around), Text (click to type text on canvas), and Shapes — Rectangle, Circle, Triangle, Star, Line, Pentagon, Hexagon, Callout, Arrow, and Rhombus. Each tool can be selected from the left toolbar."
+  },
+  {
+    "question": "How do I draw shapes on the canvas?",
+    "answer": "To draw a shape: 1. Select a shape tool from the left toolbar (rectangle, circle, triangle, star, line, etc). 2. Click and drag on the canvas to draw the shape. 3. You can toggle Fill Mode (on = solid filled shape, off = outline only) using the fill button in the toolbar. 4. Set the stroke (border) color and fill color using the color picker. 5. Adjust stroke width using the width slider."
+  },
+  {
+    "question": "How do I use the text tool?",
+    "answer": "To add text: 1. Select the 'Text' tool from the left toolbar. 2. Click anywhere on the canvas to place a text box. 3. Type your text. 4. Use the text formatting toolbar that appears at the top to change font family, font size, bold, italic, underline, strikethrough, and text alignment. 5. Click outside the text box or press Escape to finish editing."
+  },
+  {
+    "question": "How do I change colors in the paint editor?",
+    "answer": "Use the color palette at the left or bottom of the toolbar to pick a color. You can click any color swatch to set the draw/stroke color. The palette includes 20 preset colors. You can also type a hex color code directly. The selected color is shown in the color indicator in the toolbar."
+  },
+  {
+    "question": "How do I change stroke width or brush size?",
+    "answer": "In the properties panel on the left or in the toolbar, use the stroke width slider or input field to adjust the line thickness. Drag the slider right for thicker strokes and left for thinner. This affects pencil, brush, eraser, and shape borders."
+  },
+  {
+    "question": "How do I adjust opacity?",
+    "answer": "Use the opacity slider in the properties panel to control how transparent or opaque your drawing is. A value of 1 (100%) is fully opaque. A lower value makes the stroke semi-transparent. This applies to new strokes and shapes you draw."
+  },
+  {
+    "question": "How does Fill Mode work?",
+    "answer": "Fill Mode controls whether shapes are drawn solid or as outlines. When Fill Mode is ON, shapes are drawn with a solid fill color inside. When Fill Mode is OFF, shapes are drawn as outlines only (just the border, no fill inside). Toggle this in the toolbar before drawing a shape."
+  },
+  {
+    "question": "How do I undo or redo actions in the paint editor?",
+    "answer": "To undo the last action, press Ctrl+Z or click the Undo button in the Edit menu (top bar). To redo, press Ctrl+Y or Ctrl+Shift+Z, or click the Redo button. You can undo/redo multiple steps — the history is maintained as long as you are on the canvas."
+  },
+  {
+    "question": "How do I select, move, or resize elements on the canvas?",
+    "answer": "Use the Select tool (arrow icon) from the left toolbar. Click on any element to select it — selection handles will appear. Drag the element to move it. Drag the corner handles to resize it. You can also cut (Ctrl+X), copy (Ctrl+C), and paste (Ctrl+V) selected elements using the Edit menu or keyboard shortcuts."
+  },
+  {
+    "question": "How do I copy and paste elements?",
+    "answer": "Select an element using the Select tool, then use Ctrl+C to copy or Ctrl+X to cut. Press Ctrl+V to paste. You can also access Cut, Copy, and Paste from the Edit menu in the top bar. Pasted elements appear slightly offset from the original."
+  },
+  {
+    "question": "How do I cut elements from the canvas?",
+    "answer": "Select an element with the Select tool, then press Ctrl+X or use Edit > Cut from the top menu. The element will be removed from the canvas and copied to the clipboard so you can paste it elsewhere."
+  },
+  {
+    "question": "How do I zoom in or out on the canvas?",
+    "answer": "To zoom in, use Ctrl+= or the zoom controls in the status bar at the bottom. To zoom out, use Ctrl+- . You can also use the View menu in the top bar to set a specific zoom level. Use the Hand/Pan tool or hold the middle mouse button to pan around when zoomed in."
+  },
+  {
+    "question": "How do I pan or move around the canvas?",
+    "answer": "Select the Hand tool (hand icon) from the left toolbar and drag to pan the canvas. You can also hold the Space bar while using any tool to temporarily switch to the pan mode. Alternatively, use the scroll wheel to scroll up/down and Shift+scroll to scroll left/right."
+  },
+  {
+    "question": "How do I show or hide rulers and gridlines?",
+    "answer": "In the paint editor, click 'View' in the top menu bar. From the dropdown, you can toggle 'Show Rulers' to display rulers at the top and left edges, and 'Show Gridlines' to overlay a grid on the canvas. You can also change the grid size. These are visual guides and do not affect the exported canvas."
+  },
+  {
+    "question": "How do I clear the entire canvas?",
+    "answer": "To clear all elements from the canvas, click 'Edit' in the top menu bar and select 'Clear Canvas'. This removes all drawn elements but preserves the background. You can also ask me (the bot) to 'clear the canvas' and I will do it for you instantly!"
+  },
+  {
+    "question": "What is the Layers panel and how do I use it?",
+    "answer": "The Layers panel is on the right side of the paint editor. Each layer acts like a transparent sheet you draw on. You can: Add a new layer (+ button), rename a layer (double-click its name), toggle visibility (eye icon) to hide/show a layer, lock a layer (lock icon) to prevent editing, adjust layer opacity, and reorder layers by dragging. The active layer is highlighted. Only elements on the active layer are affected by drawing."
+  },
+  {
+    "question": "How do I add a new layer?",
+    "answer": "In the Layers panel on the right side of the editor, click the '+' (Add Layer) button at the top of the panel. A new layer will be added above the current active layer. Click on a layer in the panel to make it the active drawing layer."
+  },
+  {
+    "question": "How do I delete a layer?",
+    "answer": "In the Layers panel, select the layer you want to delete by clicking on it. Then click the delete/trash icon in the panel. Note: the last remaining layer cannot be deleted. All elements on a deleted layer are removed from the canvas."
+  },
+  {
+    "question": "How do I hide or lock a layer?",
+    "answer": "In the Layers panel, each layer has two icons: an eye icon (toggle visibility — hides the layer content from view) and a lock icon (prevents drawing on that layer). Click the eye icon to hide/show a layer, and the lock icon to lock/unlock it."
+  },
+  {
+    "question": "How do I use version history or time-lapse?",
+    "answer": "The application tracks versions of your canvas as you save. In the Dashboard, click the three-dot menu on a canvas card and look for the history option to view saved versions. You can restore a previous version — this action is logged in your Activity Log as 'Version Restored'. The time-lapse replay feature lets you watch how the canvas was built step by step."
+  },
+  {
+    "question": "How does AI shape correction work?",
+    "answer": "When you draw a freehand shape (like a rough circle or rectangle), the AI shape correction feature can automatically snap and clean up your drawing into a perfect geometric shape. This feature can be toggled on/off using the AI toggle button in the toolbar. When enabled, your rough hand-drawn shapes are automatically corrected to clean shapes."
+  },
+  {
+    "question": "What can I ask the AI bot to do on the canvas?",
+    "answer": "The AI bot (bottom-right button) can: draw shapes (rectangles, circles, triangles, stars, lines, pentagons, hexagons, arrows, callouts, rhombuses), add text, change the background color, clear the canvas, change the active tool, change the stroke color, adjust stroke width, undo/redo, move, resize, duplicate, or delete selected elements. Just describe what you want in plain English — for example: 'draw a red circle', 'add text Hello World', 'fill the background blue', or 'clear the canvas and draw a house'."
+  },
+  {
+    "question": "How do I open or close the AI bot?",
+    "answer": "The AI bot widget is available in both the Dashboard and the paint editor. Look for the bot/chat icon in the bottom-right corner of the screen. Click it to open the chat panel. Type your message or question and press Enter or click Send. The bot can answer questions about the app and also perform drawing actions on the canvas."
+  },
+  {
+    "question": "How do I create an instant meeting?",
+    "answer": "To create an instant meeting: 1. Click 'Meetings' in the left sidebar of the Dashboard. 2. Click 'Create Meeting'. 3. The 'Instant Meeting' tab is selected by default — meeting credentials (ID, password, and share link) are generated automatically. 4. Enter a meeting name. 5. Click 'Start Meeting'. You will be taken to the meeting room immediately. Share the meeting ID, password, or the shareable link with participants."
+  },
+  {
+    "question": "How do I schedule a meeting for a later time?",
+    "answer": "To schedule a meeting: 1. Click 'Meetings' in the Dashboard sidebar. 2. Click 'Create Meeting'. 3. Click the 'Schedule Meeting' tab. 4. Enter a meeting name, date, and time (must be in the future). 5. Click 'Generate Details'. Meeting credentials will be created and saved. 6. Share the meeting ID, password, or link with participants in advance. The meeting will appear in your Upcoming Meetings list. You will receive a notification reminder when it is about to start."
+  },
+  {
+    "question": "How do I join a meeting using a meeting ID?",
+    "answer": "To join a meeting by ID: 1. Click 'Meetings' in the Dashboard sidebar. 2. Click 'Join Meeting'. 3. Enter the Meeting ID and Meeting Password provided by the host. 4. Choose whether to enable audio and video before joining. 5. Click 'Join'. You will be connected to the meeting room."
+  },
+  {
+    "question": "How do I join a meeting using a share link?",
+    "answer": "If someone sent you a meeting share link, simply click the link in your browser. It will open a join page where you can enter your credentials (if required) and join the meeting directly. No need to enter a Meeting ID or password separately — the link contains all the necessary information."
+  },
+  {
+    "question": "How do I view my upcoming, active, and completed meetings?",
+    "answer": "Go to 'Meetings' in the Dashboard sidebar. The meetings page has three tabs: 'Recent' (active meetings currently live), 'Upcoming' (scheduled meetings that haven't started yet), and 'Completed' (meetings that have ended). Each card shows the meeting name, status, date/time, and action buttons."
+  },
+  {
+    "question": "How do I cancel or delete a scheduled meeting?",
+    "answer": "In the Meetings view, find the upcoming meeting you want to cancel. Click the Cancel or Delete option on the meeting card. A confirmation will appear — confirm to cancel the meeting. It will be removed from the Upcoming Meetings list."
+  },
+  {
+    "question": "What can I do inside a meeting room?",
+    "answer": "Inside a meeting room you can: collaborate on a shared canvas in real-time with other participants, toggle your camera and microphone on/off, use the chat panel to send messages to all participants, raise your hand to signal you want to speak, react with emoji reactions visible to everyone, see other participants' cursors on the canvas, and (as host) lock the canvas so only the host can draw."
+  },
+  {
+    "question": "How does real-time collaboration work on the canvas?",
+    "answer": "When multiple users are in the same meeting or have the same canvas open, all drawing actions are synchronized in real-time via WebSocket. You can see other users' cursors and watch their strokes appear live as they draw. Changes are merged automatically. If you go offline briefly and reconnect, your changes will sync when you come back."
+  },
+  {
+    "question": "What are notifications and how do I view them?",
+    "answer": "Notifications in this app are meeting reminders. When a scheduled meeting is about to start, you will receive a notification automatically. Click 'Notifications' in the left sidebar of the Dashboard to see all your notifications. Unread notifications are shown with a badge count on the Notifications icon. Click a notification to mark it as read or to navigate to the related meeting."
+  },
+  {
+    "question": "How do I mark notifications as read?",
+    "answer": "In the Notifications view, click on an individual notification to mark it as read. You can also click 'Mark All as Read' to dismiss all notifications at once. Read notifications appear dimmed compared to unread ones."
+  },
+  {
+    "question": "What is the Activity Log?",
+    "answer": "The Activity Log tracks everything you do in the application. Click 'Activity' in the left sidebar of the Dashboard to view it. It shows events like: login, logout, canvas created, canvas deleted, canvas renamed, canvas duplicated, canvas exported, canvas imported, canvas updated, folder created, folder deleted, favorite toggled, version restored, meeting joined, meeting left, profile updated, password reset, walkthrough viewed, help searched, and feedback submitted. Each entry shows the action, a description, and the timestamp."
+  },
+  {
+    "question": "How do I update my profile (username or email)?",
+    "answer": "To update your profile: 1. Click 'Settings' in the left sidebar of the Dashboard. 2. The 'Profile Details' tab is selected by default. 3. Update your username and/or email address in the provided fields. 4. Click 'Update Profile'. A success message will appear confirming the update. Your new username and email will take effect immediately."
+  },
+  {
+    "question": "How do I change my password?",
+    "answer": "To change your password: 1. Click 'Settings' in the left sidebar of the Dashboard. 2. Click the 'Password' tab (second tab in Account Settings). 3. Enter your current (old) password in the first field. 4. Enter your new password (minimum 6 characters) in the second field. 5. Re-enter the new password in the 'Confirm Password' field to make sure they match. 6. Click 'Update Password'. A success message will confirm the change."
+  },
+  {
+    "question": "How do I update my profile picture?",
+    "answer": "To update your profile picture: 1. Go to Settings in the Dashboard. 2. In the Profile Details tab, look for the profile image section. 3. Click on your current avatar or the upload area to select a new image from your computer. 4. The image is uploaded to Cloudinary and your profile picture updates immediately. Click 'Update Profile' to save."
+  },
+  {
+    "question": "Where can I find my account information like when I registered?",
+    "answer": "Go to Settings in the Dashboard and click the 'Account Details' tab (third tab). This shows your account information including your registration date (Member Since), your username, email, and the account deletion option."
+  },
+  {
+    "question": "How do I delete my account?",
+    "answer": "To permanently delete your account: 1. Click 'Settings' in the left sidebar of the Dashboard. 2. Click the 'Account Details' tab (third tab). 3. Scroll down to the 'Delete account' section — it has a red border with the warning 'This action is permanent and cannot be undone.' 4. Click the 'Delete' button. 5. A confirmation modal appears — enter your current password. 6. Click 'Delete Account'. This permanently deletes your account, all your canvases, folders, meetings, and activity logs. This action cannot be reversed."
+  },
+  {
+    "question": "Where is the Account Details tab in Settings?",
+    "answer": "In the Dashboard, click 'Settings' in the left sidebar. At the top of Account Settings you will see three tabs: 'Profile Details', 'Password', and 'Account Details'. Click 'Account Details' (the third tab) to view your account info and find the option to delete your account."
+  },
+  {
+    "question": "What happens when I delete my account?",
+    "answer": "When you delete your account, everything is permanently removed: all your canvases, all your folders, all meetings you hosted, your activity logs, and your profile. You are also removed from any meetings you were a participant in. This is irreversible — data cannot be recovered. You will be logged out and redirected to the home page."
+  },
+  {
+    "question": "How do I remove all elements from the canvas?",
+    "answer": "To clear the canvas, click 'Edit' in the top menu bar and select 'Clear Canvas'. You can also ask me (the bot) to 'clear the canvas' and I will do it for you instantly!"
+  },
+  {
+    "question": "How do I access the Help Center?",
+    "answer": "To open the Help Center: 1. In the Dashboard, click the 'Help' button (question mark icon) in the bottom area of the left sidebar or in the top-right area. 2. The Help System opens with a searchable guide covering all features — canvas tools, meetings, collaboration, settings, and more. 3. You can search for specific topics using the search bar, browse categories, read guides, view keyboard shortcuts, take guided walkthroughs, and submit feedback."
+  },
+  {
+    "question": "How do I take a guided walkthrough of the application?",
+    "answer": "A guided walkthrough is available in both the Dashboard and the paint editor. Click the Help button and look for the 'Walkthrough' or 'Tour' option. This will highlight each part of the interface step-by-step with tooltips explaining what each element does. You can navigate through steps with Next/Previous buttons and close it at any time."
+  },
+  {
+    "question": "What keyboard shortcuts are available in the canvas editor?",
+    "answer": "Key shortcuts in the paint editor: Ctrl+Z = Undo, Ctrl+Y or Ctrl+Shift+Z = Redo, Ctrl+C = Copy selected, Ctrl+X = Cut selected, Ctrl+V = Paste, Ctrl+S = Save, Ctrl+= = Zoom In, Ctrl+- = Zoom Out, Space+Drag = Pan canvas, Delete/Backspace = Delete selected element, Escape = Deselect / close text editing. You can also find all shortcuts in the Help Center."
+  },
+  {
+    "question": "How do I submit feedback about the application?",
+    "answer": "To submit feedback: 1. Click the Help button in the Dashboard or editor. 2. In the Help System, navigate to the 'Feedback' section. 3. Fill in the feedback form with your comments, suggestions, or issues. 4. Click Submit. Your feedback is logged in the Activity Log as 'Feedback Submitted'. The feedback helps improve the application."
+  },
+  {
+    "question": "How does search work in the Dashboard?",
+    "answer": "The search bar at the top of the Dashboard main area lets you search across your canvases by name. Start typing and results appear after a short debounce delay. The search is scoped to the current view — in 'My Canvases' it searches your canvases, in Meetings it searches meetings. Clear the search to go back to the normal view."
+  },
+  {
+    "question": "What are the canvas types — Private vs Meeting?",
+    "answer": "Canvases have two types: Private canvases are personal canvases you create yourself (shown with a green 'Private' tag). Meeting canvases are created during a collaboration meeting (shown with an amber 'Meeting' tag). You can filter your canvases by type using the 'Private' or 'Meeting' filter buttons in the 'My Canvases' view."
+  },
+  {
+    "question": "Can I view a canvas shared by someone else?",
+    "answer": "Yes. If someone shares a canvas link with you, open the link in your browser. You will see the SharedCanvas view where you can view the canvas content. You can also clone/copy the shared canvas into your own account so you can edit it separately. A valid account login is required to view shared canvases."
+  },
+  {
+    "question": "What is the status bar at the bottom of the paint editor?",
+    "answer": "The status bar at the bottom of the paint editor shows: current cursor position (x, y coordinates), current zoom level, canvas dimensions (1920x1080 by default), and canvas save status (saved or unsaved changes). You can use the zoom controls in the status bar to set a precise zoom percentage."
+  },
+  {
+    "question": "How do I use the Options menu (top menu bar) in the paint editor?",
+    "answer": "The top menu bar in the paint editor has three menus: 1. Options menu — Import File, Export File, Share. 2. Edit menu — Cut, Copy, Paste, Undo, Redo, Clear Canvas. 3. View menu — Show/Hide Rulers, Show/Hide Gridlines, adjust Grid Size, Show/Hide Status Bar, toggle Always Show Toolbar, and Fullscreen mode. There is also a 'Dashboard' back button to return to your Dashboard."
+  },
+  {
+    "question": "How do I go back to the Dashboard from the paint editor?",
+    "answer": "In the top-left of the paint editor, click the 'Dashboard' button (with the grid icon). If you have unsaved changes, a prompt will appear asking if you want to save before leaving. Choose to save or discard, then you will be returned to your Dashboard."
+  },
+  {
+    "question": "What roles exist in a meeting collaboration room?",
+    "answer": "There are two roles in a meeting room: Host (the person who created the meeting) — they have full control, can draw freely, and can lock the canvas to prevent others from drawing. Viewer/Editor — other participants who join. The host can set the default permission to 'edit' (everyone can draw) or 'view' (only the host can draw). The host can also lock/unlock the canvas at any time during the meeting."
+  },
+  {
+    "question": "What is the difference between Beginner mode and Advanced mode in the Help Center?",
+    "answer": "The Help Center has two modes toggled by the Beginner/Advanced buttons in the top-right header (shortcut: Ctrl+M). Beginner Mode is designed for new users: it uses an indigo/blue color scheme, shows large friendly article cards in a 3-column grid, displays contextual tooltip popups when you hover over interface elements (explaining features inline), provides quick-action cards for Starting a Guided Walkthrough, viewing Keyboard Shortcuts, and submitting Feedback, and uses a guided step-by-step walkthrough you can launch at any time. Advanced Mode is designed for power users and staff: it switches to a purple/violet color scheme throughout (banner, headers, article rows, FAQ items all turn purple), shows a purple 'Advanced Mode Active' banner at the top confirming the mode is on, displays articles in a compact single-column list (each row has a purple left-border accent) instead of large cards, shows a 'Quick Reference' keyboard shortcuts panel with all important hotkeys visible at a glance (Ctrl+Z=Undo, Ctrl+Y=Redo, Ctrl+C=Copy, Ctrl+V=Paste, Ctrl+S=Save, Ctrl+Shift+E=Export, F=Pencil, E=Eraser, T=Text, Delete=Delete, etc.), uses compact FAQ items with purple-accented styling instead of large accordion cards, shows a 'Recently Viewed' horizontal scroll section so you can quickly revisit articles, displays keyboard shortcut hints (Ctrl+K) directly inside the search bar, and has no beginner tooltip popups or guided walkthrough prompts. In summary: Beginner mode = friendly, guided, tooltips, large cards, indigo colors. Advanced mode = compact, keyboard-first, purple colors, quick reference panel, recently viewed, no hand-holding tooltips."
+  }
+]

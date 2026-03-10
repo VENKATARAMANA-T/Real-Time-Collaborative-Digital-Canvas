@@ -62,7 +62,7 @@ const LayerPanel = ({
     };
 
     return (
-        <div className="w-72 bg-[#0c0c0e] border-l border-zinc-800 flex flex-col shadow-2xl z-40">
+        <div data-tour="layers" className="w-72 bg-[#0c0c0e] border-l border-zinc-800 flex flex-col shadow-2xl z-40">
             <div className="p-4 border-b border-zinc-800 flex items-center justify-between bg-zinc-900/20">
                 <div className="flex items-center gap-2">
                     <div className="p-1.5 bg-blue-500/10 rounded-lg">

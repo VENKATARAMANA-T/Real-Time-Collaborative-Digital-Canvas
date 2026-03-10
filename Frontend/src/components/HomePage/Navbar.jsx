@@ -68,16 +68,16 @@ export default function Navbar({ onSlideChange, onAuthOpen }) {
           </button>
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 sm:gap-4 pr-10 sm:pr-0">
           <button
             onClick={() => onAuthOpen('login')}
-            className="text-sm font-medium text-slate-300 hover:text-white transition-colors"
+            className="text-xs sm:text-sm font-medium text-slate-300 hover:text-white transition-colors"
           >
             Sign In
           </button>
           <button
             onClick={() => onAuthOpen('register')}
-            className="px-5 py-2.5 rounded-lg bg-gradient-to-r from-purple-600 to-cyan-600 font-medium text-sm text-white shadow-lg shadow-purple-500/25 glow-button"
+            className="px-3 sm:px-5 py-2 sm:py-2.5 rounded-lg bg-gradient-to-r from-purple-600 to-cyan-600 font-medium text-xs sm:text-sm text-white shadow-lg shadow-purple-500/25 glow-button whitespace-nowrap"
           >
             Get Started
           </button>

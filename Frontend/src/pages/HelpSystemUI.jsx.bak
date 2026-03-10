@@ -4,7 +4,8 @@ import {
   HelpCircle, Search, BookOpen, Lightbulb, Zap, MessageSquare, 
   ChevronRight, ChevronDown, X, PlayCircle, Info, Settings, Video, 
   Star, Share2, Link as LinkIcon, Clock, Bug, Image as ImageIcon, 
-  Upload, Check, Mail, Trash2 
+  Upload, Check, Mail, Trash2, Filter, Code, Zap as Lightning, 
+  Cpu, GitBranch, PenTool, Award, TrendingUp, Eye, Lock, Unlock
 } from 'lucide-react';
 
 export default function HelpSystemUI() {
@@ -31,6 +32,10 @@ export default function HelpSystemUI() {
   // Advanced States
   const [bookmarks, setBookmarks] = useState([1]); 
   const [recentViewed, setRecentViewed] = useState([2, 5]);
+  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [difficultyFilter, setDifficultyFilter] = useState('all');
+  const [viewMode, setViewMode] = useState('cards'); // cards, compact, grid
 
   // Feedback Form States
   const [feedbackType, setFeedbackType] = useState('general');
@@ -48,30 +53,6 @@ export default function HelpSystemUI() {
     const timer = setTimeout(() => setLoading(false), 1500);
     return () => clearTimeout(timer);
   }, []);
-
-  // Parse URL query parameter for direct article link (e.g., ?article=1)
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const articleId = params.get('article');
-    if (articleId) {
-      const id = parseInt(articleId, 10);
-      setSelectedArticleId(id);
-      // Add to recent viewed if not already there
-      setRecentViewed(prev => {
-        const updated = [id, ...prev.filter(v => v !== id)];
-        return updated.slice(0, 5); // Keep only last 5
-      });
-    }
-  }, []);
-
-  // Update URL when article selection changes
-  useEffect(() => {
-    if (selectedArticleId) {
-      window.history.replaceState({}, '', `?article=${selectedArticleId}`);
-    } else {
-      window.history.replaceState({}, '', window.location.pathname);
-    }
-  }, [selectedArticleId]);
 
   // Keyboard Shortcuts
   useEffect(() => {
@@ -202,6 +183,8 @@ export default function HelpSystemUI() {
       category: 'Basics', 
       icon: PlayCircle, 
       readTime: '5 min',
+      difficulty: 'beginner',
+      views: 2847,
       details: {
         intro: 'Welcome to our Digital Canvas Application! This guide will help you get started with creating beautiful artwork.',
         sections: [
@@ -250,6 +233,8 @@ export default function HelpSystemUI() {
       category: 'Features', 
       icon: Settings, 
       readTime: '8 min',
+      difficulty: 'beginner',
+      views: 1923,
       details: {
         intro: 'Master all the powerful tools available in your Digital Canvas application. From basic drawing tools to advanced shape creation and selection features.',
         sections: [
@@ -535,15 +520,6 @@ export default function HelpSystemUI() {
       section.content.toLowerCase().includes(query)
     );
     return titleMatch || categoryMatch || introMatch || contentMatch;
-  }).sort((a, b) => {
-    // In Advanced mode, bookmarked articles appear first
-    if (mode === 'advanced') {
-      const aBookmarked = bookmarks.includes(a.id);
-      const bBookmarked = bookmarks.includes(b.id);
-      if (aBookmarked && !bBookmarked) return -1;
-      if (!aBookmarked && bBookmarked) return 1;
-    }
-    return 0;
   });
 
   const filteredFaqs = faqs.filter(faq => {
@@ -626,7 +602,7 @@ export default function HelpSystemUI() {
   };
 
   return (
-    <div className={`min-h-screen transition-colors duration-300 ease-in-out ${isDarkMode ? 'bg-gray-900 text-white' : mode === 'advanced' ? 'bg-gradient-to-br from-purple-50 via-violet-50 to-indigo-50 text-gray-900' : 'bg-gradient-to-br from-indigo-50 via-white to-purple-50 text-gray-900'}`}>
+    <div className={`min-h-screen ${isDarkMode ? 'bg-gray-900 text-white' : 'bg-gradient-to-br from-indigo-50 via-white to-purple-50 text-gray-900'} transition-colors duration-300 ease-in-out`}>
       {walkthroughActive && <WalkthroughHighlight />}
       
       <header className={`${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white/80 backdrop-blur-sm border-gray-200'} border-b sticky top-0 z-40 transition-all duration-300 ease-in-out`}>
@@ -695,21 +671,6 @@ export default function HelpSystemUI() {
         </div>
 
         {mode === 'advanced' && !loading && (
-          <div className={`mb-6 px-4 py-3 rounded-xl border flex items-center justify-between animate-fade-in ${isDarkMode ? 'border-purple-500/30 bg-purple-900/10' : 'border-purple-300 bg-gradient-to-r from-purple-50 to-violet-50'}`}>
-            <div className="flex items-center gap-3">
-              <div className={`p-2 rounded-lg ${isDarkMode ? 'bg-purple-800/40' : 'bg-purple-100'}`}>
-                <Zap className={`w-4 h-4 ${isDarkMode ? 'text-purple-400' : 'text-purple-600'}`} />
-              </div>
-              <div>
-                <p className={`text-sm font-semibold ${isDarkMode ? 'text-purple-300' : 'text-purple-700'}`}>Advanced Mode Active</p>
-                <p className={`text-xs ${isDarkMode ? 'text-purple-400/70' : 'text-purple-500'}`}>Compact layout · Keyboard hints · Full article access</p>
-              </div>
-            </div>
-            <kbd className={`hidden sm:inline-flex px-2 py-1 text-xs rounded border font-mono ${isDarkMode ? 'border-purple-600/30 text-purple-400 bg-purple-900/20' : 'border-purple-300 text-purple-600 bg-white'}`}>Ctrl+M to switch</kbd>
-          </div>
-        )}
-
-        {mode === 'advanced' && !loading && (
           <div className="mb-8 animate-fade-in">
              <div className="flex items-center space-x-2 mb-4">
                 <Clock className={`w-5 h-5 ${isDarkMode ? 'text-purple-400' : 'text-purple-600'}`} />
@@ -762,8 +723,8 @@ export default function HelpSystemUI() {
 
         <div className="mb-8">
           <div className="flex items-center justify-between mb-6">
-            <h2 className={`text-2xl font-bold ${mode === 'advanced' ? (isDarkMode ? 'text-purple-300' : 'text-purple-700') : ''}`}>Help Articles</h2>
-            {mode === 'advanced' && ( <span className={`text-xs font-mono px-3 py-1 rounded-full border ${isDarkMode ? 'bg-purple-900/20 text-purple-400 border-purple-700/40' : 'bg-purple-50 text-purple-600 border-purple-200'}`}>⚡ Advanced View</span> )}
+            <h2 className="text-2xl font-bold">Help Articles</h2>
+            {mode === 'advanced' && ( <span className={`text-sm px-3 py-1 rounded-full ${isDarkMode ? 'bg-gray-800 text-gray-400' : 'bg-gray-100 text-gray-600'}`}>Compact View Active</span> )}
           </div>
 
           <div className={mode === 'advanced' ? "space-y-3" : "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"}>
@@ -772,15 +733,15 @@ export default function HelpSystemUI() {
                 if (mode === 'advanced') {
                    const isBookmarked = bookmarks.includes(article.id);
                    return (
-                      <div key={article.id} onClick={() => setSelectedArticleId(article.id)} className={`group flex items-center justify-between p-4 rounded-lg border-l-4 border-l-purple-500 border ${isDarkMode ? 'bg-gray-800 border-gray-700 hover:bg-gray-750' : 'bg-white border-gray-200 hover:shadow-md'} transition-all duration-200 cursor-pointer`}>
+                      <div key={article.id} className={`group flex items-center justify-between p-4 rounded-lg border ${isDarkMode ? 'bg-gray-800 border-gray-700 hover:bg-gray-750' : 'bg-white border-gray-200 hover:shadow-md'} transition-all duration-200 cursor-pointer`}>
                          <div className="flex items-center space-x-4">
-                            <div className={`p-2 rounded-md ${isDarkMode ? 'bg-purple-900/30' : 'bg-purple-50'}`}><article.icon className={`w-5 h-5 ${isDarkMode ? 'text-purple-400' : 'text-purple-600'}`} /></div>
+                            <div className={`p-2 rounded-md ${isDarkMode ? 'bg-gray-700' : 'bg-gray-100'}`}><article.icon className={`w-5 h-5 ${isDarkMode ? 'text-indigo-400' : 'text-indigo-600'}`} /></div>
                             <div><h3 className="font-semibold text-sm">{article.title}</h3><p className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>{article.category} • {article.readTime}</p></div>
                          </div>
                          <div className="flex items-center space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button onClick={(e) => { e.stopPropagation(); const shareUrl = window.location.origin + window.location.pathname + '?article=' + article.id; if (navigator.share) { navigator.share({ title: 'Help: ' + article.title, text: article.details?.intro || '', url: shareUrl }).catch(err => console.log('Share cancelled')); } else { navigator.clipboard.writeText(shareUrl); alert('Link copied! You can share it now.'); } }} className={`p-2 rounded-full hover:bg-blue-100 dark:hover:bg-blue-900 ${isDarkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'}`} title="Share article to apps"><Share2 className="w-4 h-4" /></button>
-                            <button onClick={(e) => { e.stopPropagation(); const shareUrl = window.location.origin + window.location.pathname + '?article=' + article.id; navigator.clipboard.writeText(shareUrl); alert('Link copied! Paste it anywhere to share.'); }} className={`p-2 rounded-full hover:bg-green-100 dark:hover:bg-green-900 ${isDarkMode ? 'text-green-400 hover:text-green-300' : 'text-green-600 hover:text-green-700'}`} title="Copy shareable link"><LinkIcon className="w-4 h-4" /></button>
-                            <button onClick={(e) => { e.stopPropagation(); toggleBookmark(article.id); }} className={`p-2 rounded-full transition-all ${isBookmarked ? (isDarkMode ? 'bg-yellow-900/40 text-yellow-400 hover:bg-yellow-800/40' : 'bg-yellow-100 text-yellow-600 hover:bg-yellow-200') : (isDarkMode ? 'hover:bg-gray-700 text-gray-400 hover:text-yellow-400' : 'hover:bg-gray-100 text-gray-400 hover:text-yellow-600')}`} title={isBookmarked ? 'Remove bookmark' : 'Bookmark article'}><Star className={`w-4 h-4 ${isBookmarked ? 'fill-current' : ''}`} /></button>
+                            <button className={`p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}><Share2 className="w-4 h-4" /></button>
+                            <button className={`p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}><LinkIcon className="w-4 h-4" /></button>
+                            <button onClick={(e) => { e.stopPropagation(); toggleBookmark(article.id); }} className={`p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 ${isBookmarked ? 'text-yellow-500' : isDarkMode ? 'text-gray-400' : 'text-gray-300'}`}><Star className={`w-4 h-4 ${isBookmarked ? 'fill-current' : ''}`} /></button>
                          </div>
                       </div>
                    );
@@ -803,56 +764,15 @@ export default function HelpSystemUI() {
           </div>
         </div>
 
-        {mode === 'advanced' && !loading && (
-          <div className="mb-8 animate-fade-in">
-            <div className="flex items-center gap-2 mb-4">
-              <Zap className={`w-5 h-5 ${isDarkMode ? 'text-purple-400' : 'text-purple-600'}`} />
-              <h2 className={`text-lg font-bold ${isDarkMode ? 'text-purple-300' : 'text-purple-700'}`}>Quick Reference</h2>
-              <span className={`text-xs px-2 py-0.5 rounded-full font-mono ${isDarkMode ? 'bg-purple-900/30 text-purple-400' : 'bg-purple-100 text-purple-600'}`}>Shortcuts</span>
-            </div>
-            <div className={`grid grid-cols-2 md:grid-cols-3 gap-2 p-4 rounded-xl border ${isDarkMode ? 'bg-gray-800/60 border-purple-900/30' : 'bg-purple-50 border-purple-200'}`}>
-              {[
-                { keys: 'Ctrl+Z', action: 'Undo' },
-                { keys: 'Ctrl+Y', action: 'Redo' },
-                { keys: 'Ctrl+C', action: 'Copy' },
-                { keys: 'Ctrl+V', action: 'Paste' },
-                { keys: 'Ctrl+S', action: 'Save' },
-                { keys: 'Ctrl+Shift+E', action: 'Export' },
-                { keys: 'Ctrl+A', action: 'Select All' },
-                { keys: 'Delete', action: 'Delete' },
-                { keys: 'Ctrl++/-', action: 'Zoom' },
-                { keys: 'F', action: 'Pencil' },
-                { keys: 'E', action: 'Eraser' },
-                { keys: 'T', action: 'Text Tool' },
-              ].map(({ keys, action }) => (
-                <div key={keys} className={`flex items-center justify-between px-3 py-2 rounded-lg text-sm ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-purple-100'} border`}>
-                  <span className={`${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>{action}</span>
-                  <kbd className={`ml-2 px-2 py-0.5 text-xs rounded font-mono border ${isDarkMode ? 'bg-purple-900/30 text-purple-300 border-purple-700/50' : 'bg-purple-100 text-purple-700 border-purple-200'}`}>{keys}</kbd>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
         <div className="mb-8">
-          <h2 className={`text-2xl font-bold mb-6 ${mode === 'advanced' ? (isDarkMode ? 'text-purple-300' : 'text-purple-700') : ''}`}>Frequently Asked Questions</h2>
+          <h2 className="text-2xl font-bold mb-6">Frequently Asked Questions</h2>
           <div className="space-y-4">
             {filteredFaqs.length > 0 ? (
               filteredFaqs.map((faq, idx) => (
-                mode === 'advanced' ? (
-                  <div key={idx} className={`rounded-lg border-l-4 border-l-purple-500 border transition-colors duration-300 ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
-                    <button onClick={() => setExpandedFaq(expandedFaq === idx ? null : idx)} className="w-full px-4 py-3 flex items-center justify-between">
-                      <span className={`font-medium text-sm text-left ${isDarkMode ? 'text-purple-300' : 'text-purple-700'}`}>{faq.q}</span>
-                      <ChevronDown className={`w-4 h-4 flex-shrink-0 ml-2 transition-transform duration-300 ${isDarkMode ? 'text-purple-400' : 'text-purple-600'} ${expandedFaq === idx ? 'rotate-180' : ''}`} />
-                    </button>
-                    {expandedFaq === idx && (<div className={`px-4 pb-3 text-sm transition-colors duration-300 ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>{faq.a}</div>)}
-                  </div>
-                ) : (
-                  <div key={idx} className={`rounded-xl transition-colors duration-300 ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} border`}>
-                    <button onClick={() => setExpandedFaq(expandedFaq === idx ? null : idx)} className="w-full p-6 flex items-center justify-between"><span className="font-semibold text-left">{faq.q}</span><ChevronDown className={`w-5 h-5 transition-transform duration-300 ${expandedFaq === idx ? 'rotate-180' : ''}`} /></button>
-                    {expandedFaq === idx && (<div className={`px-6 pb-6 transition-colors duration-300 ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>{faq.a}</div>)}
-                  </div>
-                )
+                <div key={idx} className={`rounded-xl transition-colors duration-300 ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} border`}>
+                  <button onClick={() => setExpandedFaq(expandedFaq === idx ? null : idx)} className="w-full p-6 flex items-center justify-between"><span className="font-semibold text-left">{faq.q}</span><ChevronDown className={`w-5 h-5 transition-transform duration-300 ${expandedFaq === idx ? 'rotate-180' : ''}`} /></button>
+                  {expandedFaq === idx && (<div className={`px-6 pb-6 transition-colors duration-300 ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>{faq.a}</div>)}
+                </div>
               ))
             ) : searchQuery ? (
               <div className={`p-8 rounded-xl text-center ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-gray-50 border-gray-200'} border`}>

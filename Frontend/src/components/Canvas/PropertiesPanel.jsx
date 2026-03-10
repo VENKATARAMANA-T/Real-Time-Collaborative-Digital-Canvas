@@ -15,7 +15,7 @@ const PropertiesPanel = ({
   const activeLayer = layers.find(l => l.id === activeLayerId);
 
   return (
-    <aside className="w-20 flex flex-col items-center py-8 gap-10 bg-gradient-to-b from-[#18181b]/90 to-[#09090b]/95 border-r border-zinc-800/40 backdrop-blur-2xl shrink-0 shadow-[4px_0_24px_rgba(0,0,0,0.3)] z-50">
+    <aside data-tour="properties" className="w-20 flex flex-col items-center py-8 gap-10 bg-gradient-to-b from-[#18181b]/90 to-[#09090b]/95 border-r border-zinc-800/40 backdrop-blur-2xl shrink-0 shadow-[4px_0_24px_rgba(0,0,0,0.3)] z-50">
       <div className="flex flex-col items-center gap-6 group">
         <div className="h-48 flex flex-col items-center gap-3">
           <div className="relative w-10 flex-1 flex items-center justify-center">
