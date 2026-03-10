@@ -49,13 +49,14 @@ const setAuthCookies = (res, accessToken, refreshToken) => {
 
   res.cookie('refreshToken', refreshToken, {
     ...cookieBaseOptions,
+    path: '/api/auth/refresh',
     maxAge: REFRESH_TOKEN_TTL_MS
   });
 };
 
 const clearAuthCookies = (res) => {
   res.clearCookie('accessToken', cookieBaseOptions);
-  res.clearCookie('refreshToken', cookieBaseOptions);
+  res.clearCookie('refreshToken', { ...cookieBaseOptions, path: '/api/auth/refresh' });
 };
 
 module.exports = {

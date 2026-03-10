@@ -9,18 +9,10 @@ const api = axios.create({
   },
 });
 
-// Request interceptor to add access token
+// Request interceptor (cookies are sent automatically via withCredentials)
 api.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('accessToken');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
-  }
+  (config) => config,
+  (error) => Promise.reject(error)
 );
 
 // Response interceptor for token refresh
@@ -44,20 +36,17 @@ api.interceptors.response.use(
       originalRequest._retry = true;
 
       try {
-        const { data } = await axios.post(
+        await axios.post(
           `${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/auth/refresh`,
           {},
           { withCredentials: true }
         );
 
-        if (data.accessToken) {
-          localStorage.setItem('accessToken', data.accessToken);
-          originalRequest.headers.Authorization = `Bearer ${data.accessToken}`;
-          return api(originalRequest);
-        }
+        // Refresh succeeded — cookies are updated automatically by the browser.
+        // Retry the original request (cookies will be sent automatically).
+        return api(originalRequest);
       } catch (refreshError) {
         // Refresh failed, avoid reload loops on public pages
-        localStorage.removeItem('accessToken');
         localStorage.removeItem('user');
 
         const isPublicPath = [
@@ -89,18 +78,14 @@ export const authAPI = {
   login: async (credentials) => {
     const response = await api.post('/auth/login', credentials);
     if (response.data.success) {
-      // Store user data and token
+      // Store user data (tokens are in httpOnly cookies)
       localStorage.setItem('user', JSON.stringify(response.data.user));
-      if (response.data.accessToken) {
-        localStorage.setItem('accessToken', response.data.accessToken);
-      }
     }
     return response.data;
   },
 
   logout: async () => {
     const response = await api.post('/auth/logout');
-    localStorage.removeItem('accessToken');
     localStorage.removeItem('user');
     return response.data;
   },

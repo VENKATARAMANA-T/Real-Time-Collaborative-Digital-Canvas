@@ -28,12 +28,19 @@ const app = express();
 // Wrap Express app with HTTP Server
 const server = http.createServer(app);
 // Initialize Socket.io with CORS settings
-// Accept any localhost origin (handles port drift 5173/5174/5175/…)
+// Accept any localhost origin in dev; in production use FRONTEND_URL
 const isLocalOrigin = (origin) => !origin || /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+const FRONTEND_URL = process.env.FRONTEND_URL; // e.g. https://your-app.example.com
+
+const allowedOrigin = (origin, cb) => {
+  if (FRONTEND_URL && origin === FRONTEND_URL) return cb(null, true);
+  if (isLocalOrigin(origin)) return cb(null, true);
+  return cb(null, false);
+};
 
 const io = new Server(server, {
   cors: {
-    origin: (origin, cb) => cb(null, isLocalOrigin(origin)),
+    origin: allowedOrigin,
     methods: ["GET", "POST"],
     credentials: true,
     allowEIO3: true
@@ -43,7 +50,7 @@ app.set('io', io);
 socketHandler(io);
 
 app.use(cors({
-  origin: (origin, cb) => cb(null, isLocalOrigin(origin)),
+  origin: allowedOrigin,
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE"],
 }));
@@ -53,8 +60,7 @@ app.use(express.json({ limit: '20mb' }));
 app.use(express.urlencoded({ extended: true, limit: '20mb' }));
 app.use(cookieParser());
 
-// Serve recordings as static files
-app.use('/api/recordings', express.static(path.join(__dirname, 'uploads', 'recordings')));
+// Recordings are now served from Cloudinary — no static file serving needed
 
 app.use('/api/auth', authRoutes);
 app.use('/api/canvases', canvasRoutes);

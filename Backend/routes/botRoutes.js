@@ -1,8 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const botController = require('../controllers/botController');
+const { authMiddleware } = require('../middleware/authMiddleware');
 
-// Bot route does not require auth — only needs GROQ_API_KEY (no DB dependency)
+// All bot routes require authentication
+router.use(authMiddleware);
+
 router.post('/chat', botController.getChatResponse);
 
 module.exports = router;

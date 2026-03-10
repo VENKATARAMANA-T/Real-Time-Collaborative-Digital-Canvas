@@ -59,9 +59,12 @@ exports.registerUser = async (req, res) => {
     // 4. Create stateless Activation JWT (expires in 5 minutes)
     // We do NOT save the user to the database yet.
     const activationPayload = { username, email, hashedPassword };
+    if (!process.env.JWT_SECRET) {
+      return res.status(500).json({ message: 'Server configuration error' });
+    }
     const activationToken = jwt.sign(
       activationPayload, 
-      process.env.JWT_SECRET || 'fallback_secret', 
+      process.env.JWT_SECRET, 
       { expiresIn: '5m' }
     );
 
@@ -110,6 +113,9 @@ exports.registerUser = async (req, res) => {
     });
 
   } catch (error) {
+    if (error.code === 'INVALID_EMAIL') {
+      return res.status(400).json({ message: error.message });
+    }
     console.error(error);
     res.status(500).json({ message: 'Server Error' });
   }
@@ -128,7 +134,10 @@ exports.activateAccount = async (req, res) => {
 
     try {
       // 1. Verify the JWT Token
-      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback_secret');
+      if (!process.env.JWT_SECRET) {
+        return res.status(500).json({ message: 'Server configuration error' });
+      }
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
       
       const { username, email, hashedPassword } = decoded;
 
@@ -177,11 +186,16 @@ exports.activateAccount = async (req, res) => {
       await user.save();
 
       // 4. Log Activity
-      const log = new ActivityLog({
+      const log = await ActivityLog.create({
         user: user._id,
-        action: 'REGISTER_USER', // Or ACCOUNT_ACTIVATED
+        action: 'REGISTER_USER',
       });
-      await log.save();
+
+      // Emit activity update to dashboard
+      const actIo = req.app?.get('io');
+      if (actIo) {
+        actIo.to(user._id.toString()).emit('activity_update', { userId: user._id, log });
+      }
 
       // 5. Create default folder
       try {
@@ -263,11 +277,16 @@ exports.loginUser = async (req, res) => {
     await user.save();
 
     // 4. Log Success
-    const successLog = new ActivityLog({
+    const successLog = await ActivityLog.create({
       user: user._id,
       action: 'LOGIN_SUCCESS',
     });
-    await successLog.save();
+
+    // Emit activity update to dashboard
+    const actIo = req.app?.get('io');
+    if (actIo) {
+      actIo.to(user._id.toString()).emit('activity_update', { userId: user._id, log: successLog });
+    }
 
     // login successful, redirect to canvas page ********
     setAuthCookies(res, accessToken, refreshToken);
@@ -393,7 +412,8 @@ exports.forgotPassword = async (req, res) => {
     const user = await User.findOne({ email });
 
     if (!user) {
-      return res.status(404).json({ message: 'Invalid email address' });
+      // Return same success response to prevent email enumeration
+      return res.status(200).json({ message: 'If that email is registered, a reset link has been sent.' });
     }
 
     const resetToken = crypto.randomBytes(32).toString('hex');
@@ -412,6 +432,17 @@ exports.forgotPassword = async (req, res) => {
 
     await sendEmail({ to: user.email, subject, text, html });
 
+    // Log Activity: PASSWORD_RESET_REQUEST
+    try {
+      const log = await ActivityLog.create({ user: user._id, action: 'PASSWORD_RESET_REQUEST' });
+      const actIo = req.app?.get('io');
+      if (actIo) {
+        actIo.to(user._id.toString()).emit('activity_update', { userId: user._id, log });
+      }
+    } catch (logErr) {
+      console.error('Activity log failed:', logErr.message);
+    }
+
     // Emit socket event to notify all browsers for this email about password reset request
     const io = req.app?.get('io');
     if (io) {
@@ -422,8 +453,11 @@ exports.forgotPassword = async (req, res) => {
       console.log(`📧 Socket event emitted for password reset request: ${email}`);
     }
 
-    res.status(200).json({ message: 'Reset link sent to your email' });
+    res.status(200).json({ message: 'If that email is registered, a reset link has been sent.' });
   } catch (error) {
+    if (error.code === 'INVALID_EMAIL') {
+      return res.status(400).json({ message: error.message });
+    }
     console.error(error);
     res.status(500).json({ message: 'Server Error' });
   }
@@ -460,6 +494,17 @@ exports.resetPassword = async (req, res) => {
     await user.save();
 
     clearAuthCookies(res);
+
+    // Log Activity: PASSWORD_RESET_SUCCESS
+    try {
+      const log = await ActivityLog.create({ user: user._id, action: 'PASSWORD_RESET_SUCCESS' });
+      const actIo = req.app?.get('io');
+      if (actIo) {
+        actIo.to(user._id.toString()).emit('activity_update', { userId: user._id, log });
+      }
+    } catch (logErr) {
+      console.error('Activity log failed:', logErr.message);
+    }
 
     // Emit real-time socket event to notify waiting browsers about password reset completion
     const io = req.app?.get('io');

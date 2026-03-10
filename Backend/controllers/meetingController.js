@@ -2,7 +2,7 @@ const Meeting = require('../models/Meeting');
 const Canvas = require('../models/Canvas');
 const { v4: uuidv4 } = require('uuid');
 const crypto = require('crypto'); // Built-in Node module for random passwords
-const { uploadToCloudinary, deleteFromCloudinary } = require('../config/cloudinary');
+const { uploadToCloudinary, uploadBufferToCloudinary, deleteFromCloudinary } = require('../config/cloudinary');
 const fs = require('fs');
 const path = require('path');
 
@@ -824,23 +824,27 @@ exports.uploadRecording = async (req, res) => {
     const fileSizeMB = (req.file.size / (1024 * 1024)).toFixed(2);
     console.log(`[uploadRecording] File received: ${req.file.originalname}, size: ${fileSizeMB}MB, mimetype: ${req.file.mimetype}`);
 
-    // Save recording to local disk (uploads/recordings/)
-    const filename = `recording_${req.params.id}_${Date.now()}.webm`;
-    const recordingsDir = path.join(__dirname, '..', 'uploads', 'recordings');
-    if (!fs.existsSync(recordingsDir)) {
-      fs.mkdirSync(recordingsDir, { recursive: true });
-    }
-    const filePath = path.join(recordingsDir, filename);
-    fs.writeFileSync(filePath, req.file.buffer);
-    console.log(`[uploadRecording] Saved locally: ${filePath}`);
+    // Upload recording to Cloudinary
+    const publicId = `recording_${req.params.id}_${Date.now()}`;
+
+    console.log(`[uploadRecording] Uploading to Cloudinary (${fileSizeMB}MB)...`);
+
+    const cloudinaryResult = await uploadBufferToCloudinary(req.file.buffer, {
+      resource_type: 'auto',
+      folder: 'RealTimeDigitalCanvas/recordings',
+      public_id: publicId,
+    });
+
+    const cloudinaryUrl = cloudinaryResult.secure_url;
+    console.log(`[uploadRecording] Uploaded to Cloudinary: ${cloudinaryUrl}`);
 
     // Keep legacy single field updated (for backward compat)
-    meeting.recordingPath = filename;
+    meeting.recordingPath = cloudinaryUrl;
     meeting.recordedBy = req.user._id;
 
     // Push to recordings array (supports multiple recordings)
     meeting.recordings.push({
-      filename: filename,
+      filename: cloudinaryUrl,
       recordedBy: req.user._id,
       uploadedAt: new Date()
     });
@@ -849,8 +853,8 @@ exports.uploadRecording = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: 'Recording uploaded successfully',
-      recordingPath: filename
+      message: 'Recording uploaded to cloud successfully',
+      recordingPath: cloudinaryUrl
     });
   } catch (error) {
     console.error('[uploadRecording] Error:', error.message);

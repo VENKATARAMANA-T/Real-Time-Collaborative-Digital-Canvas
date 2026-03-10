@@ -19,6 +19,12 @@ const { uploadToCloudinary, deleteFromCloudinary, getPublicIdFromUrl } = require
 const updateUserProfile = async (req, res) => {
   try {
     const userId = req.params.id;
+
+    // Ownership check: users can only update their own profile
+    if (!req.user || req.user._id.toString() !== userId) {
+      return res.status(403).json({ message: "Not authorized to update this profile" });
+    }
+
     const user = await User.findById(userId);
 
     if (!user) {

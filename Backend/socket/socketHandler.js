@@ -1,5 +1,7 @@
 const { chatSocket } = require('./chatSocket');
-const { canvasSocket } = require('./canvasSocket'); 
+const { canvasSocket } = require('./canvasSocket');
+const ActivityLog = require('../models/ActivityLog');
+
 module.exports = (io) => {
   io.on('connection', (socket) => {
     console.log(`User Connected: ${socket.id}`);
@@ -73,6 +75,13 @@ module.exports = (io) => {
       if (!silent) {
         socket.to(meetingId).emit('user_joined', { userId, username });
       }
+
+      // Log JOIN_ROOM activity
+      if (userId) {
+        ActivityLog.create({ user: userId, action: 'JOIN_ROOM' })
+          .then(log => io.to(userId).emit('activity_update', { userId, log }))
+          .catch(err => console.error('JOIN_ROOM log failed:', err.message));
+      }
     });
 
 
@@ -109,6 +118,14 @@ module.exports = (io) => {
       if (!silent) {
         io.to(meetingId).emit('user_left', { username, userId });
       }
+
+      // Log LEAVE_ROOM activity
+      if (userId) {
+        ActivityLog.create({ user: userId, action: 'LEAVE_ROOM' })
+          .then(log => io.to(userId).emit('activity_update', { userId, log }))
+          .catch(err => console.error('LEAVE_ROOM log failed:', err.message));
+      }
+
       console.log(`${username || 'Unknown'} left room: ${meetingId}`);
     });
 

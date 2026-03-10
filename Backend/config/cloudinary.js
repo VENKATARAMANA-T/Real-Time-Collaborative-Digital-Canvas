@@ -5,6 +5,7 @@ cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
   api_secret: process.env.CLOUDINARY_API_SECRET,
+  timeout: 600000, // 10 min timeout for large video uploads
 });
 
 /**
@@ -40,14 +41,21 @@ const uploadBufferToCloudinary = (buffer, options = {}) => {
   return new Promise((resolve, reject) => {
     const defaultOptions = {
       resource_type: 'auto',
+      timeout: 600000, // 10 min timeout for large video uploads
       ...options,
     };
+
+    // For large files (>20MB), use chunked upload
+    if (buffer.length > 20 * 1024 * 1024) {
+      defaultOptions.chunk_size = 6 * 1024 * 1024; // 6MB chunks
+    }
 
     const uploadStream = cloudinary.uploader.upload_stream(
       defaultOptions,
       (error, result) => {
         if (error) {
           console.error('[Cloudinary] Buffer upload error:', error.message);
+          console.error('[Cloudinary] Error details:', JSON.stringify(error));
           reject(error);
         } else {
           resolve(result);
