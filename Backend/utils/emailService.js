@@ -20,23 +20,46 @@ const createTransporter = () => {
 };
 
 /**
- * Validate email format and verify domain has MX records
+ * Validate email format and verify domain can receive mail
+ * Checks MX records first, then falls back to A/AAAA records (per RFC 5321)
+ * On network errors (DNS unavailable), passes validation to avoid false rejections
  */
 const validateEmail = async (email) => {
   // Basic format check
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
   if (!emailRegex.test(email)) {
     return false;
   }
 
-  // Extract domain and check MX records
+  // Extract domain and check if it can receive mail
   const domain = email.split('@')[1];
+
   try {
-    const addresses = await dns.promises.resolveMx(domain);
-    return addresses && addresses.length > 0;
-  } catch {
-    return false;
+    const mxRecords = await dns.promises.resolveMx(domain);
+    if (mxRecords && mxRecords.length > 0) return true;
+  } catch (err) {
+    // ENOTFOUND = domain doesn't exist; other errors = DNS network issue
+    if (err.code === 'ENOTFOUND') return false;
+    if (err.code !== 'ENODATA') return true; // DNS unavailable, assume valid
   }
+
+  try {
+    const aRecords = await dns.promises.resolve4(domain);
+    if (aRecords && aRecords.length > 0) return true;
+  } catch (err) {
+    if (err.code === 'ENOTFOUND') return false;
+    if (err.code !== 'ENODATA') return true;
+  }
+
+  try {
+    const aaaaRecords = await dns.promises.resolve6(domain);
+    if (aaaaRecords && aaaaRecords.length > 0) return true;
+  } catch (err) {
+    if (err.code === 'ENOTFOUND') return false;
+    if (err.code !== 'ENODATA') return true;
+  }
+
+  return false;
 };
 
 const sendEmail = async ({ to, subject, html, text }) => {
