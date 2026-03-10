@@ -1,12 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import api from '../services/api';
 import { 
   HelpCircle, Search, BookOpen, Lightbulb, Zap, MessageSquare, 
   ChevronRight, ChevronDown, X, PlayCircle, Info, Settings, Video, 
   Star, Share2, Link as LinkIcon, Clock, Bug, Image as ImageIcon, 
-  Upload, Check, Mail, Trash2, Filter, Code, Zap as Lightning, 
-  Cpu, GitBranch, PenTool, Award, TrendingUp, Eye, Lock, Unlock
+  Upload, Check, Mail, Trash2 
 } from 'lucide-react';
 
 export default function HelpSystemUI() {
@@ -33,10 +31,6 @@ export default function HelpSystemUI() {
   // Advanced States
   const [bookmarks, setBookmarks] = useState([1]); 
   const [recentViewed, setRecentViewed] = useState([2, 5]);
-  const [selectedCategory, setSelectedCategory] = useState('all');
-  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
-  const [difficultyFilter, setDifficultyFilter] = useState('all');
-  const [viewMode, setViewMode] = useState('cards'); // cards, compact, grid
 
   // Feedback Form States
   const [feedbackType, setFeedbackType] = useState('general');
@@ -49,10 +43,6 @@ export default function HelpSystemUI() {
   const [attachedFile, setAttachedFile] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef(null);
-  
-  // Form field states
-  const [feedbackDescription, setFeedbackDescription] = useState('');
-  const [feedbackEmail, setFeedbackEmail] = useState('');
 
   useEffect(() => {
     const timer = setTimeout(() => setLoading(false), 1500);
@@ -157,18 +147,10 @@ export default function HelpSystemUI() {
     }));
   };
 
-  const handleFeedbackSubmit = async (e) => {
+  const handleFeedbackSubmit = (e) => {
     e.preventDefault();
-    if (!feedbackDescription.trim()) return;
     setIsSubmitting(true);
-    try {
-      await api.post('/feedback', {
-        type: feedbackType,
-        rating: feedbackRating,
-        description: feedbackDescription.trim(),
-        contactEmail: feedbackEmail.trim(),
-        attachmentUrl: attachedFile ? attachedFile.name : ''
-      });
+    setTimeout(() => {
       setIsSubmitting(false);
       setSubmitSuccess(true);
       setTimeout(() => {
@@ -176,24 +158,9 @@ export default function HelpSystemUI() {
         setShowFeedback(false);
         setFeedbackRating(0);
         setFeedbackType('general');
-        setFeedbackDescription('');
-        setFeedbackEmail('');
         setAttachedFile(null);
       }, 2000);
-    } catch {
-      // Fallback: still show success for non-authenticated users
-      setIsSubmitting(false);
-      setSubmitSuccess(true);
-      setTimeout(() => {
-        setSubmitSuccess(false);
-        setShowFeedback(false);
-        setFeedbackRating(0);
-        setFeedbackType('general');
-        setFeedbackDescription('');
-        setFeedbackEmail('');
-        setAttachedFile(null);
-      }, 2000);
-    }
+    }, 1500);
   };
 
   const toggleBookmark = (id) => {
@@ -211,7 +178,6 @@ export default function HelpSystemUI() {
       category: 'Basics', 
       icon: PlayCircle, 
       readTime: '5 min',
-      difficulty: 'beginner',
       details: {
         intro: 'Welcome to our Digital Canvas Application! This guide will help you get started with creating beautiful artwork.',
         sections: [
@@ -260,7 +226,6 @@ export default function HelpSystemUI() {
       category: 'Features', 
       icon: Settings, 
       readTime: '8 min',
-      difficulty: 'beginner',
       details: {
         intro: 'Master all the powerful tools available in your Digital Canvas application. From basic drawing tools to advanced shape creation and selection features.',
         sections: [
@@ -321,7 +286,6 @@ export default function HelpSystemUI() {
       category: 'Productivity', 
       icon: Zap, 
       readTime: '4 min',
-      difficulty: 'beginner',
       details: {
         intro: 'Learn keyboard shortcuts to speed up your workflow and become more productive in the Digital Canvas application.',
         sections: [
@@ -370,7 +334,6 @@ export default function HelpSystemUI() {
       category: 'Advanced', 
       icon: Lightbulb, 
       readTime: '10 min',
-      difficulty: 'advanced',
       details: {
         intro: 'Master advanced techniques to create professional-quality artwork and unlock the full potential of the Digital Canvas application.',
         sections: [
@@ -427,7 +390,6 @@ export default function HelpSystemUI() {
       category: 'Learning', 
       icon: Video, 
       readTime: '15 min',
-      difficulty: 'beginner',
       details: {
         intro: 'Watch our comprehensive video tutorials to learn Digital Canvas features step by step. Add your own videos by replacing the video links below.',
         sections: [
@@ -448,7 +410,6 @@ export default function HelpSystemUI() {
       category: 'Support', 
       icon: HelpCircle, 
       readTime: '7 min',
-      difficulty: 'beginner',
       details: {
         intro: 'Experiencing issues? Find solutions to common problems and get your Digital Canvas application running smoothly.',
         sections: [
@@ -506,16 +467,11 @@ export default function HelpSystemUI() {
   ];
 
   const faqs = [
-    { q: 'How do I start using the platform?', a: 'Begin with our Getting Started guide or activate the interactive walkthrough from the help menu.', level: 'beginner' },
-    { q: 'What are the keyboard shortcuts?', a: 'Press Ctrl+K to view all shortcuts, or hover over any tool to see its specific shortcut.', level: 'beginner' },
-    { q: 'Can I switch between beginner and advanced mode?', a: 'Yes! Use the mode toggle in Settings or the top navigation bar.', level: 'beginner' },
-    { q: 'How do I get contextual help?', a: 'Hover over any tool or feature to see tooltips. Click the help icon for detailed information.', level: 'beginner' },
-    { q: 'Where can I provide feedback?', a: 'Click the feedback button in the bottom right corner or use the dedicated feedback option in the help menu.', level: 'beginner' },
-    { q: 'How do layer blend modes work?', a: 'Blend modes control how pixels on one layer interact with layers below. Multiply darkens, Screen lightens, Overlay combines both. Use them for shadows, highlights, and creative effects.', level: 'advanced' },
-    { q: 'How can I optimize canvas performance for large files?', a: 'Merge unused layers, reduce undo history steps in Settings > Performance, work at lower resolution then scale up for export, and disable real-time previews when not needed.', level: 'advanced' },
-    { q: 'What are non-destructive editing techniques?', a: 'Use layer masks instead of erasing, adjustment layers for color changes, smart objects for transforms, and always duplicate layers before major edits. This preserves your original work.', level: 'advanced' },
-    { q: 'How do I use Bezier curves and paths?', a: 'Select the Path tool, click to create anchor points, and drag to create curve handles. Use Ctrl+click to convert between smooth and corner points. Stroke or fill paths for precise shapes.', level: 'advanced' },
-    { q: 'What export settings should I use for web vs print?', a: 'For web: PNG (transparency) or JPG (photos) at 72 DPI, sRGB color space. For print: TIFF or high-quality PDF at 300 DPI, CMYK color space. Use File > Export for format-specific options.', level: 'advanced' }
+    { q: 'How do I start using the platform?', a: 'Begin with our Getting Started guide or activate the interactive walkthrough from the help menu.' },
+    { q: 'What are the keyboard shortcuts?', a: 'Press Ctrl+K to view all shortcuts, or hover over any tool to see its specific shortcut.' },
+    { q: 'Can I switch between beginner and advanced mode?', a: 'Yes! Use the mode toggle in Settings or the top navigation bar.' },
+    { q: 'How do I get contextual help?', a: 'Hover over any tool or feature to see tooltips. Click the help icon for detailed information.' },
+    { q: 'Where can I provide feedback?', a: 'Click the feedback button in the bottom right corner or use the dedicated feedback option in the help menu.' }
   ];
 
   const walkthroughSteps = [
@@ -554,18 +510,12 @@ export default function HelpSystemUI() {
       section.title.toLowerCase().includes(query) || 
       section.content.toLowerCase().includes(query)
     );
-    const textMatch = titleMatch || categoryMatch || introMatch || contentMatch;
-    // Beginner mode only shows beginner-level articles; Advanced shows all
-    if (mode === 'beginner' && article.difficulty === 'advanced') return false;
-    return textMatch;
+    return titleMatch || categoryMatch || introMatch || contentMatch;
   });
 
   const filteredFaqs = faqs.filter(faq => {
     const query = searchQuery.toLowerCase();
-    const textMatch = faq.q.toLowerCase().includes(query) || faq.a.toLowerCase().includes(query);
-    // Beginner mode only shows beginner FAQs; Advanced shows all
-    if (mode === 'beginner' && faq.level === 'advanced') return false;
-    return textMatch;
+    return faq.q.toLowerCase().includes(query) || faq.a.toLowerCase().includes(query);
   });
 
   const SkeletonCard = () => (
@@ -666,14 +616,8 @@ export default function HelpSystemUI() {
             <div className="flex items-center space-x-4">
               <div className="relative" onMouseEnter={() => mode === 'beginner' && setHoveredElement('mode-toggle')} onMouseLeave={() => setHoveredElement(null)}>
                 <div className={`flex rounded-lg p-1 ${isDarkMode ? 'bg-gray-700' : 'bg-gray-100'} transition-colors duration-300`}>
-                  <button onClick={() => setMode('beginner')} className={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 flex items-center gap-1.5 ${mode === 'beginner' ? 'bg-indigo-600 text-white shadow-lg' : isDarkMode ? 'text-gray-300 hover:text-white' : 'text-gray-600 hover:text-gray-900'}`}>
-                    <Eye className="w-3.5 h-3.5" />
-                    Beginner
-                  </button>
-                  <button onClick={() => setMode('advanced')} className={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 flex items-center gap-1.5 ${mode === 'advanced' ? 'bg-purple-600 text-white shadow-lg' : isDarkMode ? 'text-gray-300 hover:text-white' : 'text-gray-600 hover:text-gray-900'}`}>
-                    <Cpu className="w-3.5 h-3.5" />
-                    Advanced
-                  </button>
+                  <button onClick={() => setMode('beginner')} className={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${mode === 'beginner' ? 'bg-indigo-600 text-white shadow-lg' : isDarkMode ? 'text-gray-300 hover:text-white' : 'text-gray-600 hover:text-gray-900'}`}>Beginner</button>
+                  <button onClick={() => setMode('advanced')} className={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${mode === 'advanced' ? 'bg-purple-600 text-white shadow-lg' : isDarkMode ? 'text-gray-300 hover:text-white' : 'text-gray-600 hover:text-gray-900'}`}>Advanced</button>
                 </div>
                 <ContextualTooltip id="mode-toggle" title="Learning Mode" description="Beginner shows tooltips. Advanced provides streamlined experience." shortcut="Ctrl+M" />
               </div>
@@ -717,24 +661,6 @@ export default function HelpSystemUI() {
           </div>
         </div>
 
-        {/* Mode-specific welcome banner */}
-        {!loading && (
-          <div className={`mb-8 p-4 rounded-xl border ${
-            mode === 'beginner' 
-              ? (isDarkMode ? 'bg-indigo-900/20 border-indigo-800 text-indigo-200' : 'bg-indigo-50 border-indigo-200 text-indigo-800')
-              : (isDarkMode ? 'bg-purple-900/20 border-purple-800 text-purple-200' : 'bg-purple-50 border-purple-200 text-purple-800')
-          }`}>
-            <div className="flex items-center gap-3">
-              {mode === 'beginner' ? <Eye className="w-5 h-5 flex-shrink-0" /> : <Cpu className="w-5 h-5 flex-shrink-0" />}
-              <p className="text-sm">
-                {mode === 'beginner' 
-                  ? 'Beginner Mode — Showing simplified articles with tooltips and guided walkthroughs. Switch to Advanced for more content.'
-                  : 'Advanced Mode — Showing all articles including advanced techniques, compact list view, bookmarks, and keyboard shortcuts.'}
-              </p>
-            </div>
-          </div>
-        )}
-
         {mode === 'advanced' && !loading && (
           <div className="mb-8 animate-fade-in">
              <div className="flex items-center space-x-2 mb-4">
@@ -753,27 +679,6 @@ export default function HelpSystemUI() {
                    )
                 })}
              </div>
-          </div>
-        )}
-
-        {mode === 'advanced' && !loading && bookmarks.length > 0 && (
-          <div className="mb-8 animate-fade-in">
-            <div className="flex items-center space-x-2 mb-4">
-              <Star className={`w-5 h-5 ${isDarkMode ? 'text-yellow-400' : 'text-yellow-500'}`} />
-              <h2 className="text-lg font-bold">Bookmarked</h2>
-            </div>
-            <div className="flex gap-4 overflow-x-auto pb-4">
-              {bookmarks.map(id => {
-                const item = helpArticles.find(a => a.id === id);
-                if (!item) return null;
-                return (
-                  <div key={id} onClick={() => setSelectedArticleId(id)} className={`flex-shrink-0 w-64 p-3 rounded-lg border ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} flex items-center space-x-3 cursor-pointer hover:shadow-md transition-all`}>
-                    <div className={`p-2 rounded-md ${isDarkMode ? 'bg-gray-700' : 'bg-yellow-50'}`}><item.icon className="w-4 h-4 text-yellow-500" /></div>
-                    <div className="truncate"><div className="text-sm font-medium truncate">{item.title}</div><div className="text-xs text-gray-500">{item.readTime} read</div></div>
-                  </div>
-                );
-              })}
-            </div>
           </div>
         )}
 
@@ -807,40 +712,9 @@ export default function HelpSystemUI() {
           </div>
         )}
 
-        {mode === 'advanced' && !loading && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-            <button onClick={() => setSelectedArticleId(4)} className={`p-6 rounded-xl ${isDarkMode ? 'bg-gray-800 hover:bg-gray-700 border-gray-700' : 'bg-white hover:shadow-xl border-gray-200'} border transition-all duration-300 ease-in-out group`}>
-              <div className="flex items-center space-x-4">
-                <div className="p-3 rounded-lg bg-gradient-to-r from-orange-500 to-red-500"><Cpu className="w-6 h-6 text-white" /></div>
-                <div className="flex-1 text-left"><h3 className="font-semibold mb-1">Performance Tips</h3><p className={`text-sm transition-colors duration-300 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Optimize your workflow</p></div>
-                <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform duration-300" />
-              </div>
-            </button>
-            <button onClick={() => setSelectedArticleId(4)} className={`p-6 rounded-xl ${isDarkMode ? 'bg-gray-800 hover:bg-gray-700 border-gray-700' : 'bg-white hover:shadow-xl border-gray-200'} border transition-all duration-300 ease-in-out group`}>
-              <div className="flex items-center space-x-4">
-                <div className="p-3 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500"><Code className="w-6 h-6 text-white" /></div>
-                <div className="flex-1 text-left"><h3 className="font-semibold mb-1">Advanced Shortcuts</h3><p className={`text-sm transition-colors duration-300 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Power user key combos</p></div>
-                <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform duration-300" />
-              </div>
-            </button>
-            <button onClick={() => setShowFeedback(true)} className={`p-6 rounded-xl ${isDarkMode ? 'bg-gray-800 hover:bg-gray-700 border-gray-700' : 'bg-white hover:shadow-xl border-gray-200'} border transition-all duration-300 ease-in-out group`}>
-              <div className="flex items-center space-x-4">
-                <div className="p-3 rounded-lg bg-gradient-to-r from-emerald-500 to-green-500"><GitBranch className="w-6 h-6 text-white" /></div>
-                <div className="flex-1 text-left"><h3 className="font-semibold mb-1">Collaboration Guide</h3><p className={`text-sm transition-colors duration-300 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Team workflow tips</p></div>
-                <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform duration-300" />
-              </div>
-            </button>
-          </div>
-        )}
-
         <div className="mb-8">
           <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <h2 className="text-2xl font-bold">Help Articles</h2>
-              <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${mode === 'advanced' ? (isDarkMode ? 'bg-purple-900/40 text-purple-300 border border-purple-700' : 'bg-purple-100 text-purple-700') : (isDarkMode ? 'bg-indigo-900/40 text-indigo-300 border border-indigo-700' : 'bg-indigo-100 text-indigo-700')}`}>
-                {filteredArticles.length} {mode === 'advanced' ? 'total' : 'articles'}
-              </span>
-            </div>
+            <h2 className="text-2xl font-bold">Help Articles</h2>
             {mode === 'advanced' && ( <span className={`text-sm px-3 py-1 rounded-full ${isDarkMode ? 'bg-gray-800 text-gray-400' : 'bg-gray-100 text-gray-600'}`}>Compact View Active</span> )}
           </div>
 
@@ -850,13 +724,10 @@ export default function HelpSystemUI() {
                 if (mode === 'advanced') {
                    const isBookmarked = bookmarks.includes(article.id);
                    return (
-                      <div key={article.id} onClick={() => setSelectedArticleId(article.id)} className={`group flex items-center justify-between p-4 rounded-lg border ${isDarkMode ? 'bg-gray-800 border-gray-700 hover:bg-gray-750' : 'bg-white border-gray-200 hover:shadow-md'} transition-all duration-200 cursor-pointer`}>
+                      <div key={article.id} className={`group flex items-center justify-between p-4 rounded-lg border ${isDarkMode ? 'bg-gray-800 border-gray-700 hover:bg-gray-750' : 'bg-white border-gray-200 hover:shadow-md'} transition-all duration-200 cursor-pointer`}>
                          <div className="flex items-center space-x-4">
                             <div className={`p-2 rounded-md ${isDarkMode ? 'bg-gray-700' : 'bg-gray-100'}`}><article.icon className={`w-5 h-5 ${isDarkMode ? 'text-indigo-400' : 'text-indigo-600'}`} /></div>
                             <div><h3 className="font-semibold text-sm">{article.title}</h3><p className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>{article.category} • {article.readTime}</p></div>
-                            {article.difficulty === 'advanced' && (
-                              <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${isDarkMode ? 'bg-purple-900/40 text-purple-300 border border-purple-700' : 'bg-purple-100 text-purple-700'}`}>Advanced</span>
-                            )}
                          </div>
                          <div className="flex items-center space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
                             <button className={`p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}><Share2 className="w-4 h-4" /></button>
@@ -890,15 +761,7 @@ export default function HelpSystemUI() {
             {filteredFaqs.length > 0 ? (
               filteredFaqs.map((faq, idx) => (
                 <div key={idx} className={`rounded-xl transition-colors duration-300 ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} border`}>
-                  <button onClick={() => setExpandedFaq(expandedFaq === idx ? null : idx)} className="w-full p-6 flex items-center justify-between">
-                    <span className="font-semibold text-left flex items-center gap-2">
-                      {faq.q}
-                      {mode === 'advanced' && faq.level === 'advanced' && (
-                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${isDarkMode ? 'bg-purple-900/40 text-purple-300 border border-purple-700' : 'bg-purple-100 text-purple-700'}`}>Advanced</span>
-                      )}
-                    </span>
-                    <ChevronDown className={`w-5 h-5 flex-shrink-0 transition-transform duration-300 ${expandedFaq === idx ? 'rotate-180' : ''}`} />
-                  </button>
+                  <button onClick={() => setExpandedFaq(expandedFaq === idx ? null : idx)} className="w-full p-6 flex items-center justify-between"><span className="font-semibold text-left">{faq.q}</span><ChevronDown className={`w-5 h-5 transition-transform duration-300 ${expandedFaq === idx ? 'rotate-180' : ''}`} /></button>
                   {expandedFaq === idx && (<div className={`px-6 pb-6 transition-colors duration-300 ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>{faq.a}</div>)}
                 </div>
               ))
@@ -1156,8 +1019,6 @@ export default function HelpSystemUI() {
                       <label className="text-sm font-semibold">Description</label>
                       <textarea 
                         rows="4"
-                        value={feedbackDescription}
-                        onChange={(e) => setFeedbackDescription(e.target.value)}
                         placeholder="Tell us more about what happened or what you'd like to see..."
                         className={`w-full p-3 rounded-lg border ${isDarkMode ? 'bg-gray-700 border-gray-600' : 'bg-white border-gray-200'} focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all resize-none`}
                       ></textarea>
@@ -1222,8 +1083,6 @@ export default function HelpSystemUI() {
                       <Mail className={`absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`} />
                       <input 
                         type="email" 
-                        value={feedbackEmail}
-                        onChange={(e) => setFeedbackEmail(e.target.value)}
                         placeholder="name@example.com"
                         className={`w-full pl-10 p-3 rounded-lg border ${isDarkMode ? 'bg-gray-700 border-gray-600' : 'bg-white border-gray-200'} focus:ring-2 focus:ring-indigo-500 outline-none`}
                       />
