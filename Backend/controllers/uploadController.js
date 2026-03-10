@@ -184,6 +184,11 @@ exports.deleteUpload = async (req, res) => {
       return res.status(400).json({ message: 'Public ID is required' });
     }
 
+    // Only allow deleting resources within our app's Cloudinary folder
+    if (!publicId.startsWith('RealTimeDigitalCanvas/')) {
+      return res.status(403).json({ message: 'Not authorized to delete this resource' });
+    }
+
     const result = await deleteFromCloudinary(publicId, resourceType);
 
     res.status(200).json({

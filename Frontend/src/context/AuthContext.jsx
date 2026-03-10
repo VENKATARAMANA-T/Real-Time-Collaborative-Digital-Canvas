@@ -32,7 +32,6 @@ export const AuthProvider = ({ children }) => {
         // Token invalid or expired — clear cache entirely so protected routes kick in immediately
         setUser(null);
         localStorage.removeItem('user');
-        localStorage.removeItem('accessToken');
       } finally {
         setLoading(false);
       }
@@ -95,7 +94,6 @@ export const AuthProvider = ({ children }) => {
     } finally {
       setUser(null);
       localStorage.removeItem('user');
-      localStorage.removeItem('accessToken');
       
       // Clear any activation-related flags so home page shows clean
       localStorage.removeItem('collab_activationSent');

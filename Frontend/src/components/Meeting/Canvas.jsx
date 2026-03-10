@@ -232,8 +232,21 @@ const Canvas = forwardRef(function Canvas({
   };
 
   const isPointInElement = (x, y, element) => {
-    if (element.type === 'freehand') return false;
+    if (element.isEraser) return false;
     const buffer = 10 / viewport.scale;
+
+    // For freehand, use the bounding box computed from points
+    if (element.type === 'freehand' && element.points && element.points.length > 1) {
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      element.points.forEach(p => {
+        minX = Math.min(minX, p.x);
+        minY = Math.min(minY, p.y);
+        maxX = Math.max(maxX, p.x);
+        maxY = Math.max(maxY, p.y);
+      });
+      return x >= minX - buffer && x <= maxX + buffer && y >= minY - buffer && y <= maxY + buffer;
+    }
+
     const rx = element.width < 0 ? element.x + element.width : element.x;
     const ry = element.height < 0 ? element.y + element.height : element.y;
     const rw = Math.abs(element.width);
@@ -245,7 +258,7 @@ const Canvas = forwardRef(function Canvas({
   const getElementAtPosition = (x, y) => {
     for (let i = elements.length - 1; i >= 0; i--) {
       const element = elements[i];
-      if (element.type === 'freehand' || element.isEraser) continue;
+      if (element.isEraser) continue;
       if (isPointInElement(x, y, element)) {
         return element;
       }
@@ -277,22 +290,65 @@ const Canvas = forwardRef(function Canvas({
   const wrapText = (ctx, text, x, y, maxWidth, lineHeight) => {
     const paragraphs = text.split('\n');
     let currentY = y;
+
+    // Break a single word into lines if it exceeds maxWidth
+    const breakWord = (word) => {
+      const lines = [];
+      let current = '';
+      for (let i = 0; i < word.length; i++) {
+        const test = current + word[i];
+        if (ctx.measureText(test).width > maxWidth && current.length > 0) {
+          lines.push(current);
+          current = word[i];
+        } else {
+          current = test;
+        }
+      }
+      if (current) lines.push(current);
+      return lines;
+    };
+
     paragraphs.forEach((paragraph) => {
+      if (!paragraph) {
+        // Empty line (just a newline)
+        currentY += lineHeight;
+        return;
+      }
       const words = paragraph.split(' ');
       let line = '';
       for (let n = 0; n < words.length; n++) {
-        const testLine = line + words[n] + ' ';
-        const metrics = ctx.measureText(testLine);
-        const testWidth = metrics.width;
-        if (testWidth > maxWidth && n > 0) {
-          ctx.fillText(line, x, currentY);
-          line = words[n] + ' ';
-          currentY += lineHeight;
+        const word = words[n];
+        // If a single word is wider than maxWidth, break it character-by-character
+        if (ctx.measureText(word).width > maxWidth) {
+          // Flush current line first
+          if (line.trim()) {
+            ctx.fillText(line.trim(), x, currentY);
+            currentY += lineHeight;
+            line = '';
+          }
+          const broken = breakWord(word);
+          for (let b = 0; b < broken.length; b++) {
+            if (b < broken.length - 1) {
+              ctx.fillText(broken[b], x, currentY);
+              currentY += lineHeight;
+            } else {
+              line = broken[b] + ' ';
+            }
+          }
         } else {
-          line = testLine;
+          const testLine = line + word + ' ';
+          if (ctx.measureText(testLine).width > maxWidth && line.length > 0) {
+            ctx.fillText(line.trim(), x, currentY);
+            line = word + ' ';
+            currentY += lineHeight;
+          } else {
+            line = testLine;
+          }
         }
       }
-      ctx.fillText(line, x, currentY);
+      if (line.trim()) {
+        ctx.fillText(line.trim(), x, currentY);
+      }
       currentY += lineHeight;
     });
   };
@@ -654,7 +710,18 @@ const Canvas = forwardRef(function Canvas({
     // Draw Selection UI (in World Space)
     if (selectedElementId) {
       const selectedEl = elements.find((el) => el.id === selectedElementId);
-      if (selectedEl && (selectedEl.type === 'shape' || selectedEl.type === 'sticky-note' || selectedEl.type === 'image')) {
+      if (selectedEl && selectedEl.type === 'freehand' && selectedEl.points && selectedEl.points.length > 1) {
+        // Draw selection box around freehand using its bounding box
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        selectedEl.points.forEach(p => {
+          minX = Math.min(minX, p.x);
+          minY = Math.min(minY, p.y);
+          maxX = Math.max(maxX, p.x);
+          maxY = Math.max(maxY, p.y);
+        });
+        const pad = 5;
+        drawSelection(ctx, { x: minX - pad, y: minY - pad, width: (maxX - minX) + pad * 2, height: (maxY - minY) + pad * 2 });
+      } else if (selectedEl && (selectedEl.type === 'shape' || selectedEl.type === 'sticky-note' || selectedEl.type === 'image')) {
         drawSelection(ctx, selectedEl);
       }
     }
@@ -941,11 +1008,17 @@ const Canvas = forwardRef(function Canvas({
       const dy = y - currentAction.current.startY;
       const updatedElements = elements.map((el) => {
         if (el.id === currentAction.current?.currentId) {
-          return {
+          const updated = {
             ...el,
             x: currentAction.current.originalElement.x + dx,
             y: currentAction.current.originalElement.y + dy
           };
+          // For freehand, also move all points
+          if (el.type === 'freehand' && currentAction.current.originalElement.points) {
+            const origPoints = currentAction.current.originalElement.points;
+            updated.points = origPoints.map(p => ({ x: p.x + dx, y: p.y + dy }));
+          }
+          return updated;
         }
         return el;
       });
@@ -1003,7 +1076,47 @@ const Canvas = forwardRef(function Canvas({
   };
 
   const handleTextChange = (id, text) => {
-    onElementsChange(elements.map((el) => (el.id === id ? { ...el, text } : el)));
+    onElementsChange(elements.map((el) => {
+      if (el.id !== id) return el;
+      const updated = { ...el, text };
+      // Auto-expand sticky note height to fit text content
+      if (el.type === 'sticky-note') {
+        const fontSize = el.style?.fontSize || 16;
+        const lineHeight = fontSize * 1.5;
+        const padding = 40; // 20px top + 20px bottom
+        const availableWidth = el.width - 40;
+        const avgCharWidth = fontSize * 0.6;
+        const charsPerLine = Math.max(1, Math.floor(availableWidth / avgCharWidth));
+        const paragraphs = text.split('\n');
+        let totalLines = 0;
+        paragraphs.forEach(para => {
+          if (!para) { totalLines += 1; return; }
+          const words = para.split(' ');
+          let lineLen = 0;
+          let lines = 1;
+          words.forEach(word => {
+            const wordChars = word.length;
+            if (wordChars > charsPerLine) {
+              // Long word without spaces: breaks across multiple lines
+              if (lineLen > 0) { lines++; lineLen = 0; }
+              lines += Math.ceil(wordChars / charsPerLine) - 1;
+              lineLen = wordChars % charsPerLine || charsPerLine;
+            } else if (lineLen + wordChars + (lineLen > 0 ? 1 : 0) > charsPerLine) {
+              lines++;
+              lineLen = wordChars;
+            } else {
+              lineLen += wordChars + (lineLen > 0 ? 1 : 0);
+            }
+          });
+          totalLines += lines;
+        });
+        const neededHeight = totalLines * lineHeight + padding;
+        if (neededHeight > el.height) {
+          updated.height = neededHeight;
+        }
+      }
+      return updated;
+    }));
   };
 
   return (
@@ -1055,7 +1168,9 @@ const Canvas = forwardRef(function Canvas({
                 textAlign: el.style.textAlign || 'left',
                 color: el.style.brushColor || '#000000',
                 lineHeight: '1.5',
-                overflow: 'auto',
+                overflow: 'hidden',
+                overflowWrap: 'break-word',
+                wordBreak: 'break-word',
                 transformOrigin: 'top left'
               }}
               className="focus:outline-none"
