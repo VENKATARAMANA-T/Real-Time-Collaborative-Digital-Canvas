@@ -1,0 +1,7 @@
+# Default variable values for development/production
+# Copy to terraform.tfvars and adjust as needed
+
+project_name = "collab-canvas"
+location     = "Central India"
+environment  = "production"
+sku_tier     = "Free"

@@ -28,9 +28,10 @@ const app = express();
 // Wrap Express app with HTTP Server
 const server = http.createServer(app);
 // Initialize Socket.io with CORS settings
-// Accept any localhost origin in dev; in production use FRONTEND_URL
+// Accept any localhost origin in dev; in production use FRONTEND_URL or ALLOWED_ORIGINS
 const isLocalOrigin = (origin) => !origin || /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
 const FRONTEND_URL = process.env.FRONTEND_URL; // e.g. https://your-app.example.com
+const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : [];
 
 const allowedOrigin = [
   'http://localhost:5173', // Local development

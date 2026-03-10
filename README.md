@@ -217,6 +217,30 @@ The platform enables users to:
 
 ---
 
+## 🚀 DevOps & CI/CD Pipeline
+
+This project implement standard CI/CD and deployment practices.
+
+### Infrastructure & Deployment
+- **Frontend Hosting**: Azure Static Web Apps (via `.github/workflows/azure-static-web-apps.yml`).
+- **Backend Containerization**: Multi-stage `Dockerfile` creating a lightweight `node:20-alpine` production image.
+- **Infrastructure as Code (IaC)**: Terraform scripts (`terraform/main.tf`) to provision the Azure Resource Group and Static Web App.
+
+### Continuous Integration (CI)
+A GitHub Actions workflow (`.github/workflows/ci.yml`) runs on all pushes and PRs to `main`, performing:
+1. Frontend dependency installation, linting, and Vite build.
+2. Backend dependency installation, testing, and syntax checks.
+3. Multi-stage Docker image build verification.
+
+### Branching Strategy
+- `main` - Production-ready code, triggers deployments.
+- `dev` - Integration branch for ongoing work.
+- `feature/*` - Individual developer feature branches.
+
+### Future Enhancements (Phase 2)
+- **Monitoring & Logging**: Prometheus, Grafana, and ELK stack integration.
+- **Security Scanning**: Trivy container scanning, Snyk dependency checks, and SonarQube static code analysis.
+
 ## 🏗️ System Architecture
 
 ### Frontend

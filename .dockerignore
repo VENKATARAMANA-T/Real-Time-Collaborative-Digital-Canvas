@@ -1,0 +1,40 @@
+# Dependencies
+node_modules
+npm-debug.log*
+
+# Frontend (not needed in backend container)
+Frontend/node_modules
+Frontend/dist
+
+# Git
+.git
+.gitignore
+
+# Environment files (injected at runtime)
+**/.env
+**/.env.local
+
+# IDE / OS
+.vscode
+.idea
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Terraform
+terraform/
+.terraform/
+
+# Docs
+docs/
+*.md
+!Backend/README.md
+
+# CI/CD
+.github/
+
+# Docker
+Dockerfile
+docker-compose*.yml
+.dockerignore
