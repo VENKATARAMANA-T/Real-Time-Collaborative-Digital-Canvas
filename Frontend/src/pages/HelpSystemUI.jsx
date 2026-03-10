@@ -49,6 +49,30 @@ export default function HelpSystemUI() {
     return () => clearTimeout(timer);
   }, []);
 
+  // Parse URL query parameter for direct article link (e.g., ?article=1)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const articleId = params.get('article');
+    if (articleId) {
+      const id = parseInt(articleId, 10);
+      setSelectedArticleId(id);
+      // Add to recent viewed if not already there
+      setRecentViewed(prev => {
+        const updated = [id, ...prev.filter(v => v !== id)];
+        return updated.slice(0, 5); // Keep only last 5
+      });
+    }
+  }, []);
+
+  // Update URL when article selection changes
+  useEffect(() => {
+    if (selectedArticleId) {
+      window.history.replaceState({}, '', `?article=${selectedArticleId}`);
+    } else {
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, [selectedArticleId]);
+
   // Keyboard Shortcuts
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -511,6 +535,15 @@ export default function HelpSystemUI() {
       section.content.toLowerCase().includes(query)
     );
     return titleMatch || categoryMatch || introMatch || contentMatch;
+  }).sort((a, b) => {
+    // In Advanced mode, bookmarked articles appear first
+    if (mode === 'advanced') {
+      const aBookmarked = bookmarks.includes(a.id);
+      const bBookmarked = bookmarks.includes(b.id);
+      if (aBookmarked && !bBookmarked) return -1;
+      if (!aBookmarked && bBookmarked) return 1;
+    }
+    return 0;
   });
 
   const filteredFaqs = faqs.filter(faq => {
@@ -745,9 +778,9 @@ export default function HelpSystemUI() {
                             <div><h3 className="font-semibold text-sm">{article.title}</h3><p className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>{article.category} • {article.readTime}</p></div>
                          </div>
                          <div className="flex items-center space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button className={`p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}><Share2 className="w-4 h-4" /></button>
-                            <button className={`p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}><LinkIcon className="w-4 h-4" /></button>
-                            <button onClick={(e) => { e.stopPropagation(); toggleBookmark(article.id); }} className={`p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 ${isBookmarked ? 'text-yellow-500' : isDarkMode ? 'text-gray-400' : 'text-gray-300'}`}><Star className={`w-4 h-4 ${isBookmarked ? 'fill-current' : ''}`} /></button>
+                            <button onClick={(e) => { e.stopPropagation(); const shareUrl = window.location.origin + window.location.pathname + '?article=' + article.id; if (navigator.share) { navigator.share({ title: 'Help: ' + article.title, text: article.details?.intro || '', url: shareUrl }).catch(err => console.log('Share cancelled')); } else { navigator.clipboard.writeText(shareUrl); alert('Link copied! You can share it now.'); } }} className={`p-2 rounded-full hover:bg-blue-100 dark:hover:bg-blue-900 ${isDarkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'}`} title="Share article to apps"><Share2 className="w-4 h-4" /></button>
+                            <button onClick={(e) => { e.stopPropagation(); const shareUrl = window.location.origin + window.location.pathname + '?article=' + article.id; navigator.clipboard.writeText(shareUrl); alert('Link copied! Paste it anywhere to share.'); }} className={`p-2 rounded-full hover:bg-green-100 dark:hover:bg-green-900 ${isDarkMode ? 'text-green-400 hover:text-green-300' : 'text-green-600 hover:text-green-700'}`} title="Copy shareable link"><LinkIcon className="w-4 h-4" /></button>
+                            <button onClick={(e) => { e.stopPropagation(); toggleBookmark(article.id); }} className={`p-2 rounded-full transition-all ${isBookmarked ? (isDarkMode ? 'bg-yellow-900/40 text-yellow-400 hover:bg-yellow-800/40' : 'bg-yellow-100 text-yellow-600 hover:bg-yellow-200') : (isDarkMode ? 'hover:bg-gray-700 text-gray-400 hover:text-yellow-400' : 'hover:bg-gray-100 text-gray-400 hover:text-yellow-600')}`} title={isBookmarked ? 'Remove bookmark' : 'Bookmark article'}><Star className={`w-4 h-4 ${isBookmarked ? 'fill-current' : ''}`} /></button>
                          </div>
                       </div>
                    );
