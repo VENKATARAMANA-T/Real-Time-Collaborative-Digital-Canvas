@@ -54,7 +54,7 @@ export default function CollabCanvasApp({ initialShowAuth = false, initialAuthMo
         localStorage.removeItem('logoutFlash');
       }
     }
-    
+
     // Auto-open modal for activation (only if no logout flash)
     if (localStorage.getItem('collab_activationSent') === 'true') {
       setAuthMode('register');
@@ -62,8 +62,10 @@ export default function CollabCanvasApp({ initialShowAuth = false, initialAuthMo
     }
   }, []);
 
-  // Scroll wheel navigation
+  // Scroll wheel and touch navigation
   useEffect(() => {
+    let touchStartY = 0;
+
     const handleWheel = (e) => {
       if (showAuth) return;
 
@@ -83,8 +85,42 @@ export default function CollabCanvasApp({ initialShowAuth = false, initialAuthMo
       }
     };
 
+    const handleTouchStart = (e) => {
+      touchStartY = e.changedTouches[0].screenY;
+    };
+
+    const handleTouchEnd = (e) => {
+      if (showAuth) return;
+      const touchEndY = e.changedTouches[0].screenY;
+      const deltaY = touchStartY - touchEndY;
+
+      const now = Date.now();
+      if (now - lastScrollTime.current < 1000) return;
+
+      // Swipe UP (scroll down to next slide)
+      if (deltaY > 50) {
+        if (currentSlide < 2) {
+          setCurrentSlide((prev) => prev + 1);
+          lastScrollTime.current = now;
+        }
+      }
+      // Swipe DOWN (scroll up to prev slide)
+      else if (deltaY < -50) {
+        if (currentSlide > 0) {
+          setCurrentSlide((prev) => prev - 1);
+          lastScrollTime.current = now;
+        }
+      }
+    };
+
     window.addEventListener('wheel', handleWheel);
-    return () => window.removeEventListener('wheel', handleWheel);
+    window.addEventListener('touchstart', handleTouchStart);
+    window.addEventListener('touchend', handleTouchEnd);
+    return () => {
+      window.removeEventListener('wheel', handleWheel);
+      window.removeEventListener('touchstart', handleTouchStart);
+      window.removeEventListener('touchend', handleTouchEnd);
+    };
   }, [currentSlide, showAuth]);
 
   const handleSlideChange = (index) => {
@@ -148,11 +184,10 @@ export default function CollabCanvasApp({ initialShowAuth = false, initialAuthMo
       {flash && (
         <div className="fixed top-24 left-1/2 z-50 w-full max-w-md -translate-x-1/2 px-4">
           <div
-            className={`flex items-center justify-between gap-4 rounded-xl border px-4 py-3 text-sm shadow-xl ${
-              flash.type === 'success'
+            className={`flex items-center justify-between gap-4 rounded-xl border px-4 py-3 text-sm shadow-xl ${flash.type === 'success'
                 ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
                 : 'border-rose-500/30 bg-rose-500/10 text-rose-200'
-            }`}
+              }`}
           >
             <span>{flash.message}</span>
             <button className="text-xs font-semibold uppercase tracking-widest" onClick={() => setFlash(null)} type="button">

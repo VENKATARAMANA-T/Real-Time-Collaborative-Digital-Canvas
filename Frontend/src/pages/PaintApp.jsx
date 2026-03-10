@@ -10,6 +10,9 @@ import usePaintHistory from '../hooks/usePaintHistory';
 import usePaintTools from '../hooks/usePaintTools';
 import { getElementBounds } from '../utils/canvasHelpers';
 import { canvasAPI } from '../services/api';
+import BotWidget from '../components/Bot/BotWidget';
+import HelpOptionsButton from '../components/shared/HelpOptionsButton';
+import PaintWalkthrough from '../components/Canvas/PaintWalkthrough';
 
 const PaintApp = () => {
   const { id: canvasId } = useParams();
@@ -54,6 +57,9 @@ const PaintApp = () => {
   const [shareLink, setShareLink] = useState('');
   const [shareCopied, setShareCopied] = useState(false);
   const [navigatingToDashboard, setNavigatingToDashboard] = useState(false);
+  const [isBotOpen, setIsBotOpen] = useState(false);
+  const [showWalkthrough, setShowWalkthrough] = useState(false);
+  const [walkthroughStep, setWalkthroughStep] = useState(0);
 
   const {
     tool,
@@ -95,6 +101,231 @@ const PaintApp = () => {
   const fontSizes = [8, 9, 10, 11, 12, 14, 16, 18, 20, 22, 24, 26, 28, 36, 48, 72];
 
   const isTextToolActive = tool === 'text' || (selectedId && elements.find(e => e.id === selectedId)?.type === 'text');
+
+  // Bot Actions Integration — 15 agentic action types
+  const handleBotAction = useCallback((action) => {
+    // Map bot JSON → canvas element schema: w/h/color/fill(bool)/opacity
+    const buildShape = (s, idOffset = 0) => {
+      const hasFill = s.fill && s.fill !== 'transparent';
+      const fillHex = hasFill ? s.fill : null;
+      const strokeHex = s.stroke || null;
+      return {
+        id: Date.now() + idOffset + Math.floor(Math.random() * 1000),
+        type: s.shape || s.type || 'rect',
+        x: s.x ?? 700,
+        y: s.y ?? 300,
+        w: s.width ?? s.w ?? 160,
+        h: s.height ?? s.h ?? 120,
+        color: fillHex || strokeHex || color,
+        fillColor: fillHex || undefined,
+        strokeColor: strokeHex || undefined,
+        fill: hasFill,
+        strokeWidth: s.strokeWidth ?? strokeWidth,
+        opacity: s.opacity ?? 1,
+        rotation: s.rotation ?? 0,
+      };
+    };
+
+    const buildText = (s) => ({
+      id: Date.now() + Math.floor(Math.random() * 1000),
+      type: 'text',
+      text: s.text || 'Text',
+      x: s.x ?? 700,
+      y: s.y ?? 300,
+      w: s.width ?? s.w ?? 300,
+      h: s.height ?? s.h ?? 60,
+      color: s.color || s.fill || color,
+      font: s.fontFamily || s.font || 'Arial',
+      fontSize: s.fontSize || 28,
+      strokeWidth,
+      opacity: 1,
+    });
+
+    switch (action.type) {
+      case 'CLEAR_CANVAS':
+        setElements([]);
+        saveState([]);
+        break;
+
+      case 'FILL_BACKGROUND': {
+        if (action.color) {
+          const bg = buildShape({
+            type: 'rect', x: 0, y: 0,
+            width: canvasSize.width, height: canvasSize.height,
+            fill: action.color, stroke: action.color,
+          });
+          const withoutOldBg = elements.filter(e =>
+            !(e.type === 'rect' && e.x <= 0 && e.y <= 0 &&
+              e.w >= canvasSize.width * 0.9 && e.h >= canvasSize.height * 0.9)
+          );
+          const next = [bg, ...withoutOldBg];
+          setElements(next); saveState(next);
+        }
+        break;
+      }
+
+      case 'UNDO':
+        baseUndo(contextRef, setElements, setSelectedId, setEditingId);
+        break;
+
+      case 'REDO':
+        baseRedo(contextRef, setElements, setSelectedId, setEditingId);
+        break;
+
+      case 'CHANGE_TOOL':
+        if (action.tool) handleToolChange(action.tool);
+        break;
+
+      case 'CHANGE_COLOR':
+        if (action.color) baseUpdateColor(action.color, elements, setElements, saveState);
+        break;
+
+      case 'SET_STROKE_WIDTH':
+        if (action.width !== undefined) setStrokeWidth(Math.max(1, Math.min(50, action.width)));
+        break;
+
+      case 'SET_FILL_MODE':
+        setFillMode(action.enabled !== undefined ? Boolean(action.enabled) : !fillMode);
+        break;
+
+      case 'SET_ZOOM':
+        if (action.zoom !== undefined) setZoom(Math.max(10, Math.min(500, action.zoom)));
+        break;
+
+      case 'SELECT_LAST':
+        if (elements.length > 0) setSelectedId(elements[elements.length - 1].id);
+        break;
+
+      case 'DELETE_SELECTED':
+        if (selectedId) {
+          const next = elements.filter(e => e.id !== selectedId);
+          setElements(next); setSelectedId(null); saveState(next);
+        }
+        break;
+
+      case 'MOVE_SELECTED':
+        if (selectedId) {
+          const next = elements.map(e =>
+            e.id === selectedId
+              ? { ...e, x: e.x + (action.dx || 0), y: e.y + (action.dy || 0) }
+              : e
+          );
+          setElements(next); saveState(next);
+        }
+        break;
+
+      case 'RESIZE_SELECTED':
+        if (selectedId) {
+          const next = elements.map(e =>
+            e.id === selectedId
+              ? { ...e, w: action.width ?? e.w, h: action.height ?? e.h }
+              : e
+          );
+          setElements(next); saveState(next);
+        }
+        break;
+
+      case 'MODIFY_SHAPES': {
+        // Target elements by explicit ids array OR by matchType (shape type string)
+        const targetIds = Array.isArray(action.ids) ? action.ids : null;
+        const matchType = action.matchType || null;
+        const next = elements.map(e => {
+          const isTarget =
+            (targetIds && targetIds.includes(e.id)) ||
+            (matchType && e.type === matchType);
+          if (!isTarget) return e;
+          const updated = { ...e };
+          if (action.width  !== undefined) updated.w = action.width;
+          if (action.height !== undefined) updated.h = action.height;
+          if (action.fill   !== undefined) {
+            const hasFill = action.fill !== 'transparent';
+            updated.fill      = hasFill;
+            updated.fillColor = hasFill ? action.fill : undefined;
+            if (hasFill) updated.color = action.fill;
+          }
+          if (action.stroke      !== undefined) updated.strokeColor = action.stroke;
+          if (action.strokeWidth !== undefined) updated.strokeWidth = action.strokeWidth;
+          if (action.color       !== undefined) updated.color = action.color;
+          return updated;
+        });
+        setElements(next); saveState(next);
+        break;
+      }
+
+      case 'DUPLICATE_SELECTED':
+        if (selectedId) {
+          const orig = elements.find(e => e.id === selectedId);
+          if (orig) {
+            const dup = {
+              ...orig, id: Date.now(),
+              x: orig.x + (action.offsetX ?? 30),
+              y: orig.y + (action.offsetY ?? 30)
+            };
+            const next = [...elements, dup];
+            setElements(next); setSelectedId(dup.id); saveState(next);
+          }
+        }
+        break;
+
+      case 'DRAW_SHAPE': {
+        const newShape = buildShape(action);
+        const next = [...elements, newShape];
+        setElements(next); setSelectedId(newShape.id); saveState(next);
+        break;
+      }
+
+      case 'DRAW_MULTIPLE': {
+        if (Array.isArray(action.shapes) && action.shapes.length > 0) {
+          const newShapes = action.shapes.map((s, i) => buildShape(s, i * 10));
+          const next = [...elements, ...newShapes];
+          setElements(next); setSelectedId(newShapes[newShapes.length - 1].id); saveState(next);
+        }
+        break;
+      }
+
+      case 'ARRANGE_GRID': {
+        const { shape = 'rect', rows = 3, cols = 3,
+          x = 200, y = 150, width = 80, height = 80,
+          colSpacing = 20, rowSpacing = 20,
+          fill, stroke, strokeWidth: sw } = action;
+        const newShapes = [];
+        for (let r = 0; r < rows; r++)
+          for (let c = 0; c < cols; c++) {
+            const hasFill = fill && fill !== 'transparent';
+            const fillHex = hasFill ? fill : null;
+            newShapes.push({
+              id: Date.now() + r * 1000 + c,
+              type: shape,
+              x: x + c * (width + colSpacing),
+              y: y + r * (height + rowSpacing),
+              w: width, h: height,
+              color: fillHex || stroke || color,
+              fillColor: fillHex || undefined,
+              strokeColor: stroke || undefined,
+              fill: hasFill,
+              strokeWidth: sw ?? strokeWidth,
+              opacity: 1, rotation: 0,
+            });
+          }
+        const next = [...elements, ...newShapes];
+        setElements(next); saveState(next);
+        break;
+      }
+
+      case 'ADD_TEXT': {
+        const newText = buildText(action);
+        const next = [...elements, newText];
+        setElements(next); setSelectedId(newText.id); saveState(next);
+        break;
+      }
+
+      default:
+        console.warn('Unknown bot action:', action.type);
+    }
+  }, [elements, color, strokeWidth, fillMode, selectedId, canvasSize,
+    handleToolChange, baseUpdateColor, saveState,
+    setStrokeWidth, setFillMode, setZoom, setSelectedId,
+    baseUndo, baseRedo, contextRef, setEditingId]);
 
   // Load canvas data from DB on mount
   useEffect(() => {
@@ -987,6 +1218,55 @@ const PaintApp = () => {
             </button>
           </div>
         </div>
+      )}
+
+      {/* ── Guided Walkthrough ─────────────────────────────────────────── */}
+      {showWalkthrough && (
+        <PaintWalkthrough
+          step={walkthroughStep}
+          onNext={() => setWalkthroughStep(s => Math.min(s + 1, 9))}
+          onPrev={() => setWalkthroughStep(s => Math.max(s - 1, 0))}
+          onClose={() => setShowWalkthrough(false)}
+        />
+      )}
+
+      {/* Floating AI & Help Options */}
+      <HelpOptionsButton
+        onBotClick={() => setIsBotOpen(true)}
+        onWalkthroughClick={() => {
+          setWalkthroughStep(0);
+          setShowWalkthrough(true);
+        }}
+      />
+
+      {/* AI Bot Widget */}
+      {isBotOpen && (
+        <BotWidget
+          onClose={() => setIsBotOpen(false)}
+          onAction={handleBotAction}
+          contextSnapshot={{
+            view: 'paint',
+            tool,
+            color,
+            strokeWidth,
+            fillMode,
+            zoom,
+            canvasSize,
+            elementsCount: elements.length,
+            selectedElementId: selectedId,
+            elements: elements.slice(-15).map(e => ({
+              type: e.type,
+              id: e.id,
+              x: Math.round(e.x),
+              y: Math.round(e.y),
+              w: Math.round(e.w || 0),
+              h: Math.round(e.h || 0),
+              color: e.color,
+              filled: e.fill,
+              text: e.text,
+            })),
+          }}
+        />
       )}
 
       {/* ── Toast Notifications ────────────────────────────────────────────── */}

@@ -8,57 +8,57 @@ export default function HeroSlide({ onAuthOpen, onSlideChange }) {
   }, []);
 
   return (
-    <div className="w-full h-full flex items-center relative">
-      <div className="container mx-auto px-6 grid lg:grid-cols-2 gap-12 items-center w-full">
-        <div className="space-y-8 relative z-10 text-start">
+    <div className="w-full h-full flex items-center relative overflow-y-auto">
+      <div className="container mx-auto px-4 sm:px-6 grid lg:grid-cols-2 gap-8 lg:gap-12 items-center w-full py-10 lg:py-0">
+        <div className="space-y-5 lg:space-y-8 relative z-10 text-start">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-300 text-xs text-start font-semibold uppercase tracking-wider animate-fade-up">
             <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
             v2.0 Now Available
           </div>
 
-          <h1 className="text-5xl lg:text-7xl font-bold leading-tight animate-fade-up text-start" style={{ animationDelay: '0.1s' }}>
+          <h1 className="text-3xl sm:text-5xl lg:text-7xl font-bold leading-tight animate-fade-up text-start" style={{ animationDelay: '0.1s' }}>
             Where Teams <br />
             <span className="gradient-text">Create Magic</span>
           </h1>
 
-          <p className="text-lg text-slate-400 max-w-lg animate-fade-up" style={{ animationDelay: '0.2s' }}>
+          <p className="text-base sm:text-lg text-slate-400 max-w-lg animate-fade-up" style={{ animationDelay: '0.2s' }}>
             The infinite canvas for brainstorming, design, and strategy. Real-time collaboration with AI superpowers
             built right in.
           </p>
 
-          <div className="flex flex-wrap gap-4 animate-fade-up" style={{ animationDelay: '0.3s' }}>
+          <div className="flex flex-wrap gap-3 sm:gap-4 animate-fade-up" style={{ animationDelay: '0.3s' }}>
             <button
               onClick={() => onAuthOpen('register')}
-              className="px-8 py-4 rounded-xl bg-white text-slate-900 font-bold text-lg shadow-xl hover:shadow-2xl hover:bg-slate-100 transform hover:-translate-y-1 transition-all"
+              className="px-5 sm:px-8 py-3 sm:py-4 rounded-xl bg-white text-slate-900 font-bold text-base sm:text-lg shadow-xl hover:shadow-2xl hover:bg-slate-100 transform hover:-translate-y-1 transition-all"
             >
               Start Drawing Free
             </button>
             <button
               onClick={() => onSlideChange(1)}
-              className="px-8 py-4 rounded-xl border border-white/10 bg-[#0f172a]/60 font-semibold text-lg text-slate-100 hover:bg-[#0f172a]/80 transition-colors flex items-center gap-2"
+              className="px-5 sm:px-8 py-3 sm:py-4 rounded-xl border border-white/10 bg-[#0f172a]/60 font-semibold text-base sm:text-lg text-slate-100 hover:bg-[#0f172a]/80 transition-colors flex items-center gap-2"
             >
               <span aria-hidden="true">&#9654;</span> Watch Demo
             </button>
           </div>
 
-          <div className="flex items-center gap-6 pt-8 border-t border-slate-800/50 animate-fade-up" style={{ animationDelay: '0.4s' }}>
+          <div className="flex items-center gap-4 sm:gap-6 pt-5 sm:pt-8 border-t border-slate-800/50 animate-fade-up" style={{ animationDelay: '0.4s' }}>
             <div className="flex -space-x-3">
               <img
                 src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix"
-                className="w-10 h-10 rounded-full border-2 border-[#0f172a]"
+                className="w-8 h-8 sm:w-10 sm:h-10 rounded-full border-2 border-[#0f172a]"
                 alt="User"
               />
               <img
                 src="https://api.dicebear.com/7.x/avataaars/svg?seed=Aneka"
-                className="w-10 h-10 rounded-full border-2 border-[#0f172a]"
+                className="w-8 h-8 sm:w-10 sm:h-10 rounded-full border-2 border-[#0f172a]"
                 alt="User"
               />
               <img
                 src="https://api.dicebear.com/7.x/avataaars/svg?seed=Bob"
-                className="w-10 h-10 rounded-full border-2 border-[#0f172a]"
+                className="w-8 h-8 sm:w-10 sm:h-10 rounded-full border-2 border-[#0f172a]"
                 alt="User"
               />
-              <div className="w-10 h-10 rounded-full border-2 border-[#0f172a] bg-slate-800 flex items-center justify-center text-xs font-bold">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full border-2 border-[#0f172a] bg-slate-800 flex items-center justify-center text-xs font-bold">
                 +2k
               </div>
             </div>
@@ -68,10 +68,10 @@ export default function HeroSlide({ onAuthOpen, onSlideChange }) {
           </div>
         </div>
 
-        <div className="relative animate-scale-in" style={{ animationDelay: '0.5s' }}>
+        <div className="relative animate-scale-in hidden sm:block" style={{ animationDelay: '0.5s' }}>
           <div className="absolute -inset-4 bg-gradient-to-r from-purple-600 to-cyan-600 rounded-3xl opacity-30 blur-2xl animate-pulse"></div>
-          <div className="glass-card rounded-2xl p-2 relative overflow-hidden h-[500px] hover:shadow-2xl hover:shadow-purple-500/20 transition-all border border-white/10">
-            <div className="h-12 border-b border-white/10 flex items-center px-4 gap-2">
+          <div className="glass-card rounded-2xl p-2 relative overflow-hidden h-[260px] sm:h-[360px] lg:h-[500px] hover:shadow-2xl hover:shadow-purple-500/20 transition-all border border-white/10">
+            <div className="h-10 sm:h-12 border-b border-white/10 flex items-center px-4 gap-2">
               <div className="flex gap-1.5">
                 <div className="w-3 h-3 rounded-full bg-red-500"></div>
                 <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
@@ -81,7 +81,7 @@ export default function HeroSlide({ onAuthOpen, onSlideChange }) {
             </div>
             <canvas id="hero-canvas" width="600" height="450" className="w-full h-full cursor-crosshair"></canvas>
 
-            <div className="absolute top-20 right-10 p-2 glass rounded-lg flex gap-2 animate-float">
+            <div className="absolute top-16 sm:top-20 right-6 sm:right-10 p-2 glass rounded-lg flex gap-2 animate-float">
               <div className="w-8 h-8 bg-purple-500 rounded flex items-center justify-center">
                 <svg className="w-4 h-4 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
                   <path d="M12 20h9" />
@@ -96,7 +96,7 @@ export default function HeroSlide({ onAuthOpen, onSlideChange }) {
       </div>
 
       <div
-        className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 cursor-pointer animate-bounce"
+        className="absolute bottom-4 sm:bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 cursor-pointer animate-bounce"
         onClick={() => onSlideChange(1)}
       >
         <span className="text-xs text-slate-500 uppercase tracking-widest">Explore</span>

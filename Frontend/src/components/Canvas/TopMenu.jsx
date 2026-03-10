@@ -44,7 +44,7 @@ const TopMenu = ({
   onShare
 }) => {
   return (
-    <nav className="h-12 flex items-center px-2 gap-8 text-sm border-b border-zinc-800/40 bg-gradient-to-r from-[#09090b] to-[#18181b] relative z-[100] backdrop-blur-md shadow-lg">
+    <nav data-tour="topmenu" className="h-12 flex items-center px-2 gap-8 text-sm border-b border-zinc-800/40 bg-gradient-to-r from-[#09090b] to-[#18181b] relative z-[100] backdrop-blur-md shadow-lg">
 
 
       <div className={`flex gap-1 relative ${currentView === 'dashboard' ? 'opacity-0 pointer-events-none' : ''}`}>

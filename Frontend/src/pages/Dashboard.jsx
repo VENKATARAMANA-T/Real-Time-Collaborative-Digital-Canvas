@@ -3,31 +3,34 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import { userAPI, canvasAPI, meetingAPI, folderAPI, notificationAPI } from '../services/api';
 import { useSocket } from '../hooks/useSocket.js';
+import BotWidget from '../components/Bot/BotWidget.jsx';
+import HelpOptionsButton from '../components/shared/HelpOptionsButton.jsx';
+import DashboardWalkthrough from '../components/Dashboard/DashboardWalkthrough.jsx';
 
 const ACTIVITY_ICON_MAP = {
-  REGISTER_USER:         { icon: 'person_add',         color: 'text-green-400',   border: 'border-green-500/20', bg: 'bg-green-500/10' },
-  LOGIN_SUCCESS:         { icon: 'login',              color: 'text-blue-400',    border: 'border-blue-500/20',  bg: 'bg-blue-500/10' },
-  LOGOUT:                { icon: 'logout',             color: 'text-slate-400',   border: 'border-slate-500/20', bg: 'bg-slate-500/10' },
-  PASSWORD_RESET_REQUEST:{ icon: 'key',                color: 'text-yellow-400',  border: 'border-yellow-500/20',bg: 'bg-yellow-500/10' },
-  PASSWORD_RESET_SUCCESS:{ icon: 'shield',             color: 'text-emerald-400', border: 'border-emerald-500/20',bg: 'bg-emerald-500/10' },
-  UPDATE_PROFILE:        { icon: 'manage_accounts',    color: 'text-purple-400',  border: 'border-purple-500/20',bg: 'bg-purple-500/10' },
-  CREATE_CANVAS:         { icon: 'note_add',           color: 'text-cyan-400',    border: 'border-cyan-500/20',  bg: 'bg-cyan-500/10' },
-  DELETE_CANVAS:         { icon: 'delete_forever',     color: 'text-red-400',     border: 'border-red-500/20',   bg: 'bg-red-500/10' },
-  RENAME_CANVAS:         { icon: 'edit_note',          color: 'text-orange-400',  border: 'border-orange-500/20',bg: 'bg-orange-500/10' },
-  UPDATE_CANVAS:         { icon: 'save',               color: 'text-sky-400',     border: 'border-sky-500/20',   bg: 'bg-sky-500/10' },
-  DUPLICATE_CANVAS:      { icon: 'content_copy',       color: 'text-indigo-400',  border: 'border-indigo-500/20',bg: 'bg-indigo-500/10' },
-  IMPORT_CANVAS:         { icon: 'upload_file',        color: 'text-violet-400',  border: 'border-violet-500/20',bg: 'bg-violet-500/10' },
-  CREATE_FOLDER:         { icon: 'create_new_folder',  color: 'text-emerald-400', border: 'border-emerald-500/20',bg: 'bg-emerald-500/10' },
-  DELETE_FOLDER:         { icon: 'folder_delete',      color: 'text-red-400',     border: 'border-red-500/20',   bg: 'bg-red-500/10' },
-  TOGGLE_FAVORITE:       { icon: 'star',               color: 'text-yellow-400',  border: 'border-yellow-500/20',bg: 'bg-yellow-500/10' },
-  EXPORT_CANVAS:         { icon: 'download',           color: 'text-teal-400',    border: 'border-teal-500/20',  bg: 'bg-teal-500/10' },
-  RESTORE_VERSION:       { icon: 'history',            color: 'text-amber-400',   border: 'border-amber-500/20', bg: 'bg-amber-500/10' },
-  JOIN_ROOM:             { icon: 'group_add',          color: 'text-green-400',   border: 'border-green-500/20', bg: 'bg-green-500/10' },
-  LEAVE_ROOM:            { icon: 'group_remove',       color: 'text-slate-400',   border: 'border-slate-500/20', bg: 'bg-slate-500/10' },
-  TOGGLE_THEME:          { icon: 'palette',            color: 'text-pink-400',    border: 'border-pink-500/20',  bg: 'bg-pink-500/10' },
-  VIEW_WALKTHROUGH:      { icon: 'menu_book',          color: 'text-blue-300',    border: 'border-blue-300/20',  bg: 'bg-blue-300/10' },
-  SEARCH_HELP:           { icon: 'search',             color: 'text-slate-300',   border: 'border-slate-300/20', bg: 'bg-slate-300/10' },
-  SUBMIT_FEEDBACK:       { icon: 'chat',               color: 'text-purple-400',  border: 'border-purple-500/20',bg: 'bg-purple-500/10' },
+  REGISTER_USER: { icon: 'person_add', color: 'text-green-400', border: 'border-green-500/20', bg: 'bg-green-500/10' },
+  LOGIN_SUCCESS: { icon: 'login', color: 'text-blue-400', border: 'border-blue-500/20', bg: 'bg-blue-500/10' },
+  LOGOUT: { icon: 'logout', color: 'text-slate-400', border: 'border-slate-500/20', bg: 'bg-slate-500/10' },
+  PASSWORD_RESET_REQUEST: { icon: 'key', color: 'text-yellow-400', border: 'border-yellow-500/20', bg: 'bg-yellow-500/10' },
+  PASSWORD_RESET_SUCCESS: { icon: 'shield', color: 'text-emerald-400', border: 'border-emerald-500/20', bg: 'bg-emerald-500/10' },
+  UPDATE_PROFILE: { icon: 'manage_accounts', color: 'text-purple-400', border: 'border-purple-500/20', bg: 'bg-purple-500/10' },
+  CREATE_CANVAS: { icon: 'note_add', color: 'text-cyan-400', border: 'border-cyan-500/20', bg: 'bg-cyan-500/10' },
+  DELETE_CANVAS: { icon: 'delete_forever', color: 'text-red-400', border: 'border-red-500/20', bg: 'bg-red-500/10' },
+  RENAME_CANVAS: { icon: 'edit_note', color: 'text-orange-400', border: 'border-orange-500/20', bg: 'bg-orange-500/10' },
+  UPDATE_CANVAS: { icon: 'save', color: 'text-sky-400', border: 'border-sky-500/20', bg: 'bg-sky-500/10' },
+  DUPLICATE_CANVAS: { icon: 'content_copy', color: 'text-indigo-400', border: 'border-indigo-500/20', bg: 'bg-indigo-500/10' },
+  IMPORT_CANVAS: { icon: 'upload_file', color: 'text-violet-400', border: 'border-violet-500/20', bg: 'bg-violet-500/10' },
+  CREATE_FOLDER: { icon: 'create_new_folder', color: 'text-emerald-400', border: 'border-emerald-500/20', bg: 'bg-emerald-500/10' },
+  DELETE_FOLDER: { icon: 'folder_delete', color: 'text-red-400', border: 'border-red-500/20', bg: 'bg-red-500/10' },
+  TOGGLE_FAVORITE: { icon: 'star', color: 'text-yellow-400', border: 'border-yellow-500/20', bg: 'bg-yellow-500/10' },
+  EXPORT_CANVAS: { icon: 'download', color: 'text-teal-400', border: 'border-teal-500/20', bg: 'bg-teal-500/10' },
+  RESTORE_VERSION: { icon: 'history', color: 'text-amber-400', border: 'border-amber-500/20', bg: 'bg-amber-500/10' },
+  JOIN_ROOM: { icon: 'group_add', color: 'text-green-400', border: 'border-green-500/20', bg: 'bg-green-500/10' },
+  LEAVE_ROOM: { icon: 'group_remove', color: 'text-slate-400', border: 'border-slate-500/20', bg: 'bg-slate-500/10' },
+  TOGGLE_THEME: { icon: 'palette', color: 'text-pink-400', border: 'border-pink-500/20', bg: 'bg-pink-500/10' },
+  VIEW_WALKTHROUGH: { icon: 'menu_book', color: 'text-blue-300', border: 'border-blue-300/20', bg: 'bg-blue-300/10' },
+  SEARCH_HELP: { icon: 'search', color: 'text-slate-300', border: 'border-slate-300/20', bg: 'bg-slate-300/10' },
+  SUBMIT_FEEDBACK: { icon: 'chat', color: 'text-purple-400', border: 'border-purple-500/20', bg: 'bg-purple-500/10' },
 };
 
 const ACTIVITY_LABELS = {
@@ -81,9 +84,9 @@ const formatTimestamp = (date) => {
 };
 
 export default function Dashboard() {
-    const { user, updateUser, logout } = useAuth();
-    // Setup socket for activity updates
-    const socket = useSocket({ userId: user?._id || user?.id, username: user?.username });
+  const { user, updateUser, logout } = useAuth();
+  // Setup socket for activity updates
+  const socket = useSocket({ userId: user?._id || user?.id, username: user?.username });
   const navigate = useNavigate();
   const location = useLocation();
   const [activeTab, setActiveTab] = useState('recent');
@@ -134,6 +137,9 @@ export default function Dashboard() {
   const [isInstantGenerating, setIsInstantGenerating] = useState(false);
   const [isScheduledGenerating, setIsScheduledGenerating] = useState(false);
   const [meetingName, setMeetingName] = useState('');
+  const [isBotOpen, setIsBotOpen] = useState(false);
+  const [showWalkthrough, setShowWalkthrough] = useState(false);
+  const [walkthroughStep, setWalkthroughStep] = useState(0);
 
   // Real meetings data
   const [activeMeetings, setActiveMeetings] = useState([]);
@@ -402,7 +408,7 @@ export default function Dashboard() {
         // Backend getFolders auto-creates "Personal Sketches" if missing
         const allFolders = await folderAPI.getAll();
         setFolders(allFolders || []);
-        
+
         // Find the default folder for reference
         const personalFolder = allFolders.find(f => f.name === 'Personal Sketches');
         if (personalFolder) setDefaultFolderId(personalFolder._id);
@@ -422,24 +428,24 @@ export default function Dashboard() {
       const canvasButtons = document.querySelectorAll('[data-canvas-menu-button]');
       const folderMenus = document.querySelectorAll('[data-folder-menu]');
       const folderButtons = document.querySelectorAll('[data-folder-menu-button]');
-      
+
       let clickedOutsideCanvas = true;
       let clickedOutsideFolder = true;
-      
+
       canvasMenus.forEach(menu => {
         if (menu.contains(e.target)) clickedOutsideCanvas = false;
       });
       canvasButtons.forEach(btn => {
         if (btn.contains(e.target)) clickedOutsideCanvas = false;
       });
-      
+
       folderMenus.forEach(menu => {
         if (menu.contains(e.target)) clickedOutsideFolder = false;
       });
       folderButtons.forEach(btn => {
         if (btn.contains(e.target)) clickedOutsideFolder = false;
       });
-      
+
       if (clickedOutsideCanvas) {
         setCurrentMenuCanvasId(null);
       }
@@ -447,7 +453,7 @@ export default function Dashboard() {
         setCurrentMenuFolderId(null);
       }
     };
-    
+
     if (currentMenuCanvasId || currentMenuFolderId) {
       document.addEventListener('click', handleClickOutside);
       return () => document.removeEventListener('click', handleClickOutside);
@@ -521,10 +527,10 @@ export default function Dashboard() {
   const accountCreatedAt = user?.createdAt || user?.createAt;
   const accountCreatedLabel = accountCreatedAt
     ? new Date(accountCreatedAt).toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-      })
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    })
     : 'Unknown';
 
   const showFlash = (type, message, scope = 'general') => {
@@ -630,23 +636,23 @@ export default function Dashboard() {
 
   const navigateToMeeting = (meetingData, mediaState) => {
     // Handle both object and string formats for meetingData
-    const meetingId = typeof meetingData === 'string' 
-      ? meetingData 
+    const meetingId = typeof meetingData === 'string'
+      ? meetingData
       : (meetingData?.id || meetingData?.meetingId || '');
-    
+
     const trimmedId = meetingId?.trim?.() || meetingId;
     const path = trimmedId ? `/meeting/${trimmedId}` : '/meeting';
-    
+
     // Build state with proper password handling
     const state = {
       ...mediaState,
       meetingId: meetingId,
       // Priority: meetingData object password > mediaState password
-      meetingPassword: (typeof meetingData === 'object' && meetingData?.password) 
-        ? meetingData.password 
+      meetingPassword: (typeof meetingData === 'object' && meetingData?.password)
+        ? meetingData.password
         : mediaState?.meetingPassword
     };
-    
+
     navigate(path, { state });
   };
 
@@ -735,7 +741,7 @@ export default function Dashboard() {
       return;
     }
     setIsInstantGenerating(true);
-    
+
     try {
       // If credentials exist but not in DB, create the meeting
       if (instantMeetingDetails && !instantMeetingDetails?.meetingDbId) {
@@ -755,7 +761,7 @@ export default function Dashboard() {
           status: data.status
         };
         setInstantMeetingDetails(meetingData);
-        
+
         // Enter the meeting
         setShowCreateMeeting(false);
         startMeetingTransition('Entering meeting...', () =>
@@ -977,11 +983,11 @@ export default function Dashboard() {
     try {
       setIsOperatingFolder(true);
       await folderAPI.update(folderId, { name: newName.trim() });
-      
+
       // Refresh folders list
       const updatedFolders = await folderAPI.getAll();
       setFolders(updatedFolders || []);
-      
+
       setShowRenameFolderModal(false);
       setRenameFolderId(null);
       setNewFolderName('');
@@ -1005,20 +1011,20 @@ export default function Dashboard() {
     try {
       setIsOperatingFolder(true);
       await folderAPI.delete(folderId);
-      
+
       // Refresh folders list
       const updatedFolders = await folderAPI.getAll();
       setFolders(updatedFolders || []);
-      
+
       // Refresh canvases list since canvases in the folder are also deleted
       const canvases = await canvasAPI.getAll();
       setSavedCanvases(canvases || []);
-      
+
       // If we're viewing the deleted folder, go back to main view
       if (activeFolderId === folderId) {
         setActiveFolderId(null);
       }
-      
+
       setCurrentMenuFolderId(null);
       showFlash('success', 'Folder and its contents deleted successfully');
     } catch (error) {
@@ -1038,11 +1044,11 @@ export default function Dashboard() {
     try {
       setIsOperating(true);
       await canvasAPI.update(canvasId, { title: newName.trim() });
-      
+
       // Refresh the canvases list
       const canvases = await canvasAPI.getAll();
       setSavedCanvases(canvases || []);
-      
+
       setShowRenameModal(false);
       setRenameCanvasId(null);
       setNewCanvasName('');
@@ -1060,11 +1066,11 @@ export default function Dashboard() {
     try {
       setIsOperating(true);
       await canvasAPI.delete(canvasId);
-      
+
       // Refresh the canvases list
       const canvases = await canvasAPI.getAll();
       setSavedCanvases(canvases || []);
-      
+
       setCurrentMenuCanvasId(null);
       showFlash('success', 'Canvas deleted successfully');
     } catch (error) {
@@ -1079,11 +1085,11 @@ export default function Dashboard() {
     try {
       setIsOperating(true);
       await canvasAPI.duplicate(canvasId);
-      
+
       // Refresh the canvases list
       const canvases = await canvasAPI.getAll();
       setSavedCanvases(canvases || []);
-      
+
       setCurrentMenuCanvasId(null);
       showFlash('success', 'Canvas duplicated successfully');
     } catch (error) {
@@ -1109,7 +1115,7 @@ export default function Dashboard() {
       `}</style>
 
       <div className="flex h-screen overflow-hidden">
-        <aside className="w-64 flex-shrink-0 bg-[#111827] border-r border-[#1f2a3b] flex flex-col">
+        <aside data-tour="dash-sidebar" className="w-64 flex-shrink-0 bg-[#111827] border-r border-[#1f2a3b] flex flex-col">
           <div className="p-6 flex items-center space-x-3">
             <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
               <span className="material-icons text-white text-xl font-bold">dashboard_customize</span>
@@ -1118,9 +1124,8 @@ export default function Dashboard() {
           </div>
           <nav className="flex-1 px-4 space-y-1 mt-4">
             <button
-              className={`w-full flex items-center px-4 py-3 text-sm font-semibold rounded-xl transition-all ${
-                activeView === 'home' ? 'bg-[#1a2b4a] text-white' : 'text-slate-400 hover:bg-[#1a2b4a] hover:text-white'
-              }`}
+              className={`w-full flex items-center px-4 py-3 text-sm font-semibold rounded-xl transition-all ${activeView === 'home' ? 'bg-[#1a2b4a] text-white' : 'text-slate-400 hover:bg-[#1a2b4a] hover:text-white'
+                }`}
               onClick={() => setActiveView('home')}
               type="button"
             >
@@ -1128,11 +1133,10 @@ export default function Dashboard() {
               Home
             </button>
             <button
-              className={`w-full flex items-center px-4 py-3 text-sm font-semibold rounded-xl transition-all ${
-                activeView === 'canvases'
-                  ? 'bg-[#1a2b4a] hover:text-white'
-                  : 'text-slate-400 hover:bg-[#1a2b4a] hover:text-white'
-              }`}
+              className={`w-full flex items-center px-4 py-3 text-sm font-semibold rounded-xl transition-all ${activeView === 'canvases'
+                ? 'bg-[#1a2b4a] hover:text-white'
+                : 'text-slate-400 hover:bg-[#1a2b4a] hover:text-white'
+                }`}
               onClick={() => setActiveView('canvases')}
               type="button"
             >
@@ -1140,11 +1144,10 @@ export default function Dashboard() {
               My Canvases
             </button>
             <button
-              className={`w-full flex items-center px-4 py-3 text-sm font-semibold rounded-xl transition-all ${
-                activeView === 'meetings'
-                  ? 'bg-[#1a2b4a] hover:text-white'
-                  : 'text-slate-400 hover:bg-[#1a2b4a] hover:text-white'
-              }`}
+              className={`w-full flex items-center px-4 py-3 text-sm font-semibold rounded-xl transition-all ${activeView === 'meetings'
+                ? 'bg-[#1a2b4a] hover:text-white'
+                : 'text-slate-400 hover:bg-[#1a2b4a] hover:text-white'
+                }`}
               onClick={() => setActiveView('meetings')}
               type="button"
             >
@@ -1152,11 +1155,11 @@ export default function Dashboard() {
               Meetings
             </button>
             <button
-              className={`w-full flex items-center px-4 py-3 text-sm font-semibold rounded-xl transition-all ${
-                activeView === 'notifications'
-                  ? 'bg-[#1a2b4a] hover:text-white'
-                  : 'text-slate-400 hover:bg-[#1a2b4a] hover:text-white'
-              }`}
+              data-tour="dash-notifs-btn"
+              className={`w-full flex items-center px-4 py-3 text-sm font-semibold rounded-xl transition-all ${activeView === 'notifications'
+                ? 'bg-[#1a2b4a] hover:text-white'
+                : 'text-slate-400 hover:bg-[#1a2b4a] hover:text-white'
+                }`}
               onClick={() => setActiveView('notifications')}
               type="button"
             >
@@ -1169,11 +1172,11 @@ export default function Dashboard() {
               )}
             </button>
             <button
-              className={`w-full flex items-center px-4 py-3 text-sm font-semibold rounded-xl transition-all ${
-                activeView === 'activity'
-                  ? 'bg-[#1a2b4a] hover:text-white'
-                  : 'text-slate-400 hover:bg-[#1a2b4a] hover:text-white'
-              }`}
+              data-tour="dash-activity-btn"
+              className={`w-full flex items-center px-4 py-3 text-sm font-semibold rounded-xl transition-all ${activeView === 'activity'
+                ? 'bg-[#1a2b4a] hover:text-white'
+                : 'text-slate-400 hover:bg-[#1a2b4a] hover:text-white'
+                }`}
               onClick={() => setActiveView('activity')}
               type="button"
             >
@@ -1181,11 +1184,11 @@ export default function Dashboard() {
               Activity
             </button>
             <button
-              className={`w-full flex items-center px-4 py-3 text-sm font-semibold rounded-xl transition-all ${
-                activeView === 'settings'
-                  ? 'bg-[#1a2b4a] hover:text-white'
-                  : 'text-slate-400 hover:bg-[#1a2b4a] hover:text-white'
-              }`}
+              data-tour="dash-settings-btn"
+              className={`w-full flex items-center px-4 py-3 text-sm font-semibold rounded-xl transition-all ${activeView === 'settings'
+                ? 'bg-[#1a2b4a] hover:text-white'
+                : 'text-slate-400 hover:bg-[#1a2b4a] hover:text-white'
+                }`}
               onClick={() => setActiveView('settings')}
               type="button"
             >
@@ -1220,7 +1223,7 @@ export default function Dashboard() {
         <main className="flex-1 flex flex-col overflow-hidden">
           {activeView === 'home' ? (
             <header className="h-16 flex-shrink-0 flex items-center justify-between px-8 bg-[#0f172a] border-b border-[#1f2a3b]">
-              <div className="flex-1 max-w-xl">
+              <div data-tour="dash-search" className="flex-1 max-w-xl">
                 <div className="relative group">
                   <span className="material-icons absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors">search</span>
                   <input
@@ -1334,11 +1337,10 @@ export default function Dashboard() {
             )}
             {shouldShowFlash && (
               <div
-                className={`mb-6 flex items-center justify-between gap-4 rounded-xl border px-4 py-3 text-sm ${
-                  flash.type === 'success'
-                    ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
-                    : 'border-rose-500/30 bg-rose-500/10 text-rose-200'
-                }`}
+                className={`mb-6 flex items-center justify-between gap-4 rounded-xl border px-4 py-3 text-sm ${flash.type === 'success'
+                  ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
+                  : 'border-rose-500/30 bg-rose-500/10 text-rose-200'
+                  }`}
               >
                 <span>{flash.message}</span>
                 <button
@@ -1454,386 +1456,383 @@ export default function Dashboard() {
                   return null;
                 })()}
                 {!searchQuery.replace(/\s+/g, ' ').trim() && (
-                <>
-                <section className="mb-10 text-start">
-                  <h1 className="text-3xl font-bold mb-2 ">Welcome back, {displayName}</h1>
-                  <p className="text-slate-400">Ready to visualize your next big idea?</p>
-                </section>
+                  <>
+                    <section className="mb-10 text-start">
+                      <h1 className="text-3xl font-bold mb-2 ">Welcome back, {displayName}</h1>
+                      <p className="text-slate-400">Ready to visualize your next big idea?</p>
+                    </section>
 
-                <section className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-              <button
-                className="group relative overflow-hidden p-6 bg-[#1d7ff2] rounded-xl text-left transition-all hover:scale-[1.02] hover:shadow-xl hover:shadow-blue-500/30"
-                onClick={handleNewCanvas}
-                type="button"
-              >
-                <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
-                  <span className="material-icons text-8xl text-white">add_box</span>
-                </div>
-                <div className="relative z-10">
-                  <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center mb-4">
-                    <span className="material-icons text-white">add</span>
-                  </div>
-                  <h3 className="text-xl font-bold text-white mb-1">New Canvas</h3>
-                  <p className="text-white/70 text-sm">Start a blank project from scratch</p>
-                  {createCanvasCardMessage && (
-                    <p className="mt-3 text-xs font-semibold text-rose-100/90 bg-rose-500/30 inline-flex px-2 py-1 rounded">
-                      {createCanvasCardMessage}
-                    </p>
-                  )}
-                </div>
-              </button>
-              <button
-                className="group relative overflow-hidden p-6 bg-[#5450dd] rounded-xl text-left transition-all hover:scale-[1.02] hover:shadow-xl hover:shadow-indigo-500/30"
-                onClick={handleOpenCreateMeeting}
-                type="button"
-              >
-                <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
-                  <span className="material-icons text-8xl text-white">video_call</span>
-                </div>
-                <div className="relative z-10">
-                  <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center mb-4">
-                    <span className="material-icons text-white">groups</span>
-                  </div>
-                  <h3 className="text-xl font-bold text-white mb-1">Create Meeting</h3>
-                  <p className="text-white/70 text-sm">Instant collaboration with your team</p>
-                </div>
-              </button>
-              <button
-                className="group relative overflow-hidden p-6 bg-[#15938c] rounded-xl text-left transition-all hover:scale-[1.02] hover:shadow-xl hover:shadow-emerald-500/30"
-                onClick={handleOpenJoinMeeting}
-                type="button"
-              >
-                <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
-                  <span className="material-icons text-8xl text-white">login</span>
-                </div>
-                <div className="relative z-10">
-                  <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center mb-4">
-                    <span className="material-icons text-white">sensors</span>
-                  </div>
-                  <h3 className="text-xl font-bold text-white mb-1">Join Meeting</h3>
-                  <p className="text-white/70 text-sm">Enter a room code or invite link</p>
-                </div>
-              </button>
-            </section>
-
-            <section>
-              <div className="flex items-center space-x-8 mb-6 border-b border-[#1f2a3b]">
-                <button
-                  className={`pb-4 text-sm font-bold border-b-2 transition-all ${
-                    activeTab === 'recent'
-                      ? 'border-primary text-primary'
-                      : 'border-transparent text-slate-400 hover:text-white'
-                  }`}
-                  onClick={() => setActiveTab('recent')}
-                  type="button"
-                >
-                  Recent Canvases
-                </button>
-                <button
-                  className={`pb-4 text-sm font-bold border-b-2 transition-all ${
-                    activeTab === 'upcoming'
-                      ? 'border-primary text-primary'
-                      : 'border-transparent text-slate-400 hover:text-white'
-                  }`}
-                  onClick={() => setActiveTab('upcoming')}
-                  type="button"
-                >
-                  Upcoming Meetings
-                </button>
-                <button
-                  className={`pb-4 text-sm font-bold border-b-2 transition-all ${
-                    activeTab === 'completed'
-                      ? 'border-primary text-primary'
-                      : 'border-transparent text-slate-400 hover:text-white'
-                  }`}
-                  onClick={() => setActiveTab('completed')}
-                  type="button"
-                >
-                  Completed
-                </button>
-              </div>
-
-              {activeTab === 'recent' && (() => {
-                const q = searchQuery.replace(/\s+/g, ' ').trim().toLowerCase();
-                const recentCanvases = savedCanvases.slice(0, 4).filter(c => !q || (c.title || '').toLowerCase().includes(q));
-                return (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                  {recentCanvases.map((canvas) => (
-                    <div key={canvas._id} className={`group bg-[#111827] border border-[#1f2a3b] rounded-xl overflow-hidden hover:shadow-lg transition-all border-b-4 ${canvas.isMeetingCanvas ? 'border-b-amber-400/60' : 'border-b-emerald-400/60'}`}>
-                      <div className="h-40 bg-[#0b1220] relative overflow-hidden">
-                        <div className={`absolute inset-0 bg-gradient-to-br ${canvas.isMeetingCanvas ? 'from-amber-500/10' : 'from-emerald-500/10'} to-transparent`}></div>
-                        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 backdrop-blur-sm">
-                          <button
-                            className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold rounded-xl shadow-xl shadow-blue-600/30 transition-all"
-                            onClick={() => navigate(canvas.isMeetingCanvas ? `/meeting-canvas/${canvas._id}` : `/paint/${canvas._id}`)}
-                            type="button"
-                          >
-                            Open Editor
-                          </button>
+                    <section data-tour="dash-actions" className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+                      <button
+                        className="group relative overflow-hidden p-6 bg-[#1d7ff2] rounded-xl text-left transition-all hover:scale-[1.02] hover:shadow-xl hover:shadow-blue-500/30"
+                        onClick={handleNewCanvas}
+                        type="button"
+                      >
+                        <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
+                          <span className="material-icons text-8xl text-white">add_box</span>
                         </div>
-                        <img
-                          alt={`${canvas.title} Preview`}
-                          className="absolute inset-0 w-full h-full object-cover opacity-50 pointer-events-none group-hover:scale-110 transition-transform duration-500"
-                          src={canvas.thumbnail || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='200'%3E%3Crect fill='%23111827' width='400' height='200'/%3E%3C/svg%3E"}
-                        />
-                        {canvas.isMeetingCanvas && (
-                          <div className="absolute top-3 right-3 z-10">
-                            <span className="px-2 py-1 bg-[#101922]/80 text-[10px] font-bold rounded border uppercase text-amber-400 border-amber-400/30">
-                              Meeting
-                            </span>
+                        <div className="relative z-10">
+                          <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center mb-4">
+                            <span className="material-icons text-white">add</span>
                           </div>
-                        )}
+                          <h3 className="text-xl font-bold text-white mb-1">New Canvas</h3>
+                          <p className="text-white/70 text-sm">Start a blank project from scratch</p>
+                          {createCanvasCardMessage && (
+                            <p className="mt-3 text-xs font-semibold text-rose-100/90 bg-rose-500/30 inline-flex px-2 py-1 rounded">
+                              {createCanvasCardMessage}
+                            </p>
+                          )}
+                        </div>
+                      </button>
+                      <button
+                        className="group relative overflow-hidden p-6 bg-[#5450dd] rounded-xl text-left transition-all hover:scale-[1.02] hover:shadow-xl hover:shadow-indigo-500/30"
+                        onClick={handleOpenCreateMeeting}
+                        type="button"
+                      >
+                        <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
+                          <span className="material-icons text-8xl text-white">video_call</span>
+                        </div>
+                        <div className="relative z-10">
+                          <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center mb-4">
+                            <span className="material-icons text-white">groups</span>
+                          </div>
+                          <h3 className="text-xl font-bold text-white mb-1">Create Meeting</h3>
+                          <p className="text-white/70 text-sm">Instant collaboration with your team</p>
+                        </div>
+                      </button>
+                      <button
+                        className="group relative overflow-hidden p-6 bg-[#15938c] rounded-xl text-left transition-all hover:scale-[1.02] hover:shadow-xl hover:shadow-emerald-500/30"
+                        onClick={handleOpenJoinMeeting}
+                        type="button"
+                      >
+                        <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
+                          <span className="material-icons text-8xl text-white">login</span>
+                        </div>
+                        <div className="relative z-10">
+                          <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center mb-4">
+                            <span className="material-icons text-white">sensors</span>
+                          </div>
+                          <h3 className="text-xl font-bold text-white mb-1">Join Meeting</h3>
+                          <p className="text-white/70 text-sm">Enter a room code or invite link</p>
+                        </div>
+                      </button>
+                    </section>
+
+                    <section data-tour="dash-tabs">
+                      <div className="flex items-center space-x-8 mb-6 border-b border-[#1f2a3b]">
+                        <button
+                          className={`pb-4 text-sm font-bold border-b-2 transition-all ${activeTab === 'recent'
+                            ? 'border-primary text-primary'
+                            : 'border-transparent text-slate-400 hover:text-white'
+                            }`}
+                          onClick={() => setActiveTab('recent')}
+                          type="button"
+                        >
+                          Recent Canvases
+                        </button>
+                        <button
+                          className={`pb-4 text-sm font-bold border-b-2 transition-all ${activeTab === 'upcoming'
+                            ? 'border-primary text-primary'
+                            : 'border-transparent text-slate-400 hover:text-white'
+                            }`}
+                          onClick={() => setActiveTab('upcoming')}
+                          type="button"
+                        >
+                          Upcoming Meetings
+                        </button>
+                        <button
+                          className={`pb-4 text-sm font-bold border-b-2 transition-all ${activeTab === 'completed'
+                            ? 'border-primary text-primary'
+                            : 'border-transparent text-slate-400 hover:text-white'
+                            }`}
+                          onClick={() => setActiveTab('completed')}
+                          type="button"
+                        >
+                          Completed
+                        </button>
                       </div>
-                      <div className="p-4">
-                        <div className="flex items-start justify-between mb-2">
-                          <h4 className="font-bold text-sm truncate">{canvas.title || 'Untitled Canvas'}</h4>
-                          <div className="relative">
-                            <button 
-                              className="text-slate-500 hover:text-primary transition-colors"
-                              data-canvas-menu-button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setCurrentMenuCanvasId(currentMenuCanvasId === canvas._id ? null : canvas._id);
-                              }}
-                            >
-                              <span className="material-icons text-lg">more_vert</span>
-                            </button>
-                            {currentMenuCanvasId === canvas._id && (
-                              <div 
-                                className="absolute right-0 top-full mt-2 bg-[#101922] border border-[#2d3a4b] rounded-lg shadow-xl z-50 min-w-[180px] overflow-hidden"
-                                data-canvas-menu
-                              >
-                                <button
-                                  className="w-full text-left px-4 py-3 text-sm text-slate-300 hover:bg-[#1a242f] hover:text-primary flex items-center space-x-3 transition-colors"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setRenameCanvasId(canvas._id);
-                                    setNewCanvasName(canvas.title);
-                                    setShowRenameModal(true);
-                                    setCurrentMenuCanvasId(null);
-                                  }}
-                                >
-                                  <span className="material-icons text-sm">edit</span>
-                                  <span className="font-medium">Rename</span>
-                                </button>
-                                <button
-                                  className="w-full text-left px-4 py-3 text-sm text-slate-300 hover:bg-[#1a242f] hover:text-primary flex items-center space-x-3 transition-colors"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleDuplicateCanvas(canvas._id);
-                                  }}
-                                  disabled={isOperating}
-                                >
-                                  <span className="material-icons text-sm">content_copy</span>
-                                  <span className="font-medium">Duplicate</span>
-                                </button>
-                                <div className="border-t border-[#2d3a4b]"></div>
-                                <button
-                                  className="w-full text-left px-4 py-3 text-sm text-rose-400 hover:bg-[#1a242f] hover:text-rose-300 flex items-center space-x-3 transition-colors"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleDeleteCanvas(canvas._id);
-                                  }}
-                                  disabled={isOperating}
-                                >
-                                  <span className="material-icons text-sm">delete</span>
-                                  <span className="font-medium">Delete</span>
-                                </button>
+
+                      {activeTab === 'recent' && (() => {
+                        const q = searchQuery.replace(/\s+/g, ' ').trim().toLowerCase();
+                        const recentCanvases = savedCanvases.slice(0, 4).filter(c => !q || (c.title || '').toLowerCase().includes(q));
+                        return (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                            {recentCanvases.map((canvas) => (
+                              <div key={canvas._id} className={`group bg-[#111827] border border-[#1f2a3b] rounded-xl overflow-hidden hover:shadow-lg transition-all border-b-4 ${canvas.isMeetingCanvas ? 'border-b-amber-400/60' : 'border-b-emerald-400/60'}`}>
+                                <div className="h-40 bg-[#0b1220] relative overflow-hidden">
+                                  <div className={`absolute inset-0 bg-gradient-to-br ${canvas.isMeetingCanvas ? 'from-amber-500/10' : 'from-emerald-500/10'} to-transparent`}></div>
+                                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 backdrop-blur-sm">
+                                    <button
+                                      className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold rounded-xl shadow-xl shadow-blue-600/30 transition-all"
+                                      onClick={() => navigate(canvas.isMeetingCanvas ? `/meeting-canvas/${canvas._id}` : `/paint/${canvas._id}`)}
+                                      type="button"
+                                    >
+                                      Open Editor
+                                    </button>
+                                  </div>
+                                  <img
+                                    alt={`${canvas.title} Preview`}
+                                    className="absolute inset-0 w-full h-full object-cover opacity-50 pointer-events-none group-hover:scale-110 transition-transform duration-500"
+                                    src={canvas.thumbnail || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='200'%3E%3Crect fill='%23111827' width='400' height='200'/%3E%3C/svg%3E"}
+                                  />
+                                  {canvas.isMeetingCanvas && (
+                                    <div className="absolute top-3 right-3 z-10">
+                                      <span className="px-2 py-1 bg-[#101922]/80 text-[10px] font-bold rounded border uppercase text-amber-400 border-amber-400/30">
+                                        Meeting
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="p-4">
+                                  <div className="flex items-start justify-between mb-2">
+                                    <h4 className="font-bold text-sm truncate">{canvas.title || 'Untitled Canvas'}</h4>
+                                    <div className="relative">
+                                      <button
+                                        className="text-slate-500 hover:text-primary transition-colors"
+                                        data-canvas-menu-button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setCurrentMenuCanvasId(currentMenuCanvasId === canvas._id ? null : canvas._id);
+                                        }}
+                                      >
+                                        <span className="material-icons text-lg">more_vert</span>
+                                      </button>
+                                      {currentMenuCanvasId === canvas._id && (
+                                        <div
+                                          className="absolute right-0 top-full mt-2 bg-[#101922] border border-[#2d3a4b] rounded-lg shadow-xl z-50 min-w-[180px] overflow-hidden"
+                                          data-canvas-menu
+                                        >
+                                          <button
+                                            className="w-full text-left px-4 py-3 text-sm text-slate-300 hover:bg-[#1a242f] hover:text-primary flex items-center space-x-3 transition-colors"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setRenameCanvasId(canvas._id);
+                                              setNewCanvasName(canvas.title);
+                                              setShowRenameModal(true);
+                                              setCurrentMenuCanvasId(null);
+                                            }}
+                                          >
+                                            <span className="material-icons text-sm">edit</span>
+                                            <span className="font-medium">Rename</span>
+                                          </button>
+                                          <button
+                                            className="w-full text-left px-4 py-3 text-sm text-slate-300 hover:bg-[#1a242f] hover:text-primary flex items-center space-x-3 transition-colors"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleDuplicateCanvas(canvas._id);
+                                            }}
+                                            disabled={isOperating}
+                                          >
+                                            <span className="material-icons text-sm">content_copy</span>
+                                            <span className="font-medium">Duplicate</span>
+                                          </button>
+                                          <div className="border-t border-[#2d3a4b]"></div>
+                                          <button
+                                            className="w-full text-left px-4 py-3 text-sm text-rose-400 hover:bg-[#1a242f] hover:text-rose-300 flex items-center space-x-3 transition-colors"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleDeleteCanvas(canvas._id);
+                                            }}
+                                            disabled={isOperating}
+                                          >
+                                            <span className="material-icons text-sm">delete</span>
+                                            <span className="font-medium">Delete</span>
+                                          </button>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center text-xs text-slate-500 space-x-2">
+                                    <span className="material-icons text-sm">schedule</span>
+                                    <span>{new Date(canvas.updatedAt).toLocaleString()}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                            {recentCanvases.length === 0 && (
+                              <div className="col-span-4 text-center py-12">
+                                <p className="text-slate-500">{searchQuery.trim() ? 'No canvases match your search.' : 'No canvases yet. Create your first canvas!'}</p>
                               </div>
                             )}
                           </div>
-                        </div>
-                        <div className="flex items-center text-xs text-slate-500 space-x-2">
-                          <span className="material-icons text-sm">schedule</span>
-                          <span>{new Date(canvas.updatedAt).toLocaleString()}</span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                  {recentCanvases.length === 0 && (
-                    <div className="col-span-4 text-center py-12">
-                      <p className="text-slate-500">{searchQuery.trim() ? 'No canvases match your search.' : 'No canvases yet. Create your first canvas!'}</p>
-                    </div>
-                  )}
-                </div>
-                );
-              })()}
+                        );
+                      })()}
 
-              {activeTab === 'upcoming' && (() => {
-                const q = searchQuery.replace(/\s+/g, ' ').trim().toLowerCase();
-                const filteredMeetings = [...activeMeetings, ...upcomingMeetings].filter(m => !q || (m.name || '').toLowerCase().includes(q) || (m.meetingId || '').toLowerCase().includes(q));
-                return (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {isLoadingMeetings ? (
-                    <div className="col-span-3 text-center py-12">
-                      <span className="material-icons animate-spin text-primary text-3xl">refresh</span>
-                      <p className="text-slate-500 mt-2">Loading meetings...</p>
-                    </div>
-                  ) : filteredMeetings.length === 0 ? (
-                    <div className="col-span-3 text-center py-12">
-                      <span className="material-icons text-slate-600 text-4xl block mb-2">event_busy</span>
-                      <p className="text-slate-500">{q ? 'No meetings match your search.' : 'No upcoming meetings. Schedule one to get started!'}</p>
-                    </div>
-                  ) : (
-                    filteredMeetings.map((meeting) => (
-                      <div key={meeting._id} className={`group bg-white dark:bg-surface-dark border border-slate-200 dark:border-border-dark rounded-xl p-5 hover:shadow-lg transition-all border-l-4 ${meeting.status === 'live' ? 'border-l-emerald-500' : 'border-l-primary'}`}>
-                        <div className="flex justify-between items-start mb-4">
-                          <div className={`w-10 h-10 ${meeting.status === 'live' ? 'bg-emerald-500/10' : 'bg-primary/10'} rounded-lg flex items-center justify-center ${meeting.status === 'live' ? 'text-emerald-500' : 'text-primary'}`}>
-                            <span className="material-icons">{meeting.status === 'live' ? 'videocam' : 'event_available'}</span>
+                      {activeTab === 'upcoming' && (() => {
+                        const q = searchQuery.replace(/\s+/g, ' ').trim().toLowerCase();
+                        const filteredMeetings = [...activeMeetings, ...upcomingMeetings].filter(m => !q || (m.name || '').toLowerCase().includes(q) || (m.meetingId || '').toLowerCase().includes(q));
+                        return (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {isLoadingMeetings ? (
+                              <div className="col-span-3 text-center py-12">
+                                <span className="material-icons animate-spin text-primary text-3xl">refresh</span>
+                                <p className="text-slate-500 mt-2">Loading meetings...</p>
+                              </div>
+                            ) : filteredMeetings.length === 0 ? (
+                              <div className="col-span-3 text-center py-12">
+                                <span className="material-icons text-slate-600 text-4xl block mb-2">event_busy</span>
+                                <p className="text-slate-500">{q ? 'No meetings match your search.' : 'No upcoming meetings. Schedule one to get started!'}</p>
+                              </div>
+                            ) : (
+                              filteredMeetings.map((meeting) => (
+                                <div key={meeting._id} className={`group bg-white dark:bg-surface-dark border border-slate-200 dark:border-border-dark rounded-xl p-5 hover:shadow-lg transition-all border-l-4 ${meeting.status === 'live' ? 'border-l-emerald-500' : 'border-l-primary'}`}>
+                                  <div className="flex justify-between items-start mb-4">
+                                    <div className={`w-10 h-10 ${meeting.status === 'live' ? 'bg-emerald-500/10' : 'bg-primary/10'} rounded-lg flex items-center justify-center ${meeting.status === 'live' ? 'text-emerald-500' : 'text-primary'}`}>
+                                      <span className="material-icons">{meeting.status === 'live' ? 'videocam' : 'event_available'}</span>
+                                    </div>
+                                    <span className={`px-2 py-1 ${meeting.status === 'live' ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400' : 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'} text-[10px] font-bold rounded uppercase`}>
+                                      {meeting.status === 'live' ? 'Live Now' : 'Scheduled'}
+                                    </span>
+                                  </div>
+                                  <h4 className="font-bold text-base mb-1 text-start">{meeting.name}</h4>
+                                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
+                                    Meeting ID: {meeting.meetingId}
+                                  </p>
+                                  <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-border-dark">
+                                    <div className="flex items-center text-xs text-slate-500">
+                                      <span className="material-icons text-sm mr-1">group</span>
+                                      {meeting.participants?.length || 0} participant{(meeting.participants?.length || 0) !== 1 ? 's' : ''}
+                                    </div>
+                                    <button
+                                      className="text-primary text-xs font-bold hover:underline flex items-center"
+                                      type="button"
+                                      onClick={() => navigate(`/meeting/${meeting.meetingId}`, {
+                                        state: {
+                                          meetingDbId: meeting._id,
+                                          meetingId: meeting.meetingId,
+                                          role: meeting.isHost ? 'host' : 'participant',
+                                          permission: meeting.isHost ? 'edit' : 'view',
+                                          status: meeting.status
+                                        }
+                                      })}
+                                    >
+                                      {meeting.status === 'live' ? 'Join Now' : 'View Details'} <span className="material-icons text-sm ml-1">arrow_forward</span>
+                                    </button>
+                                  </div>
+                                </div>
+                              ))
+                            )}
                           </div>
-                          <span className={`px-2 py-1 ${meeting.status === 'live' ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400' : 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'} text-[10px] font-bold rounded uppercase`}>
-                            {meeting.status === 'live' ? 'Live Now' : 'Scheduled'}
-                          </span>
-                        </div>
-                        <h4 className="font-bold text-base mb-1 text-start">{meeting.name}</h4>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
-                          Meeting ID: {meeting.meetingId}
-                        </p>
-                        <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-border-dark">
-                          <div className="flex items-center text-xs text-slate-500">
-                            <span className="material-icons text-sm mr-1">group</span>
-                            {meeting.participants?.length || 0} participant{(meeting.participants?.length || 0) !== 1 ? 's' : ''}
-                          </div>
-                          <button
-                            className="text-primary text-xs font-bold hover:underline flex items-center"
-                            type="button"
-                            onClick={() => navigate(`/meeting/${meeting.meetingId}`, {
-                              state: {
-                                meetingDbId: meeting._id,
-                                meetingId: meeting.meetingId,
-                                role: meeting.isHost ? 'host' : 'participant',
-                                permission: meeting.isHost ? 'edit' : 'view',
-                                status: meeting.status
-                              }
-                            })}
-                          >
-                            {meeting.status === 'live' ? 'Join Now' : 'View Details'} <span className="material-icons text-sm ml-1">arrow_forward</span>
-                          </button>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-                );
-              })()}
+                        );
+                      })()}
 
-              {activeTab === 'completed' && (() => {
-                const q = searchQuery.replace(/\s+/g, ' ').trim().toLowerCase();
-                const completedMeetings = endedMeetings.filter(m => !q || (m.name || '').toLowerCase().includes(q) || (m.meetingId || '').toLowerCase().includes(q));
-                return (
-                <>
-                  <div className="flex items-center justify-between mb-4">
-                    <p className="text-xs text-slate-500">{completedMeetings.length} completed meeting{completedMeetings.length !== 1 ? 's' : ''}</p>
-                    <button
-                      className="text-xs text-slate-400 hover:text-primary flex items-center gap-1 transition-colors"
-                      type="button"
-                      onClick={() => { setIsLoadingMeetings(true); doFetchMeetings().finally(() => setIsLoadingMeetings(false)); }}
-                    >
-                      <span className={`material-icons text-sm ${isLoadingMeetings ? 'animate-spin' : ''}`}>refresh</span>
-                      Refresh
-                    </button>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {isLoadingMeetings ? (
-                    <div className="col-span-3 text-center py-12">
-                      <span className="material-icons animate-spin text-primary text-3xl">refresh</span>
-                      <p className="text-slate-500 mt-2">Loading meetings...</p>
-                    </div>
-                  ) : completedMeetings.length === 0 ? (
-                    <div className="col-span-3 text-center py-12">
-                      <span className="material-icons text-slate-600 text-4xl block mb-2">history</span>
-                      <p className="text-slate-500">{q ? 'No completed meetings match your search.' : 'No completed meetings yet.'}</p>
-                    </div>
-                  ) : (
-                    completedMeetings.map((meeting) => (
-                      <div key={meeting._id} className="group bg-white dark:bg-surface-dark border border-slate-200 dark:border-border-dark rounded-xl p-5 hover:shadow-lg transition-all">
-                        <div className="flex justify-between items-start mb-4">
-                          <div className="w-10 h-10 bg-slate-100 dark:bg-slate-800 rounded-lg flex items-center justify-center text-slate-500">
-                            <span className="material-icons">history</span>
-                          </div>
-                          <span className="px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-[10px] font-bold rounded uppercase">
-                            {meeting.endTime ? new Date(meeting.endTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'Ended'}
-                            {meeting.startTime && meeting.endTime ? ` · ${Math.round((new Date(meeting.endTime) - new Date(meeting.startTime)) / 60000)}m` : ''}
-                          </span>
-                        </div>
-                        <h4 className="font-bold text-base mb-1 text-start">{meeting.name}</h4>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
-                          Meeting ID: {meeting.meetingId}
-                        </p>
-                        <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-border-dark">
-                          <div className="flex items-center text-xs text-slate-500">
-                            <span className="material-icons text-sm mr-1">group</span>
-                            {meeting.participants?.length || 0} participant{(meeting.participants?.length || 0) !== 1 ? 's' : ''}
-                          </div>
-                          <button
-                            className="text-primary text-xs font-bold hover:underline flex items-center"
-                            type="button"
-                            onClick={() => navigate(`/meeting-notes/${meeting._id}`)}
-                          >
-                            View Notes <span className="material-icons text-sm ml-1">description</span>
-                          </button>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-                </>
-                );
-              })()}
+                      {activeTab === 'completed' && (() => {
+                        const q = searchQuery.replace(/\s+/g, ' ').trim().toLowerCase();
+                        const completedMeetings = endedMeetings.filter(m => !q || (m.name || '').toLowerCase().includes(q) || (m.meetingId || '').toLowerCase().includes(q));
+                        return (
+                          <>
+                            <div className="flex items-center justify-between mb-4">
+                              <p className="text-xs text-slate-500">{completedMeetings.length} completed meeting{completedMeetings.length !== 1 ? 's' : ''}</p>
+                              <button
+                                className="text-xs text-slate-400 hover:text-primary flex items-center gap-1 transition-colors"
+                                type="button"
+                                onClick={() => { setIsLoadingMeetings(true); doFetchMeetings().finally(() => setIsLoadingMeetings(false)); }}
+                              >
+                                <span className={`material-icons text-sm ${isLoadingMeetings ? 'animate-spin' : ''}`}>refresh</span>
+                                Refresh
+                              </button>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                              {isLoadingMeetings ? (
+                                <div className="col-span-3 text-center py-12">
+                                  <span className="material-icons animate-spin text-primary text-3xl">refresh</span>
+                                  <p className="text-slate-500 mt-2">Loading meetings...</p>
+                                </div>
+                              ) : completedMeetings.length === 0 ? (
+                                <div className="col-span-3 text-center py-12">
+                                  <span className="material-icons text-slate-600 text-4xl block mb-2">history</span>
+                                  <p className="text-slate-500">{q ? 'No completed meetings match your search.' : 'No completed meetings yet.'}</p>
+                                </div>
+                              ) : (
+                                completedMeetings.map((meeting) => (
+                                  <div key={meeting._id} className="group bg-white dark:bg-surface-dark border border-slate-200 dark:border-border-dark rounded-xl p-5 hover:shadow-lg transition-all">
+                                    <div className="flex justify-between items-start mb-4">
+                                      <div className="w-10 h-10 bg-slate-100 dark:bg-slate-800 rounded-lg flex items-center justify-center text-slate-500">
+                                        <span className="material-icons">history</span>
+                                      </div>
+                                      <span className="px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-[10px] font-bold rounded uppercase">
+                                        {meeting.endTime ? new Date(meeting.endTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'Ended'}
+                                        {meeting.startTime && meeting.endTime ? ` · ${Math.round((new Date(meeting.endTime) - new Date(meeting.startTime)) / 60000)}m` : ''}
+                                      </span>
+                                    </div>
+                                    <h4 className="font-bold text-base mb-1 text-start">{meeting.name}</h4>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
+                                      Meeting ID: {meeting.meetingId}
+                                    </p>
+                                    <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-border-dark">
+                                      <div className="flex items-center text-xs text-slate-500">
+                                        <span className="material-icons text-sm mr-1">group</span>
+                                        {meeting.participants?.length || 0} participant{(meeting.participants?.length || 0) !== 1 ? 's' : ''}
+                                      </div>
+                                      <button
+                                        className="text-primary text-xs font-bold hover:underline flex items-center"
+                                        type="button"
+                                        onClick={() => navigate(`/meeting-notes/${meeting._id}`)}
+                                      >
+                                        View Notes <span className="material-icons text-sm ml-1">description</span>
+                                      </button>
+                                    </div>
+                                  </div>
+                                ))
+                              )}
+                            </div>
+                          </>
+                        );
+                      })()}
 
-              <div className="mt-12">
-                <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-lg font-bold">Today's Schedule</h3>
-                  <button className="text-primary text-sm font-bold hover:underline" onClick={() => setActiveView('meetings')}>View All Meetings</button>
-                </div>
-                <div className="space-y-3">
-                  {[...activeMeetings, ...upcomingMeetings].length === 0 ? (
-                    <div className="text-center py-8">
-                      <p className="text-slate-500 text-sm">No meetings scheduled.</p>
-                    </div>
-                  ) : (
-                    [...activeMeetings, ...upcomingMeetings].slice(0, 3).map((meeting) => (
-                      <div key={meeting._id} className="flex items-center justify-between p-4 bg-[#111827] border border-[#1f2a3b] rounded-xl group hover:border-primary transition-all">
-                        <div className="flex items-center space-x-4">
-                          <div className={`w-12 h-12 ${meeting.status === 'live' ? 'bg-emerald-500/10' : 'bg-primary/10'} rounded-lg flex items-center justify-center ${meeting.status === 'live' ? 'text-emerald-400' : 'text-primary'}`}>
-                            <span className="material-icons text-xl">{meeting.status === 'live' ? 'videocam' : 'event'}</span>
-                          </div>
-                          <div>
-                            <h4 className="font-bold text-sm text-start">{meeting.name}</h4>
-                            <p className="text-xs text-slate-500 text-start">
-                              {meeting.status === 'live' ? 'Live Now' : meeting.startTime ? new Date(meeting.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Scheduled'} · {meeting.participants?.length || 0} participants
-                            </p>
-                          </div>
+                      <div className="mt-12">
+                        <div className="flex items-center justify-between mb-6">
+                          <h3 className="text-lg font-bold">Today's Schedule</h3>
+                          <button className="text-primary text-sm font-bold hover:underline" onClick={() => setActiveView('meetings')}>View All Meetings</button>
                         </div>
-                        <div className="flex items-center space-x-3">
-                          {meeting.status === 'live' ? (
-                            <button
-                              className="px-4 py-2 bg-primary text-white text-xs font-bold rounded-lg hover:bg-primary/90 transition-all"
-                              onClick={() => navigate(`/meeting/${meeting.meetingId}`, {
-                                state: {
-                                  meetingDbId: meeting._id,
-                                  meetingId: meeting.meetingId,
-                                  role: meeting.isHost ? 'host' : 'participant',
-                                  permission: meeting.isHost ? 'edit' : 'view',
-                                  status: meeting.status
-                                }
-                              })}
-                            >
-                              Join Now
-                            </button>
+                        <div className="space-y-3">
+                          {[...activeMeetings, ...upcomingMeetings].length === 0 ? (
+                            <div className="text-center py-8">
+                              <p className="text-slate-500 text-sm">No meetings scheduled.</p>
+                            </div>
                           ) : (
-                            <button className="px-4 py-2 border border-[#1f2a3b] text-slate-400 text-xs font-bold rounded-lg cursor-not-allowed">
-                              Upcoming
-                            </button>
+                            [...activeMeetings, ...upcomingMeetings].slice(0, 3).map((meeting) => (
+                              <div key={meeting._id} className="flex items-center justify-between p-4 bg-[#111827] border border-[#1f2a3b] rounded-xl group hover:border-primary transition-all">
+                                <div className="flex items-center space-x-4">
+                                  <div className={`w-12 h-12 ${meeting.status === 'live' ? 'bg-emerald-500/10' : 'bg-primary/10'} rounded-lg flex items-center justify-center ${meeting.status === 'live' ? 'text-emerald-400' : 'text-primary'}`}>
+                                    <span className="material-icons text-xl">{meeting.status === 'live' ? 'videocam' : 'event'}</span>
+                                  </div>
+                                  <div>
+                                    <h4 className="font-bold text-sm text-start">{meeting.name}</h4>
+                                    <p className="text-xs text-slate-500 text-start">
+                                      {meeting.status === 'live' ? 'Live Now' : meeting.startTime ? new Date(meeting.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Scheduled'} · {meeting.participants?.length || 0} participants
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="flex items-center space-x-3">
+                                  {meeting.status === 'live' ? (
+                                    <button
+                                      className="px-4 py-2 bg-primary text-white text-xs font-bold rounded-lg hover:bg-primary/90 transition-all"
+                                      onClick={() => navigate(`/meeting/${meeting.meetingId}`, {
+                                        state: {
+                                          meetingDbId: meeting._id,
+                                          meetingId: meeting.meetingId,
+                                          role: meeting.isHost ? 'host' : 'participant',
+                                          permission: meeting.isHost ? 'edit' : 'view',
+                                          status: meeting.status
+                                        }
+                                      })}
+                                    >
+                                      Join Now
+                                    </button>
+                                  ) : (
+                                    <button className="px-4 py-2 border border-[#1f2a3b] text-slate-400 text-xs font-bold rounded-lg cursor-not-allowed">
+                                      Upcoming
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            ))
                           )}
                         </div>
                       </div>
-                    ))
-                  )}
-                </div>
-              </div>
-                </section>
-                </>
+                    </section>
+                  </>
                 )}
               </>
             ) : activeView === 'meetings' ? (
@@ -1899,312 +1898,312 @@ export default function Dashboard() {
                   return null;
                 })()}
                 {!searchQuery.replace(/\s+/g, ' ').trim() && (
-                <>
-                {/* Active Meetings — categorized by backend */}
-                {(() => {
-                  const formatDate = (dt) => {
-                    if (!dt) return 'TBD';
-                    return new Date(dt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-                  };
-                  const formatTime = (dt) => {
-                    if (!dt) return '';
-                    return new Date(dt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                  };
-                  return (
-                    <>
-                    <section className="mb-10">
-                      <div className="flex items-center mb-4">
-                        <div className="w-2 h-2 rounded-full bg-emerald-500 mr-3"></div>
-                        <h3 className="text-sm font-bold uppercase tracking-widest text-slate-500">Active ({activeMeetings.length})</h3>
-                      </div>
-                      <div className="space-y-3">
-                        {isLoadingMeetings ? (
-                          <div className="text-center py-10">
-                            <span className="material-icons animate-spin text-primary text-3xl">refresh</span>
-                            <p className="text-slate-500 mt-2 text-sm">Loading meetings...</p>
-                          </div>
-                        ) : activeMeetings.length === 0 ? (
-                          <div className="text-center py-10">
-                            <span className="material-icons text-slate-600 text-4xl block mb-2">event_busy</span>
-                            <p className="text-slate-400 font-medium">No active meetings right now</p>
-                            <p className="text-slate-500 text-xs mt-1">Meetings starting within 5 minutes will appear here</p>
-                          </div>
-                        ) : (
-                          activeMeetings.map((meeting) => {
-                            const isMeetingStarted = meeting.status === 'live';
-                            return (
-                            <div key={meeting._id} className="py-5 px-4 bg-[#1a242f] border-l-4 border-emerald-500 rounded-xl border border-[#2d3a4b]">
-                              <div className="flex items-center justify-between gap-3">
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-2 mb-1">
-                                    <h4 className="text-sm font-bold truncate">{meeting.name}</h4>
-                                    <span className={`inline-flex items-center shrink-0 px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider ${isMeetingStarted ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'}`}>
-                                      <span className="relative flex h-1.5 w-1.5 mr-1">
-                                        <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${isMeetingStarted ? 'bg-emerald-400' : 'bg-amber-400'}`}></span>
-                                        <span className={`relative inline-flex rounded-full h-1.5 w-1.5 ${isMeetingStarted ? 'bg-emerald-500' : 'bg-amber-500'}`}></span>
-                                      </span>
-                                      {isMeetingStarted ? 'Meeting Started' : 'Starting Soon'}
-                                    </span>
-                                  </div>
-                                  <div className="flex items-center text-slate-500 text-[11px] gap-3">
-                                    <span className="flex items-center gap-1">
-                                      <span className="material-symbols-outlined text-[11px]">calendar_today</span>
-                                      {formatDate(meeting.startTime)}
-                                    </span>
-                                    <span className="flex items-center gap-1">
-                                      <span className="material-symbols-outlined text-[11px]">schedule</span>
-                                      {formatTime(meeting.startTime) || 'In Progress'}
-                                    </span>
-                                  </div>
-                                </div>
-                                <div className="flex items-center gap-2 shrink-0">
-                                  {activeJoinMeetingId === meeting._id ? (
-                                    <div className="flex items-center gap-3 bg-[#0d1526] border border-slate-600/40 rounded-xl px-4 py-2.5 shadow-lg shadow-black/20">
-                                      <button
-                                        onClick={() => setActiveJoinAudio((prev) => !prev)}
-                                        className={`flex h-8 w-8 items-center justify-center rounded-full transition-all ${activeJoinAudio ? 'bg-emerald-500/20 text-emerald-400 ring-1 ring-emerald-400/40' : 'bg-rose-500/20 text-rose-400 ring-1 ring-rose-400/40'}`}
-                                        type="button"
-                                        title={activeJoinAudio ? 'Disable Audio' : 'Enable Audio'}
-                                      >
-                                        <span className="material-icons text-[15px]">{activeJoinAudio ? 'mic' : 'mic_off'}</span>
-                                      </button>
-                                      <button
-                                        onClick={() => setActiveJoinVideo((prev) => !prev)}
-                                        className={`flex h-8 w-8 items-center justify-center rounded-full transition-all ${activeJoinVideo ? 'bg-emerald-500/20 text-emerald-400 ring-1 ring-emerald-400/40' : 'bg-rose-500/20 text-rose-400 ring-1 ring-rose-400/40'}`}
-                                        type="button"
-                                        title={activeJoinVideo ? 'Disable Video' : 'Enable Video'}
-                                      >
-                                        <span className="material-icons text-[15px]">{activeJoinVideo ? 'videocam' : 'videocam_off'}</span>
-                                      </button>
-                                      <div className="w-px h-6 bg-slate-600/50"></div>
-                                      <button
-                                        className="h-8 px-4 bg-emerald-600 text-white text-[11px] font-bold rounded-lg hover:bg-emerald-500 transition-all inline-flex items-center justify-center gap-1.5"
-                                        type="button"
-                                        onClick={async () => {
-                                          try {
-                                            if (meeting.isHost && meeting.status === 'pending') {
-                                              await meetingAPI.start(meeting._id);
-                                            }
-                                            // Non-host: re-register via join API (handles rejoin after leave, resets leaveTime)
-                                            let joinData = null;
-                                            if (!meeting.isHost && meeting.shareLink) {
-                                              const linkToken = meeting.shareLink.split('/join-link/')[1];
-                                              if (linkToken) {
-                                                joinData = await meetingAPI.joinByLink(linkToken);
-                                              }
-                                            }
-                                            setActiveJoinMeetingId(null);
-                                            const label = meeting.isHost ? 'Starting meeting...' : 'Joining meeting...';
-                                            startMeetingTransition(label, () =>
-                                              navigate(`/meeting/${meeting.meetingId}`, {
-                                                state: {
-                                                  meetingDbId: meeting._id,
-                                                  meetingId: meeting.meetingId,
-                                                  meetingPassword: meeting.password || '',
-                                                  role: meeting.isHost ? 'host' : (joinData?.role || 'participant'),
-                                                  permission: meeting.isHost ? 'edit' : (joinData?.permission || 'view'),
-                                                  status: 'live',
-                                                  audioEnabled: activeJoinAudio,
-                                                  videoEnabled: activeJoinVideo,
-                                                }
-                                              })
-                                            );
-                                          } catch (err) {
-                                            console.error('Failed to start/join meeting:', err);
-                                            const msg = err?.response?.data?.message || 'Failed to join meeting';
-                                            setActiveJoinMeetingId(null);
-                                            showFlash('error', msg);
-                                          }
-                                        }}
-                                      >
-                                        <span className="material-icons text-sm">play_arrow</span>
-                                        Start
-                                      </button>
-                                      <button
-                                        className="h-8 px-3 bg-slate-700 text-slate-300 text-[11px] font-bold rounded-lg hover:bg-slate-600 transition-all inline-flex items-center justify-center gap-1"
-                                        type="button"
-                                        onClick={() => setActiveJoinMeetingId(null)}
-                                      >
-                                        <span className="material-icons text-sm">arrow_back</span>
-                                        Back
-                                      </button>
-                                    </div>
-                                  ) : (
-                                    <>
-                                      <button
-                                        className="h-8 px-3 bg-emerald-600 text-white text-[11px] font-bold rounded-lg hover:bg-emerald-500 transition-all inline-flex items-center justify-center gap-1"
-                                        type="button"
-                                        onClick={() => {
-                                          setActiveJoinAudio(true);
-                                          setActiveJoinVideo(true);
-                                          setActiveJoinMeetingId(meeting._id);
-                                        }}
-                                      >
-                                        <span className="material-icons text-xs">play_arrow</span>
-                                        {meeting.isHost ? 'Start Meeting' : 'Join Meeting'}
-                                      </button>
-                                      <button
-                                        className="h-8 px-2.5 bg-slate-700/80 text-slate-300 text-[11px] font-bold rounded-lg hover:bg-indigo-600 hover:text-white transition-all inline-flex items-center justify-center gap-1"
-                                        type="button"
-                                        onClick={() => setInviteMeeting(meeting)}
-                                      >
-                                        <span className="material-icons text-xs">person_add</span>
-                                        Invite
-                                      </button>
-                                      {meeting.isHost && (
-                                        <button
-                                          className="h-8 px-2.5 bg-slate-700/80 text-slate-300 text-[11px] font-bold rounded-lg hover:bg-rose-600 hover:text-white transition-all inline-flex items-center justify-center gap-1"
-                                          type="button"
-                                          onClick={() => setCancelConfirmMeetingId(meeting._id)}
-                                        >
-                                          <span className="material-icons text-xs">close</span>
-                                          Cancel
-                                        </button>
-                                      )}
-                                    </>
-                                  )}
-                                </div>
-                              </div>
+                  <>
+                    {/* Active Meetings — categorized by backend */}
+                    {(() => {
+                      const formatDate = (dt) => {
+                        if (!dt) return 'TBD';
+                        return new Date(dt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                      };
+                      const formatTime = (dt) => {
+                        if (!dt) return '';
+                        return new Date(dt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                      };
+                      return (
+                        <>
+                          <section className="mb-10">
+                            <div className="flex items-center mb-4">
+                              <div className="w-2 h-2 rounded-full bg-emerald-500 mr-3"></div>
+                              <h3 className="text-sm font-bold uppercase tracking-widest text-slate-500">Active ({activeMeetings.length})</h3>
                             </div>
-                            );
-                          })
-                        )}
-                      </div>
-                    </section>
+                            <div className="space-y-3">
+                              {isLoadingMeetings ? (
+                                <div className="text-center py-10">
+                                  <span className="material-icons animate-spin text-primary text-3xl">refresh</span>
+                                  <p className="text-slate-500 mt-2 text-sm">Loading meetings...</p>
+                                </div>
+                              ) : activeMeetings.length === 0 ? (
+                                <div className="text-center py-10">
+                                  <span className="material-icons text-slate-600 text-4xl block mb-2">event_busy</span>
+                                  <p className="text-slate-400 font-medium">No active meetings right now</p>
+                                  <p className="text-slate-500 text-xs mt-1">Meetings starting within 5 minutes will appear here</p>
+                                </div>
+                              ) : (
+                                activeMeetings.map((meeting) => {
+                                  const isMeetingStarted = meeting.status === 'live';
+                                  return (
+                                    <div key={meeting._id} className="py-5 px-4 bg-[#1a242f] border-l-4 border-emerald-500 rounded-xl border border-[#2d3a4b]">
+                                      <div className="flex items-center justify-between gap-3">
+                                        <div className="flex-1 min-w-0">
+                                          <div className="flex items-center gap-2 mb-1">
+                                            <h4 className="text-sm font-bold truncate">{meeting.name}</h4>
+                                            <span className={`inline-flex items-center shrink-0 px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider ${isMeetingStarted ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'}`}>
+                                              <span className="relative flex h-1.5 w-1.5 mr-1">
+                                                <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${isMeetingStarted ? 'bg-emerald-400' : 'bg-amber-400'}`}></span>
+                                                <span className={`relative inline-flex rounded-full h-1.5 w-1.5 ${isMeetingStarted ? 'bg-emerald-500' : 'bg-amber-500'}`}></span>
+                                              </span>
+                                              {isMeetingStarted ? 'Meeting Started' : 'Starting Soon'}
+                                            </span>
+                                          </div>
+                                          <div className="flex items-center text-slate-500 text-[11px] gap-3">
+                                            <span className="flex items-center gap-1">
+                                              <span className="material-symbols-outlined text-[11px]">calendar_today</span>
+                                              {formatDate(meeting.startTime)}
+                                            </span>
+                                            <span className="flex items-center gap-1">
+                                              <span className="material-symbols-outlined text-[11px]">schedule</span>
+                                              {formatTime(meeting.startTime) || 'In Progress'}
+                                            </span>
+                                          </div>
+                                        </div>
+                                        <div className="flex items-center gap-2 shrink-0">
+                                          {activeJoinMeetingId === meeting._id ? (
+                                            <div className="flex items-center gap-3 bg-[#0d1526] border border-slate-600/40 rounded-xl px-4 py-2.5 shadow-lg shadow-black/20">
+                                              <button
+                                                onClick={() => setActiveJoinAudio((prev) => !prev)}
+                                                className={`flex h-8 w-8 items-center justify-center rounded-full transition-all ${activeJoinAudio ? 'bg-emerald-500/20 text-emerald-400 ring-1 ring-emerald-400/40' : 'bg-rose-500/20 text-rose-400 ring-1 ring-rose-400/40'}`}
+                                                type="button"
+                                                title={activeJoinAudio ? 'Disable Audio' : 'Enable Audio'}
+                                              >
+                                                <span className="material-icons text-[15px]">{activeJoinAudio ? 'mic' : 'mic_off'}</span>
+                                              </button>
+                                              <button
+                                                onClick={() => setActiveJoinVideo((prev) => !prev)}
+                                                className={`flex h-8 w-8 items-center justify-center rounded-full transition-all ${activeJoinVideo ? 'bg-emerald-500/20 text-emerald-400 ring-1 ring-emerald-400/40' : 'bg-rose-500/20 text-rose-400 ring-1 ring-rose-400/40'}`}
+                                                type="button"
+                                                title={activeJoinVideo ? 'Disable Video' : 'Enable Video'}
+                                              >
+                                                <span className="material-icons text-[15px]">{activeJoinVideo ? 'videocam' : 'videocam_off'}</span>
+                                              </button>
+                                              <div className="w-px h-6 bg-slate-600/50"></div>
+                                              <button
+                                                className="h-8 px-4 bg-emerald-600 text-white text-[11px] font-bold rounded-lg hover:bg-emerald-500 transition-all inline-flex items-center justify-center gap-1.5"
+                                                type="button"
+                                                onClick={async () => {
+                                                  try {
+                                                    if (meeting.isHost && meeting.status === 'pending') {
+                                                      await meetingAPI.start(meeting._id);
+                                                    }
+                                                    // Non-host: re-register via join API (handles rejoin after leave, resets leaveTime)
+                                                    let joinData = null;
+                                                    if (!meeting.isHost && meeting.shareLink) {
+                                                      const linkToken = meeting.shareLink.split('/join-link/')[1];
+                                                      if (linkToken) {
+                                                        joinData = await meetingAPI.joinByLink(linkToken);
+                                                      }
+                                                    }
+                                                    setActiveJoinMeetingId(null);
+                                                    const label = meeting.isHost ? 'Starting meeting...' : 'Joining meeting...';
+                                                    startMeetingTransition(label, () =>
+                                                      navigate(`/meeting/${meeting.meetingId}`, {
+                                                        state: {
+                                                          meetingDbId: meeting._id,
+                                                          meetingId: meeting.meetingId,
+                                                          meetingPassword: meeting.password || '',
+                                                          role: meeting.isHost ? 'host' : (joinData?.role || 'participant'),
+                                                          permission: meeting.isHost ? 'edit' : (joinData?.permission || 'view'),
+                                                          status: 'live',
+                                                          audioEnabled: activeJoinAudio,
+                                                          videoEnabled: activeJoinVideo,
+                                                        }
+                                                      })
+                                                    );
+                                                  } catch (err) {
+                                                    console.error('Failed to start/join meeting:', err);
+                                                    const msg = err?.response?.data?.message || 'Failed to join meeting';
+                                                    setActiveJoinMeetingId(null);
+                                                    showFlash('error', msg);
+                                                  }
+                                                }}
+                                              >
+                                                <span className="material-icons text-sm">play_arrow</span>
+                                                Start
+                                              </button>
+                                              <button
+                                                className="h-8 px-3 bg-slate-700 text-slate-300 text-[11px] font-bold rounded-lg hover:bg-slate-600 transition-all inline-flex items-center justify-center gap-1"
+                                                type="button"
+                                                onClick={() => setActiveJoinMeetingId(null)}
+                                              >
+                                                <span className="material-icons text-sm">arrow_back</span>
+                                                Back
+                                              </button>
+                                            </div>
+                                          ) : (
+                                            <>
+                                              <button
+                                                className="h-8 px-3 bg-emerald-600 text-white text-[11px] font-bold rounded-lg hover:bg-emerald-500 transition-all inline-flex items-center justify-center gap-1"
+                                                type="button"
+                                                onClick={() => {
+                                                  setActiveJoinAudio(true);
+                                                  setActiveJoinVideo(true);
+                                                  setActiveJoinMeetingId(meeting._id);
+                                                }}
+                                              >
+                                                <span className="material-icons text-xs">play_arrow</span>
+                                                {meeting.isHost ? 'Start Meeting' : 'Join Meeting'}
+                                              </button>
+                                              <button
+                                                className="h-8 px-2.5 bg-slate-700/80 text-slate-300 text-[11px] font-bold rounded-lg hover:bg-indigo-600 hover:text-white transition-all inline-flex items-center justify-center gap-1"
+                                                type="button"
+                                                onClick={() => setInviteMeeting(meeting)}
+                                              >
+                                                <span className="material-icons text-xs">person_add</span>
+                                                Invite
+                                              </button>
+                                              {meeting.isHost && (
+                                                <button
+                                                  className="h-8 px-2.5 bg-slate-700/80 text-slate-300 text-[11px] font-bold rounded-lg hover:bg-rose-600 hover:text-white transition-all inline-flex items-center justify-center gap-1"
+                                                  type="button"
+                                                  onClick={() => setCancelConfirmMeetingId(meeting._id)}
+                                                >
+                                                  <span className="material-icons text-xs">close</span>
+                                                  Cancel
+                                                </button>
+                                              )}
+                                            </>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                })
+                              )}
+                            </div>
+                          </section>
 
-                    {/* Upcoming Meetings — more than 5 minutes away */}
-                    <section className="mb-10">
-                      <div className="flex items-center mb-4">
-                        <div className="w-2 h-2 rounded-full bg-primary mr-3"></div>
-                        <h3 className="text-sm font-bold uppercase tracking-widest text-slate-500">Upcoming ({upcomingMeetings.length})</h3>
+                          {/* Upcoming Meetings — more than 5 minutes away */}
+                          <section className="mb-10">
+                            <div className="flex items-center mb-4">
+                              <div className="w-2 h-2 rounded-full bg-primary mr-3"></div>
+                              <h3 className="text-sm font-bold uppercase tracking-widest text-slate-500">Upcoming ({upcomingMeetings.length})</h3>
+                            </div>
+                            <div className="space-y-3">
+                              {upcomingMeetings.length === 0 ? (
+                                <div className="text-center py-10">
+                                  <span className="material-icons text-slate-600 text-4xl block mb-2">calendar_today</span>
+                                  <p className="text-slate-400 font-medium">No upcoming meetings</p>
+                                  <p className="text-slate-500 text-xs mt-1">Schedule a meeting to see it here</p>
+                                </div>
+                              ) : (
+                                upcomingMeetings.map((meeting) => (
+                                  <div key={meeting._id} className="py-5 px-4 bg-[#1a242f] border-l-4 border-primary rounded-xl border border-[#2d3a4b] hover:border-slate-600 transition-all">
+                                    <div className="flex items-center justify-between gap-3">
+                                      <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2 mb-1">
+                                          <h4 className="text-sm font-bold truncate">{meeting.name}</h4>
+                                          <span className="inline-flex items-center shrink-0 px-1.5 py-0.5 rounded-full text-[9px] font-bold text-primary uppercase tracking-wider bg-primary/10">Scheduled</span>
+                                        </div>
+                                        <div className="flex items-center text-slate-500 text-[11px] gap-3">
+                                          <span className="flex items-center gap-1">
+                                            <span className="material-symbols-outlined text-[11px]">calendar_today</span>
+                                            {formatDate(meeting.startTime)}
+                                          </span>
+                                          <span className="flex items-center gap-1">
+                                            <span className="material-symbols-outlined text-[11px]">schedule</span>
+                                            {formatTime(meeting.startTime) || 'TBD'}
+                                          </span>
+                                        </div>
+                                      </div>
+                                      <div className="flex items-center gap-2 shrink-0">
+                                        <button
+                                          className="h-8 px-2.5 bg-slate-700/80 text-slate-300 text-[11px] font-bold rounded-lg hover:bg-indigo-600 hover:text-white transition-all inline-flex items-center justify-center gap-1"
+                                          type="button"
+                                          onClick={() => setInviteMeeting(meeting)}
+                                        >
+                                          <span className="material-icons text-xs">person_add</span>
+                                          Invite
+                                        </button>
+                                        {meeting.isHost && (
+                                          <button
+                                            className="h-8 px-2.5 bg-slate-700/80 text-slate-300 text-[11px] font-bold rounded-lg hover:bg-rose-600 hover:text-white transition-all inline-flex items-center justify-center gap-1"
+                                            type="button"
+                                            onClick={() => setCancelConfirmMeetingId(meeting._id)}
+                                          >
+                                            <span className="material-icons text-xs">close</span>
+                                            Cancel
+                                          </button>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))
+                              )}
+                            </div>
+                          </section>
+                        </>
+                      );
+                    })()}
+
+                    {/* Completed Meetings */}
+                    <section>
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center">
+                          <div className="w-2 h-2 rounded-full bg-slate-600 mr-3"></div>
+                          <h3 className="text-sm font-bold uppercase tracking-widest text-slate-500">Completed ({endedMeetings.length})</h3>
+                        </div>
+                        <button
+                          className="text-xs text-slate-400 hover:text-primary flex items-center gap-1 transition-colors"
+                          type="button"
+                          onClick={() => { setIsLoadingMeetings(true); doFetchMeetings().finally(() => setIsLoadingMeetings(false)); }}
+                        >
+                          <span className={`material-icons text-sm ${isLoadingMeetings ? 'animate-spin' : ''}`}>refresh</span>
+                          Refresh
+                        </button>
                       </div>
                       <div className="space-y-3">
-                        {upcomingMeetings.length === 0 ? (
-                          <div className="text-center py-10">
-                            <span className="material-icons text-slate-600 text-4xl block mb-2">calendar_today</span>
-                            <p className="text-slate-400 font-medium">No upcoming meetings</p>
-                            <p className="text-slate-500 text-xs mt-1">Schedule a meeting to see it here</p>
+                        {endedMeetings.length === 0 ? (
+                          <div className="text-center py-8">
+                            <p className="text-slate-500 text-sm">No completed meetings yet.</p>
                           </div>
                         ) : (
-                          upcomingMeetings.map((meeting) => (
-                            <div key={meeting._id} className="py-5 px-4 bg-[#1a242f] border-l-4 border-primary rounded-xl border border-[#2d3a4b] hover:border-slate-600 transition-all">
+                          endedMeetings.map((meeting) => (
+                            <div key={meeting._id} className="py-5 px-4 bg-[#1a242f] border-l-4 border-slate-600 rounded-xl border border-[#2d3a4b] hover:border-slate-600 transition-all">
                               <div className="flex items-center justify-between gap-3">
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-2 mb-1">
                                     <h4 className="text-sm font-bold truncate">{meeting.name}</h4>
-                                    <span className="inline-flex items-center shrink-0 px-1.5 py-0.5 rounded-full text-[9px] font-bold text-primary uppercase tracking-wider bg-primary/10">Scheduled</span>
+                                    <span className="inline-flex items-center shrink-0 px-1.5 py-0.5 rounded-full text-[9px] font-bold text-slate-400 uppercase tracking-wider bg-slate-700/50">Ended</span>
                                   </div>
                                   <div className="flex items-center text-slate-500 text-[11px] gap-3">
                                     <span className="flex items-center gap-1">
                                       <span className="material-symbols-outlined text-[11px]">calendar_today</span>
-                                      {formatDate(meeting.startTime)}
+                                      {meeting.endTime ? new Date(meeting.endTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'Ended'}
                                     </span>
                                     <span className="flex items-center gap-1">
                                       <span className="material-symbols-outlined text-[11px]">schedule</span>
-                                      {formatTime(meeting.startTime) || 'TBD'}
+                                      {meeting.endTime ? new Date(meeting.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}
+                                    </span>
+                                    <span className="flex items-center gap-1">
+                                      <span className="material-symbols-outlined text-[11px]">tag</span>
+                                      {meeting.meetingId}
+                                    </span>
+                                    <span className="flex items-center gap-1">
+                                      <span className="material-icons text-[11px]">group</span>
+                                      {meeting.participants?.length || 0}
+                                    </span>
+                                    <span className="flex items-center gap-1">
+                                      <span className="material-symbols-outlined text-[11px]">timer</span>
+                                      {meeting.startTime && meeting.endTime
+                                        ? `${Math.round((new Date(meeting.endTime) - new Date(meeting.startTime)) / 60000)}m`
+                                        : 'N/A'}
                                     </span>
                                   </div>
                                 </div>
-                                <div className="flex items-center gap-2 shrink-0">
-                                  <button
-                                    className="h-8 px-2.5 bg-slate-700/80 text-slate-300 text-[11px] font-bold rounded-lg hover:bg-indigo-600 hover:text-white transition-all inline-flex items-center justify-center gap-1"
-                                    type="button"
-                                    onClick={() => setInviteMeeting(meeting)}
-                                  >
-                                    <span className="material-icons text-xs">person_add</span>
-                                    Invite
-                                  </button>
-                                  {meeting.isHost && (
-                                    <button
-                                      className="h-8 px-2.5 bg-slate-700/80 text-slate-300 text-[11px] font-bold rounded-lg hover:bg-rose-600 hover:text-white transition-all inline-flex items-center justify-center gap-1"
-                                      type="button"
-                                      onClick={() => setCancelConfirmMeetingId(meeting._id)}
-                                    >
-                                      <span className="material-icons text-xs">close</span>
-                                      Cancel
-                                    </button>
-                                  )}
-                                </div>
+                                <button
+                                  className="px-3 py-1.5 text-primary text-[11px] font-bold rounded-lg border border-primary/30 hover:bg-primary/10 transition-all flex items-center gap-1 shrink-0"
+                                  type="button"
+                                  onClick={() => navigate(`/meeting-notes/${meeting._id}`)}
+                                >
+                                  <span className="material-symbols-outlined text-xs">description</span>
+                                  View Notes
+                                </button>
                               </div>
                             </div>
                           ))
                         )}
                       </div>
                     </section>
-                    </>
-                  );
-                })()}
-
-                {/* Completed Meetings */}
-                <section>
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center">
-                      <div className="w-2 h-2 rounded-full bg-slate-600 mr-3"></div>
-                      <h3 className="text-sm font-bold uppercase tracking-widest text-slate-500">Completed ({endedMeetings.length})</h3>
-                    </div>
-                    <button
-                      className="text-xs text-slate-400 hover:text-primary flex items-center gap-1 transition-colors"
-                      type="button"
-                      onClick={() => { setIsLoadingMeetings(true); doFetchMeetings().finally(() => setIsLoadingMeetings(false)); }}
-                    >
-                      <span className={`material-icons text-sm ${isLoadingMeetings ? 'animate-spin' : ''}`}>refresh</span>
-                      Refresh
-                    </button>
-                  </div>
-                  <div className="space-y-3">
-                    {endedMeetings.length === 0 ? (
-                      <div className="text-center py-8">
-                        <p className="text-slate-500 text-sm">No completed meetings yet.</p>
-                      </div>
-                    ) : (
-                      endedMeetings.map((meeting) => (
-                        <div key={meeting._id} className="py-5 px-4 bg-[#1a242f] border-l-4 border-slate-600 rounded-xl border border-[#2d3a4b] hover:border-slate-600 transition-all">
-                          <div className="flex items-center justify-between gap-3">
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 mb-1">
-                                <h4 className="text-sm font-bold truncate">{meeting.name}</h4>
-                                <span className="inline-flex items-center shrink-0 px-1.5 py-0.5 rounded-full text-[9px] font-bold text-slate-400 uppercase tracking-wider bg-slate-700/50">Ended</span>
-                              </div>
-                              <div className="flex items-center text-slate-500 text-[11px] gap-3">
-                                <span className="flex items-center gap-1">
-                                  <span className="material-symbols-outlined text-[11px]">calendar_today</span>
-                                  {meeting.endTime ? new Date(meeting.endTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'Ended'}
-                                </span>
-                                <span className="flex items-center gap-1">
-                                  <span className="material-symbols-outlined text-[11px]">schedule</span>
-                                  {meeting.endTime ? new Date(meeting.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}
-                                </span>
-                                <span className="flex items-center gap-1">
-                                  <span className="material-symbols-outlined text-[11px]">tag</span>
-                                  {meeting.meetingId}
-                                </span>
-                                <span className="flex items-center gap-1">
-                                  <span className="material-icons text-[11px]">group</span>
-                                  {meeting.participants?.length || 0}
-                                </span>
-                                <span className="flex items-center gap-1">
-                                  <span className="material-symbols-outlined text-[11px]">timer</span>
-                                  {meeting.startTime && meeting.endTime
-                                    ? `${Math.round((new Date(meeting.endTime) - new Date(meeting.startTime)) / 60000)}m`
-                                    : 'N/A'}
-                                </span>
-                              </div>
-                            </div>
-                            <button
-                              className="px-3 py-1.5 text-primary text-[11px] font-bold rounded-lg border border-primary/30 hover:bg-primary/10 transition-all flex items-center gap-1 shrink-0"
-                              type="button"
-                              onClick={() => navigate(`/meeting-notes/${meeting._id}`)}
-                            >
-                              <span className="material-symbols-outlined text-xs">description</span>
-                              View Notes
-                            </button>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </section>
-                </>
+                  </>
                 )}
               </>
             ) : activeView === 'notifications' ? (
@@ -2236,11 +2235,10 @@ export default function Dashboard() {
                       notifications.map((n) => (
                         <div
                           key={n._id}
-                          className={`group flex items-center p-5 bg-[#1a242f] border rounded-xl transition-all relative overflow-hidden ${
-                            n.read
-                              ? 'border-[#2d3a4b] opacity-70 hover:opacity-100'
-                              : 'border-primary/50 hover:border-primary'
-                          }`}
+                          className={`group flex items-center p-5 bg-[#1a242f] border rounded-xl transition-all relative overflow-hidden ${n.read
+                            ? 'border-[#2d3a4b] opacity-70 hover:opacity-100'
+                            : 'border-primary/50 hover:border-primary'
+                            }`}
                         >
                           {!n.read && <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary"></div>}
                           <div className="flex-shrink-0 w-12 h-12 bg-amber-500/10 rounded-full flex items-center justify-center mr-4">
@@ -2318,20 +2316,20 @@ export default function Dashboard() {
                         const label = ACTIVITY_LABELS[log.action] || log.action;
                         const isLast = idx === activityLogs.length - 1;
                         return (
-                            <div key={log._id || idx} className={`activity-item relative flex items-center py-4 ${isLast ? '' : 'activity-line'}`}>
-                              <div className={`z-10 w-11 h-11 flex-shrink-0 ${config.bg} border ${config.border} rounded-xl flex items-center justify-center mr-4`}>
-                                <span className={`material-symbols-outlined text-2xl ${config.color}`}>{config.icon}</span>
-                              </div>
-                              <div className="min-w-0">
-                                <div className="flex flex-col items-start">
-                                  <span className="text-[15px] font-semibold text-slate-100 truncate block">{label}</span>
-                                  <span className="text-xs text-slate-500 mt-0.5">{timeAgo(log.timestamp)}</span>
-                                </div>
-                              </div>
-                              <div className="ml-auto flex-shrink-0 pl-4">
-                                <span className="text-sm text-slate-500">{formatTimestamp(log.timestamp)}</span>
+                          <div key={log._id || idx} className={`activity-item relative flex items-center py-4 ${isLast ? '' : 'activity-line'}`}>
+                            <div className={`z-10 w-11 h-11 flex-shrink-0 ${config.bg} border ${config.border} rounded-xl flex items-center justify-center mr-4`}>
+                              <span className={`material-symbols-outlined text-2xl ${config.color}`}>{config.icon}</span>
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex flex-col items-start">
+                                <span className="text-[15px] font-semibold text-slate-100 truncate block">{label}</span>
+                                <span className="text-xs text-slate-500 mt-0.5">{timeAgo(log.timestamp)}</span>
                               </div>
                             </div>
+                            <div className="ml-auto flex-shrink-0 pl-4">
+                              <span className="text-sm text-slate-500">{formatTimestamp(log.timestamp)}</span>
+                            </div>
+                          </div>
                         );
                       })}
                     </div>
@@ -2350,33 +2348,30 @@ export default function Dashboard() {
 
                   <div className="flex items-center space-x-3 p-1 bg-[#1a242f] border border-[#2d3a4b] rounded-xl mb-8">
                     <button
-                      className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${
-                        settingsTab === 'profile'
-                          ? 'bg-primary text-white'
-                          : 'text-slate-400 hover:text-white hover:bg-[#101922]'
-                      }`}
+                      className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${settingsTab === 'profile'
+                        ? 'bg-primary text-white'
+                        : 'text-slate-400 hover:text-white hover:bg-[#101922]'
+                        }`}
                       onClick={() => setSettingsTab('profile')}
                       type="button"
                     >
                       Profile Details
                     </button>
                     <button
-                      className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${
-                        settingsTab === 'password'
-                          ? 'bg-primary text-white'
-                          : 'text-slate-400 hover:text-white hover:bg-[#101922]'
-                      }`}
+                      className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${settingsTab === 'password'
+                        ? 'bg-primary text-white'
+                        : 'text-slate-400 hover:text-white hover:bg-[#101922]'
+                        }`}
                       onClick={() => setSettingsTab('password')}
                       type="button"
                     >
                       Password
                     </button>
                     <button
-                      className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${
-                        settingsTab === 'account'
-                          ? 'bg-primary text-white'
-                          : 'text-slate-400 hover:text-white hover:bg-[#101922]'
-                      }`}
+                      className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${settingsTab === 'account'
+                        ? 'bg-primary text-white'
+                        : 'text-slate-400 hover:text-white hover:bg-[#101922]'
+                        }`}
                       onClick={() => setSettingsTab('account')}
                       type="button"
                     >
@@ -2492,8 +2487,8 @@ export default function Dashboard() {
                           <p className="text-sm font-semibold  text-rose-400 text-start mb-1">Delete account</p>
                           <p className="text-xs text-rose-300 ">This action is permanent and cannot be undone.</p>
                         </div>
-                        <button 
-                          className="px-5 py-2 bg-rose-500 text-white text-xs font-bold rounded-lg hover:brightness-110 transition-all" 
+                        <button
+                          className="px-5 py-2 bg-rose-500 text-white text-xs font-bold rounded-lg hover:brightness-110 transition-all"
                           type="button"
                           onClick={() => setShowDeleteModal(true)}
                         >
@@ -2564,503 +2559,492 @@ export default function Dashboard() {
                   return null;
                 })()}
                 {!searchQuery.replace(/\s+/g, ' ').trim() && (
-                <>
-                {activeFolder ? (
                   <>
-                    <div className="flex items-end justify-between mb-8">
-                      <div>
-                        <div className="flex items-center space-x-2 mb-2">
-                          <div className="w-10 h-10 bg-blue-500/10 text-blue-500 rounded-lg flex items-center justify-center">
-                            <span className="material-symbols-outlined">folder_open</span>
+                    {activeFolder ? (
+                      <>
+                        <div className="flex items-end justify-between mb-8">
+                          <div>
+                            <div className="flex items-center space-x-2 mb-2">
+                              <div className="w-10 h-10 bg-blue-500/10 text-blue-500 rounded-lg flex items-center justify-center">
+                                <span className="material-symbols-outlined">folder_open</span>
+                              </div>
+                              <h1 className="text-3xl font-extrabold tracking-tight text-white">{activeFolder.name}</h1>
+                            </div>
+                            <p className="text-slate-400 mt-1">{activeFolder.description}</p>
                           </div>
-                          <h1 className="text-3xl font-extrabold tracking-tight text-white">{activeFolder.name}</h1>
+                          <div className="flex items-center space-x-2"></div>
                         </div>
-                        <p className="text-slate-400 mt-1">{activeFolder.description}</p>
-                      </div>
-                      <div className="flex items-center space-x-2"></div>
-                    </div>
 
-                    <section className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                      <div className="flex items-center space-x-1 p-1 bg-[#1a242f] border border-[#2d3a4b] rounded-xl">
-                        <button
-                          className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${
-                            canvasFilter === 'all'
-                              ? 'bg-primary text-white'
-                              : 'text-slate-400 hover:text-white hover:bg-[#101922]'
-                          }`}
-                          onClick={() => setCanvasFilter('all')}
-                          type="button"
-                        >
-                          All
-                        </button>
-                        <button
-                          className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${
-                            canvasFilter === 'recent'
-                              ? 'bg-primary text-white'
-                              : 'text-slate-400 hover:text-white hover:bg-[#101922]'
-                          }`}
-                          onClick={() => setCanvasFilter('recent')}
-                          type="button"
-                        >
-                          Recent
-                        </button>
-                        <button
-                          className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${
-                            canvasFilter === 'meeting'
-                              ? 'bg-amber-500 text-white'
-                              : 'text-slate-400 hover:text-white hover:bg-[#101922]'
-                          }`}
-                          onClick={() => setCanvasFilter('meeting')}
-                          type="button"
-                        >
-                          Meeting
-                        </button>
-                        <button
-                          className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${
-                            canvasFilter === 'private'
-                              ? 'bg-primary text-white'
-                              : 'text-slate-400 hover:text-white hover:bg-[#101922]'
-                          }`}
-                          onClick={() => setCanvasFilter('private')}
-                          type="button"
-                        >
-                          Private
-                        </button>
-                      </div>
-                      <div className="flex items-center space-x-4">
-                        <div className="flex items-center space-x-2 text-xs text-slate-400">
-                          <span>Sort by:</span>
-                          <button className="flex items-center space-x-1 font-bold text-slate-200" type="button">
-                            <span>Last edited</span>
-                            <span className="material-icons text-sm">expand_more</span>
-                          </button>
-                        </div>
-                      </div>
-                    </section>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 items-stretch">
-                      <button
-                        className="group bg-primary rounded-xl flex flex-col items-center justify-center text-white hover:brightness-110 transition-all p-10 h-64 shadow-lg shadow-primary/20"
-                        onClick={handleNewCanvas}
-                        type="button"
-                      >
-                        <span className="material-icons text-4xl mb-3">add_circle</span>
-                        <span className="text-sm font-bold uppercase tracking-wider">New Canvas</span>
-                        {createCanvasCardMessage && (
-                          <span className="mt-3 text-xs font-semibold text-rose-100/90 bg-rose-500/30 inline-flex px-2 py-1 rounded">
-                            {createCanvasCardMessage}
-                          </span>
-                        )}
-                      </button>
-
-                      {filteredFolderCanvases.map((canvas) => (
-                        <div
-                          key={canvas.id}
-                          className={`group h-64 flex flex-col bg-[#1a242f] border border-[#2d3a4b] rounded-xl hover:shadow-2xl transition-all border-b-4 relative ${canvas.border}`}
-                        >
-                          <div className="flex-1 bg-[#101922] relative overflow-hidden rounded-t-xl">
-                            <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent"></div>
-                            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-[#101922]/60 backdrop-blur-sm z-20">
-                              <button
-                                className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold rounded-xl shadow-xl shadow-blue-600/30 transition-all"
-                                type="button"
-                                onClick={() => navigate(canvas.isMeetingCanvas ? `/meeting-canvas/${canvas.id}` : `/paint/${canvas.id}`)}
-                              >
-                                Open Editor
+                        <section className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                          <div className="flex items-center space-x-1 p-1 bg-[#1a242f] border border-[#2d3a4b] rounded-xl">
+                            <button
+                              className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${canvasFilter === 'all'
+                                ? 'bg-primary text-white'
+                                : 'text-slate-400 hover:text-white hover:bg-[#101922]'
+                                }`}
+                              onClick={() => setCanvasFilter('all')}
+                              type="button"
+                            >
+                              All
+                            </button>
+                            <button
+                              className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${canvasFilter === 'recent'
+                                ? 'bg-primary text-white'
+                                : 'text-slate-400 hover:text-white hover:bg-[#101922]'
+                                }`}
+                              onClick={() => setCanvasFilter('recent')}
+                              type="button"
+                            >
+                              Recent
+                            </button>
+                            <button
+                              className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${canvasFilter === 'meeting'
+                                ? 'bg-amber-500 text-white'
+                                : 'text-slate-400 hover:text-white hover:bg-[#101922]'
+                                }`}
+                              onClick={() => setCanvasFilter('meeting')}
+                              type="button"
+                            >
+                              Meeting
+                            </button>
+                            <button
+                              className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${canvasFilter === 'private'
+                                ? 'bg-primary text-white'
+                                : 'text-slate-400 hover:text-white hover:bg-[#101922]'
+                                }`}
+                              onClick={() => setCanvasFilter('private')}
+                              type="button"
+                            >
+                              Private
+                            </button>
+                          </div>
+                          <div className="flex items-center space-x-4">
+                            <div className="flex items-center space-x-2 text-xs text-slate-400">
+                              <span>Sort by:</span>
+                              <button className="flex items-center space-x-1 font-bold text-slate-200" type="button">
+                                <span>Last edited</span>
+                                <span className="material-icons text-sm">expand_more</span>
                               </button>
                             </div>
-                            <img
-                              alt={`${canvas.title} Preview`}
-                              className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:scale-105 transition-transform duration-500"
-                              src={canvas.preview}
-                            />
-                            <div className="absolute top-3 right-3 z-10">
-                              <span
-                                className={`px-2 py-1 bg-[#101922]/80 text-[10px] font-bold rounded border uppercase ${
-                                  canvas.tagColor === 'amber'
-                                    ? 'text-amber-400 border-amber-400/30'
-                                    : canvas.tagColor === 'emerald'
-                                    ? 'text-emerald-400 border-emerald-400/30'
-                                    : 'text-primary border-primary/30'
-                                }`}
-                              >
-                                {canvas.tag}
-                              </span>
-                            </div>
                           </div>
-                          <div className="p-4 bg-[#1a242f]">
-                            <div className="flex items-start justify-between mb-1">
-                              <h4 className="font-bold text-sm truncate text-white">{canvas.title}</h4>
-                              {isRealCanvas(canvas) && (
-                                <div className="relative">
-                                  <button 
-                                    className="text-slate-500 hover:text-primary transition-colors" 
+                        </section>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 items-stretch">
+                          <button
+                            className="group bg-primary rounded-xl flex flex-col items-center justify-center text-white hover:brightness-110 transition-all p-10 h-64 shadow-lg shadow-primary/20"
+                            onClick={handleNewCanvas}
+                            type="button"
+                          >
+                            <span className="material-icons text-4xl mb-3">add_circle</span>
+                            <span className="text-sm font-bold uppercase tracking-wider">New Canvas</span>
+                            {createCanvasCardMessage && (
+                              <span className="mt-3 text-xs font-semibold text-rose-100/90 bg-rose-500/30 inline-flex px-2 py-1 rounded">
+                                {createCanvasCardMessage}
+                              </span>
+                            )}
+                          </button>
+
+                          {filteredFolderCanvases.map((canvas) => (
+                            <div
+                              key={canvas.id}
+                              className={`group h-64 flex flex-col bg-[#1a242f] border border-[#2d3a4b] rounded-xl hover:shadow-2xl transition-all border-b-4 relative ${canvas.border}`}
+                            >
+                              <div className="flex-1 bg-[#101922] relative overflow-hidden rounded-t-xl">
+                                <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent"></div>
+                                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-[#101922]/60 backdrop-blur-sm z-20">
+                                  <button
+                                    className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold rounded-xl shadow-xl shadow-blue-600/30 transition-all"
                                     type="button"
-                                    data-canvas-menu-button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setCurrentMenuCanvasId(currentMenuCanvasId === canvas.id ? null : canvas.id);
-                                    }}
+                                    onClick={() => navigate(canvas.isMeetingCanvas ? `/meeting-canvas/${canvas.id}` : `/paint/${canvas.id}`)}
                                   >
-                                    <span className="material-icons text-lg">more_vert</span>
+                                    Open Editor
                                   </button>
-                                  {currentMenuCanvasId === canvas.id && (
-                                    <div 
-                                      className="absolute right-0 top-full mt-2 bg-[#101922] border border-[#2d3a4b] rounded-lg shadow-xl z-50 min-w-[180px] overflow-hidden"
-                                      data-canvas-menu
-                                    >
+                                </div>
+                                <img
+                                  alt={`${canvas.title} Preview`}
+                                  className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:scale-105 transition-transform duration-500"
+                                  src={canvas.preview}
+                                />
+                                <div className="absolute top-3 right-3 z-10">
+                                  <span
+                                    className={`px-2 py-1 bg-[#101922]/80 text-[10px] font-bold rounded border uppercase ${canvas.tagColor === 'amber'
+                                      ? 'text-amber-400 border-amber-400/30'
+                                      : canvas.tagColor === 'emerald'
+                                        ? 'text-emerald-400 border-emerald-400/30'
+                                        : 'text-primary border-primary/30'
+                                      }`}
+                                  >
+                                    {canvas.tag}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="p-4 bg-[#1a242f]">
+                                <div className="flex items-start justify-between mb-1">
+                                  <h4 className="font-bold text-sm truncate text-white">{canvas.title}</h4>
+                                  {isRealCanvas(canvas) && (
+                                    <div className="relative">
                                       <button
-                                        className="w-full text-left px-4 py-3 text-sm text-slate-300 hover:bg-[#1a242f] hover:text-primary flex items-center space-x-3 transition-colors"
+                                        className="text-slate-500 hover:text-primary transition-colors"
+                                        type="button"
+                                        data-canvas-menu-button
                                         onClick={(e) => {
                                           e.stopPropagation();
-                                          setRenameCanvasId(canvas.id);
-                                          setNewCanvasName(canvas.title);
-                                          setShowRenameModal(true);
-                                          setCurrentMenuCanvasId(null);
+                                          setCurrentMenuCanvasId(currentMenuCanvasId === canvas.id ? null : canvas.id);
                                         }}
                                       >
-                                        <span className="material-icons text-sm">edit</span>
-                                        <span className="font-medium">Rename</span>
+                                        <span className="material-icons text-lg">more_vert</span>
                                       </button>
-                                      <button
-                                        className="w-full text-left px-4 py-3 text-sm text-slate-300 hover:bg-[#1a242f] hover:text-primary flex items-center space-x-3 transition-colors"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          handleDuplicateCanvas(canvas.id);
-                                        }}
-                                        disabled={isOperating}
-                                      >
-                                        <span className="material-icons text-sm">content_copy</span>
-                                        <span className="font-medium">Duplicate</span>
-                                      </button>
-                                      <div className="border-t border-[#2d3a4b]"></div>
-                                      <button
-                                        className="w-full text-left px-4 py-3 text-sm text-rose-400 hover:bg-[#1a242f] hover:text-rose-300 flex items-center space-x-3 transition-colors"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          handleDeleteCanvas(canvas.id);
-                                        }}
-                                        disabled={isOperating}
-                                      >
-                                        <span className="material-icons text-sm">delete</span>
-                                        <span className="font-medium">Delete</span>
-                                      </button>
+                                      {currentMenuCanvasId === canvas.id && (
+                                        <div
+                                          className="absolute right-0 top-full mt-2 bg-[#101922] border border-[#2d3a4b] rounded-lg shadow-xl z-50 min-w-[180px] overflow-hidden"
+                                          data-canvas-menu
+                                        >
+                                          <button
+                                            className="w-full text-left px-4 py-3 text-sm text-slate-300 hover:bg-[#1a242f] hover:text-primary flex items-center space-x-3 transition-colors"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setRenameCanvasId(canvas.id);
+                                              setNewCanvasName(canvas.title);
+                                              setShowRenameModal(true);
+                                              setCurrentMenuCanvasId(null);
+                                            }}
+                                          >
+                                            <span className="material-icons text-sm">edit</span>
+                                            <span className="font-medium">Rename</span>
+                                          </button>
+                                          <button
+                                            className="w-full text-left px-4 py-3 text-sm text-slate-300 hover:bg-[#1a242f] hover:text-primary flex items-center space-x-3 transition-colors"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleDuplicateCanvas(canvas.id);
+                                            }}
+                                            disabled={isOperating}
+                                          >
+                                            <span className="material-icons text-sm">content_copy</span>
+                                            <span className="font-medium">Duplicate</span>
+                                          </button>
+                                          <div className="border-t border-[#2d3a4b]"></div>
+                                          <button
+                                            className="w-full text-left px-4 py-3 text-sm text-rose-400 hover:bg-[#1a242f] hover:text-rose-300 flex items-center space-x-3 transition-colors"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleDeleteCanvas(canvas.id);
+                                            }}
+                                            disabled={isOperating}
+                                          >
+                                            <span className="material-icons text-sm">delete</span>
+                                            <span className="font-medium">Delete</span>
+                                          </button>
+                                        </div>
+                                      )}
                                     </div>
                                   )}
                                 </div>
-                              )}
-                            </div>
-                            <div className="flex items-center text-[11px] text-slate-500 space-x-2">
-                              <span className="material-icons text-sm">schedule</span>
-                              <span className="whitespace-nowrap">{canvas.edited}</span>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="flex items-end justify-between mb-8">
-                      <div>
-                        <h1 className="text-3xl font-extrabold tracking-tight text-white text-start">My Canvases</h1>
-                        <p className="text-slate-400 mt-1">Manage and organize your collaborative workspaces.</p>
-                      </div>
-                    </div>
-
-                    <section className="mb-12">
-                      <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500">My Folders</h3>
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                        {folders.map((folder, index) => {
-                          const folderCanvasCount = savedCanvases.filter(c => c.folder === folder._id).length;
-                          const colors = ['blue', 'amber', 'emerald', 'purple'];
-                          const color = colors[index % colors.length];
-                          
-                          return (
-                            <div
-                              key={folder._id}
-                              className="group relative flex items-center p-4 bg-[#1a242f] border border-[#2d3a4b] rounded-xl hover:border-primary cursor-pointer transition-all text-left"
-                            >
-                              <div
-                                className="flex items-center flex-1"
-                                onClick={() => setActiveFolderId(folder._id)}
-                              >
-                                <div
-                                  className={`w-10 h-10 rounded-lg flex items-center justify-center mr-4 transition-colors ${
-                                    color === 'blue'
-                                      ? 'bg-blue-500/10 text-blue-500 group-hover:bg-blue-500 group-hover:text-white'
-                                      : color === 'amber'
-                                      ? 'bg-amber-500/10 text-amber-500 group-hover:bg-amber-500 group-hover:text-white'
-                                      : color === 'emerald'
-                                      ? 'bg-emerald-500/10 text-emerald-500 group-hover:bg-emerald-500 group-hover:text-white'
-                                      : 'bg-purple-500/10 text-purple-500 group-hover:bg-purple-500 group-hover:text-white'
-                                  }`}
-                                >
-                                  <span className="material-symbols-outlined">folder</span>
-                                </div>
-                                <div>
-                                  <p className="font-bold text-sm text-white">{folder.name}</p>
-                                  <p className="text-[10px] text-slate-500">{folderCanvasCount} canvases</p>
+                                <div className="flex items-center text-[11px] text-slate-500 space-x-2">
+                                  <span className="material-icons text-sm">schedule</span>
+                                  <span className="whitespace-nowrap">{canvas.edited}</span>
                                 </div>
                               </div>
-                              <div className="relative">
-                                <button
-                                  className="text-slate-500 hover:text-primary transition-colors p-1"
-                                  data-folder-menu-button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setCurrentMenuFolderId(currentMenuFolderId === folder._id ? null : folder._id);
-                                  }}
-                                  type="button"
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="flex items-end justify-between mb-8">
+                          <div>
+                            <h1 className="text-3xl font-extrabold tracking-tight text-white text-start">My Canvases</h1>
+                            <p className="text-slate-400 mt-1">Manage and organize your collaborative workspaces.</p>
+                          </div>
+                        </div>
+
+                        <section className="mb-12">
+                          <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500">My Folders</h3>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                            {folders.map((folder, index) => {
+                              const folderCanvasCount = savedCanvases.filter(c => c.folder === folder._id).length;
+                              const colors = ['blue', 'amber', 'emerald', 'purple'];
+                              const color = colors[index % colors.length];
+
+                              return (
+                                <div
+                                  key={folder._id}
+                                  className="group relative flex items-center p-4 bg-[#1a242f] border border-[#2d3a4b] rounded-xl hover:border-primary cursor-pointer transition-all text-left"
                                 >
-                                  <span className="material-icons text-lg">more_vert</span>
-                                </button>
-                                {currentMenuFolderId === folder._id && (
                                   <div
-                                    className="absolute right-0 top-full mt-2 bg-[#101922] border border-[#2d3a4b] rounded-lg shadow-xl z-50 min-w-[180px] overflow-hidden"
-                                    data-folder-menu
+                                    className="flex items-center flex-1"
+                                    onClick={() => setActiveFolderId(folder._id)}
                                   >
+                                    <div
+                                      className={`w-10 h-10 rounded-lg flex items-center justify-center mr-4 transition-colors ${color === 'blue'
+                                        ? 'bg-blue-500/10 text-blue-500 group-hover:bg-blue-500 group-hover:text-white'
+                                        : color === 'amber'
+                                          ? 'bg-amber-500/10 text-amber-500 group-hover:bg-amber-500 group-hover:text-white'
+                                          : color === 'emerald'
+                                            ? 'bg-emerald-500/10 text-emerald-500 group-hover:bg-emerald-500 group-hover:text-white'
+                                            : 'bg-purple-500/10 text-purple-500 group-hover:bg-purple-500 group-hover:text-white'
+                                        }`}
+                                    >
+                                      <span className="material-symbols-outlined">folder</span>
+                                    </div>
+                                    <div>
+                                      <p className="font-bold text-sm text-white">{folder.name}</p>
+                                      <p className="text-[10px] text-slate-500">{folderCanvasCount} canvases</p>
+                                    </div>
+                                  </div>
+                                  <div className="relative">
                                     <button
-                                      className="w-full text-left px-4 py-3 text-sm text-slate-300 hover:bg-[#1a242f] hover:text-primary flex items-center space-x-3 transition-colors"
+                                      className="text-slate-500 hover:text-primary transition-colors p-1"
+                                      data-folder-menu-button
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        setRenameFolderId(folder._id);
-                                        setNewFolderName(folder.name);
-                                        setShowRenameFolderModal(true);
-                                        setCurrentMenuFolderId(null);
+                                        setCurrentMenuFolderId(currentMenuFolderId === folder._id ? null : folder._id);
                                       }}
                                       type="button"
                                     >
-                                      <span className="material-icons text-sm">edit</span>
-                                      <span className="font-medium">Rename</span>
+                                      <span className="material-icons text-lg">more_vert</span>
                                     </button>
-                                    <div className="border-t border-[#2d3a4b]"></div>
+                                    {currentMenuFolderId === folder._id && (
+                                      <div
+                                        className="absolute right-0 top-full mt-2 bg-[#101922] border border-[#2d3a4b] rounded-lg shadow-xl z-50 min-w-[180px] overflow-hidden"
+                                        data-folder-menu
+                                      >
+                                        <button
+                                          className="w-full text-left px-4 py-3 text-sm text-slate-300 hover:bg-[#1a242f] hover:text-primary flex items-center space-x-3 transition-colors"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setRenameFolderId(folder._id);
+                                            setNewFolderName(folder.name);
+                                            setShowRenameFolderModal(true);
+                                            setCurrentMenuFolderId(null);
+                                          }}
+                                          type="button"
+                                        >
+                                          <span className="material-icons text-sm">edit</span>
+                                          <span className="font-medium">Rename</span>
+                                        </button>
+                                        <div className="border-t border-[#2d3a4b]"></div>
+                                        <button
+                                          className="w-full text-left px-4 py-3 text-sm text-rose-400 hover:bg-[#1a242f] hover:text-rose-300 flex items-center space-x-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleDeleteFolder(folder._id);
+                                          }}
+                                          disabled={isOperatingFolder || folder._id === defaultFolderId}
+                                          type="button"
+                                        >
+                                          <span className="material-icons text-sm">delete</span>
+                                          <span className="font-medium">Delete</span>
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                            <button
+                              className="group flex items-center justify-center p-4 bg-indigo-600 text-white rounded-xl hover:bg-indigo-500 cursor-pointer transition-all"
+                              onClick={() => setShowCreateFolderModal(true)}
+                              type="button"
+                            >
+                              <span className="material-icons text-xl mr-2 text-white/90">create_new_folder</span>
+                              <span className="text-xs font-bold uppercase">Add Folder</span>
+                            </button>
+                          </div>
+                        </section>
+
+                        <section className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                          <div className="flex items-center space-x-1 p-1 bg-[#1a242f] border border-[#2d3a4b] rounded-xl">
+                            <button
+                              className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${canvasFilter === 'all'
+                                ? 'bg-primary text-white'
+                                : 'text-slate-400 hover:text-white hover:bg-[#101922]'
+                                }`}
+                              onClick={() => setCanvasFilter('all')}
+                              type="button"
+                            >
+                              All
+                            </button>
+                            <button
+                              className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${canvasFilter === 'recent'
+                                ? 'bg-primary text-white'
+                                : 'text-slate-400 hover:text-white hover:bg-[#101922]'
+                                }`}
+                              onClick={() => setCanvasFilter('recent')}
+                              type="button"
+                            >
+                              Recent
+                            </button>
+                            <button
+                              className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${canvasFilter === 'meeting'
+                                ? 'bg-amber-500 text-white'
+                                : 'text-slate-400 hover:text-white hover:bg-[#101922]'
+                                }`}
+                              onClick={() => setCanvasFilter('meeting')}
+                              type="button"
+                            >
+                              Meeting
+                            </button>
+                            <button
+                              className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${canvasFilter === 'private'
+                                ? 'bg-primary text-white'
+                                : 'text-slate-400 hover:text-white hover:bg-[#101922]'
+                                }`}
+                              onClick={() => setCanvasFilter('private')}
+                              type="button"
+                            >
+                              Private
+                            </button>
+                          </div>
+                          <div className="flex items-center space-x-4">
+                            <div className="flex items-center space-x-2 text-xs text-slate-400">
+                              <span>Sort by:</span>
+                              <button className="flex items-center space-x-1 font-bold text-slate-200" type="button">
+                                <span>Last edited</span>
+                                <span className="material-icons text-sm">expand_more</span>
+                              </button>
+                            </div>
+                          </div>
+                        </section>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                          <button
+                            className="flex flex-col items-center justify-center bg-primary text-white rounded-xl hover:brightness-110 transition-all p-10 cursor-pointer h-[264px] shadow-lg shadow-primary/20"
+                            onClick={handleNewCanvas}
+                            type="button"
+                          >
+                            <span className="material-icons text-4xl mb-3">add_circle</span>
+                            <span className="text-sm font-bold uppercase tracking-widest">New Canvas</span>
+                            {createCanvasCardMessage && (
+                              <span className="mt-3 text-xs font-semibold text-rose-100/90 bg-rose-500/30 inline-flex px-2 py-1 rounded">
+                                {createCanvasCardMessage}
+                              </span>
+                            )}
+                          </button>
+
+                          {(() => {
+                            const q = searchQuery.replace(/\s+/g, ' ').trim().toLowerCase();
+                            const searchedCanvases = filteredAllCanvases.filter(c => !q || c.title.toLowerCase().includes(q));
+                            return searchedCanvases.length === 0 ? (
+                              <div className="col-span-3 text-center py-12">
+                                <span className="material-icons text-slate-600 text-4xl block mb-2">search_off</span>
+                                <p className="text-slate-500">{q ? 'No canvases match your search.' : 'No canvases yet.'}</p>
+                              </div>
+                            ) : searchedCanvases.map((canvas) => (
+                              <div
+                                key={canvas.id}
+                                className={`group bg-[#1a242f] border border-[#2d3a4b] rounded-xl hover:shadow-2xl transition-all border-b-4 relative ${canvas.border}`}
+                              >
+                                <div className="h-40 bg-[#101922] relative overflow-hidden rounded-t-xl">
+                                  <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent"></div>
+                                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-[#101922]/60 backdrop-blur-sm z-20">
                                     <button
-                                      className="w-full text-left px-4 py-3 text-sm text-rose-400 hover:bg-[#1a242f] hover:text-rose-300 flex items-center space-x-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleDeleteFolder(folder._id);
-                                      }}
-                                      disabled={isOperatingFolder || folder._id === defaultFolderId}
+                                      className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold rounded-xl shadow-xl shadow-blue-600/30 transition-all"
+                                      onClick={() => navigate(canvas.isMeetingCanvas ? `/meeting-canvas/${canvas.id}` : `/paint/${canvas.id}`)}
                                       type="button"
                                     >
-                                      <span className="material-icons text-sm">delete</span>
-                                      <span className="font-medium">Delete</span>
+                                      Open Editor
                                     </button>
                                   </div>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })}
-                        <button 
-                          className="group flex items-center justify-center p-4 bg-indigo-600 text-white rounded-xl hover:bg-indigo-500 cursor-pointer transition-all" 
-                          onClick={() => setShowCreateFolderModal(true)}
-                          type="button"
-                        >
-                          <span className="material-icons text-xl mr-2 text-white/90">create_new_folder</span>
-                          <span className="text-xs font-bold uppercase">Add Folder</span>
-                        </button>
-                      </div>
-                    </section>
-
-                    <section className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                      <div className="flex items-center space-x-1 p-1 bg-[#1a242f] border border-[#2d3a4b] rounded-xl">
-                        <button
-                          className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${
-                            canvasFilter === 'all'
-                              ? 'bg-primary text-white'
-                              : 'text-slate-400 hover:text-white hover:bg-[#101922]'
-                          }`}
-                          onClick={() => setCanvasFilter('all')}
-                          type="button"
-                        >
-                          All
-                        </button>
-                        <button
-                          className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${
-                            canvasFilter === 'recent'
-                              ? 'bg-primary text-white'
-                              : 'text-slate-400 hover:text-white hover:bg-[#101922]'
-                          }`}
-                          onClick={() => setCanvasFilter('recent')}
-                          type="button"
-                        >
-                          Recent
-                        </button>
-                        <button
-                          className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${
-                            canvasFilter === 'meeting'
-                              ? 'bg-amber-500 text-white'
-                              : 'text-slate-400 hover:text-white hover:bg-[#101922]'
-                          }`}
-                          onClick={() => setCanvasFilter('meeting')}
-                          type="button"
-                        >
-                          Meeting
-                        </button>
-                        <button
-                          className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${
-                            canvasFilter === 'private'
-                              ? 'bg-primary text-white'
-                              : 'text-slate-400 hover:text-white hover:bg-[#101922]'
-                          }`}
-                          onClick={() => setCanvasFilter('private')}
-                          type="button"
-                        >
-                          Private
-                        </button>
-                      </div>
-                      <div className="flex items-center space-x-4">
-                        <div className="flex items-center space-x-2 text-xs text-slate-400">
-                          <span>Sort by:</span>
-                          <button className="flex items-center space-x-1 font-bold text-slate-200" type="button">
-                            <span>Last edited</span>
-                            <span className="material-icons text-sm">expand_more</span>
-                          </button>
-                        </div>
-                      </div>
-                    </section>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                      <button
-                        className="flex flex-col items-center justify-center bg-primary text-white rounded-xl hover:brightness-110 transition-all p-10 cursor-pointer h-[264px] shadow-lg shadow-primary/20"
-                        onClick={handleNewCanvas}
-                        type="button"
-                      >
-                        <span className="material-icons text-4xl mb-3">add_circle</span>
-                        <span className="text-sm font-bold uppercase tracking-widest">New Canvas</span>
-                        {createCanvasCardMessage && (
-                          <span className="mt-3 text-xs font-semibold text-rose-100/90 bg-rose-500/30 inline-flex px-2 py-1 rounded">
-                            {createCanvasCardMessage}
-                          </span>
-                        )}
-                      </button>
-
-                      {(() => {
-                        const q = searchQuery.replace(/\s+/g, ' ').trim().toLowerCase();
-                        const searchedCanvases = filteredAllCanvases.filter(c => !q || c.title.toLowerCase().includes(q));
-                        return searchedCanvases.length === 0 ? (
-                          <div className="col-span-3 text-center py-12">
-                            <span className="material-icons text-slate-600 text-4xl block mb-2">search_off</span>
-                            <p className="text-slate-500">{q ? 'No canvases match your search.' : 'No canvases yet.'}</p>
-                          </div>
-                        ) : searchedCanvases.map((canvas) => (
-                        <div
-                          key={canvas.id}
-                          className={`group bg-[#1a242f] border border-[#2d3a4b] rounded-xl hover:shadow-2xl transition-all border-b-4 relative ${canvas.border}`}
-                        >
-                          <div className="h-40 bg-[#101922] relative overflow-hidden rounded-t-xl">
-                            <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent"></div>
-                            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-[#101922]/60 backdrop-blur-sm z-20">
-                              <button
-                                className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold rounded-xl shadow-xl shadow-blue-600/30 transition-all"
-                                onClick={() => navigate(canvas.isMeetingCanvas ? `/meeting-canvas/${canvas.id}` : `/paint/${canvas.id}`)}
-                                type="button"
-                              >
-                                Open Editor
-                              </button>
-                            </div>
-                            <img
-                              alt={`${canvas.title} Preview`}
-                              className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:scale-105 transition-transform duration-500"
-                              src={canvas.preview}
-                            />
-                            <div className="absolute top-3 right-3 z-10">
-                              <span
-                                className={`px-2 py-1 bg-[#101922]/80 text-[10px] font-bold rounded border uppercase ${
-                                  canvas.tagColor === 'amber'
-                                    ? 'text-amber-400 border-amber-400/30'
-                                    : canvas.tagColor === 'emerald'
-                                    ? 'text-emerald-400 border-emerald-400/30'
-                                    : 'text-primary border-primary/30'
-                                }`}
-                              >
-                                {canvas.tag}
-                              </span>
-                            </div>
-                          </div>
-                          <div className="p-4">
-                            <div className="flex items-start justify-between mb-2">
-                              <h4 className="font-bold text-sm truncate text-white">{canvas.title}</h4>
-                              {isRealCanvas(canvas) && (
-                                <div className="relative">
-                                  <button 
-                                    className="text-slate-500 hover:text-primary transition-colors" 
-                                    type="button"
-                                    data-canvas-menu-button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setCurrentMenuCanvasId(currentMenuCanvasId === canvas.id ? null : canvas.id);
-                                    }}
-                                  >
-                                    <span className="material-icons text-lg">more_vert</span>
-                                  </button>
-                                  {currentMenuCanvasId === canvas.id && (
-                                    <div 
-                                      className="absolute right-0 top-full mt-2 bg-[#101922] border border-[#2d3a4b] rounded-lg shadow-xl z-50 min-w-[180px] overflow-hidden"
-                                      data-canvas-menu
+                                  <img
+                                    alt={`${canvas.title} Preview`}
+                                    className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:scale-105 transition-transform duration-500"
+                                    src={canvas.preview}
+                                  />
+                                  <div className="absolute top-3 right-3 z-10">
+                                    <span
+                                      className={`px-2 py-1 bg-[#101922]/80 text-[10px] font-bold rounded border uppercase ${canvas.tagColor === 'amber'
+                                        ? 'text-amber-400 border-amber-400/30'
+                                        : canvas.tagColor === 'emerald'
+                                          ? 'text-emerald-400 border-emerald-400/30'
+                                          : 'text-primary border-primary/30'
+                                        }`}
                                     >
-                                      <button
-                                        className="w-full text-left px-4 py-3 text-sm text-slate-300 hover:bg-[#1a242f] hover:text-primary flex items-center space-x-3 transition-colors"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setRenameCanvasId(canvas.id);
-                                          setNewCanvasName(canvas.title);
-                                          setShowRenameModal(true);
-                                          setCurrentMenuCanvasId(null);
-                                        }}
-                                      >
-                                        <span className="material-icons text-sm">edit</span>
-                                        <span className="font-medium">Rename</span>
-                                      </button>
-                                      <button
-                                        className="w-full text-left px-4 py-3 text-sm text-slate-300 hover:bg-[#1a242f] hover:text-primary flex items-center space-x-3 transition-colors"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          handleDuplicateCanvas(canvas.id);
-                                        }}
-                                        disabled={isOperating}
-                                      >
-                                        <span className="material-icons text-sm">content_copy</span>
-                                        <span className="font-medium">Duplicate</span>
-                                      </button>
-                                      <div className="border-t border-[#2d3a4b]"></div>
-                                      <button
-                                        className="w-full text-left px-4 py-3 text-sm text-rose-400 hover:bg-[#1a242f] hover:text-rose-300 flex items-center space-x-3 transition-colors"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          handleDeleteCanvas(canvas.id);
-                                        }}
-                                        disabled={isOperating}
-                                      >
-                                        <span className="material-icons text-sm">delete</span>
-                                        <span className="font-medium">Delete</span>
-                                      </button>
-                                    </div>
-                                  )}
+                                      {canvas.tag}
+                                    </span>
+                                  </div>
                                 </div>
-                              )}
-                            </div>
-                            <div className="flex items-center text-[11px] text-slate-500 space-x-2">
-                              <span className="material-icons text-sm">schedule</span>
-                              <span>{canvas.edited}</span>
-                              <span>•</span>
-                              <span className="flex items-center">
-                                <span className="material-icons text-[10px] mr-1">folder</span>
-                                {canvas.folder}
-                              </span>
-                            </div>
-                          </div>
+                                <div className="p-4">
+                                  <div className="flex items-start justify-between mb-2">
+                                    <h4 className="font-bold text-sm truncate text-white">{canvas.title}</h4>
+                                    {isRealCanvas(canvas) && (
+                                      <div className="relative">
+                                        <button
+                                          className="text-slate-500 hover:text-primary transition-colors"
+                                          type="button"
+                                          data-canvas-menu-button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setCurrentMenuCanvasId(currentMenuCanvasId === canvas.id ? null : canvas.id);
+                                          }}
+                                        >
+                                          <span className="material-icons text-lg">more_vert</span>
+                                        </button>
+                                        {currentMenuCanvasId === canvas.id && (
+                                          <div
+                                            className="absolute right-0 top-full mt-2 bg-[#101922] border border-[#2d3a4b] rounded-lg shadow-xl z-50 min-w-[180px] overflow-hidden"
+                                            data-canvas-menu
+                                          >
+                                            <button
+                                              className="w-full text-left px-4 py-3 text-sm text-slate-300 hover:bg-[#1a242f] hover:text-primary flex items-center space-x-3 transition-colors"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                setRenameCanvasId(canvas.id);
+                                                setNewCanvasName(canvas.title);
+                                                setShowRenameModal(true);
+                                                setCurrentMenuCanvasId(null);
+                                              }}
+                                            >
+                                              <span className="material-icons text-sm">edit</span>
+                                              <span className="font-medium">Rename</span>
+                                            </button>
+                                            <button
+                                              className="w-full text-left px-4 py-3 text-sm text-slate-300 hover:bg-[#1a242f] hover:text-primary flex items-center space-x-3 transition-colors"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleDuplicateCanvas(canvas.id);
+                                              }}
+                                              disabled={isOperating}
+                                            >
+                                              <span className="material-icons text-sm">content_copy</span>
+                                              <span className="font-medium">Duplicate</span>
+                                            </button>
+                                            <div className="border-t border-[#2d3a4b]"></div>
+                                            <button
+                                              className="w-full text-left px-4 py-3 text-sm text-rose-400 hover:bg-[#1a242f] hover:text-rose-300 flex items-center space-x-3 transition-colors"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleDeleteCanvas(canvas.id);
+                                              }}
+                                              disabled={isOperating}
+                                            >
+                                              <span className="material-icons text-sm">delete</span>
+                                              <span className="font-medium">Delete</span>
+                                            </button>
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center text-[11px] text-slate-500 space-x-2">
+                                    <span className="material-icons text-sm">schedule</span>
+                                    <span>{canvas.edited}</span>
+                                    <span>•</span>
+                                    <span className="flex items-center">
+                                      <span className="material-icons text-[10px] mr-1">folder</span>
+                                      {canvas.folder}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            ));
+                          })()}
                         </div>
-                      ));
-                      })()}
-                    </div>
+                      </>
+                    )}
                   </>
-                )}
-                </>
                 )}
               </>
             )}
@@ -3222,35 +3206,33 @@ export default function Dashboard() {
                 />
               </div>
 
-                <div className="flex items-center justify-between rounded-xl border border-white/10 bg-white/5 p-4">
-                  <span className="text-sm text-slate-200">Device Settings</span>
-                  <div className="flex items-center gap-3">
-                    <button
-                      onClick={() => setJoinAudioEnabled((prev) => !prev)}
-                      className={`flex h-11 w-11 items-center justify-center rounded-full border transition-all ${
-                        joinAudioEnabled
-                          ? 'border-emerald-400/60 bg-emerald-800 text-white'
-                          : 'border-rose-400/60 bg-rose-500 text-white'
+              <div className="flex items-center justify-between rounded-xl border border-white/10 bg-white/5 p-4">
+                <span className="text-sm text-slate-200">Device Settings</span>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setJoinAudioEnabled((prev) => !prev)}
+                    className={`flex h-11 w-11 items-center justify-center rounded-full border transition-all ${joinAudioEnabled
+                      ? 'border-emerald-400/60 bg-emerald-800 text-white'
+                      : 'border-rose-400/60 bg-rose-500 text-white'
                       }`}
-                      type="button"
-                      title={joinAudioEnabled ? 'Disable Audio' : 'Enable Audio'}
-                    >
-                      <span className="material-icons">{joinAudioEnabled ? 'mic' : 'mic_off'}</span>
-                    </button>
-                    <button
-                      onClick={() => setJoinVideoEnabled((prev) => !prev)}
-                      className={`flex h-11 w-11 items-center justify-center rounded-full border transition-all ${
-                        joinVideoEnabled
-                          ? 'border-emerald-400/60 bg-emerald-800 text-white'
-                          : 'border-rose-400/60 bg-rose-500 text-white'
+                    type="button"
+                    title={joinAudioEnabled ? 'Disable Audio' : 'Enable Audio'}
+                  >
+                    <span className="material-icons">{joinAudioEnabled ? 'mic' : 'mic_off'}</span>
+                  </button>
+                  <button
+                    onClick={() => setJoinVideoEnabled((prev) => !prev)}
+                    className={`flex h-11 w-11 items-center justify-center rounded-full border transition-all ${joinVideoEnabled
+                      ? 'border-emerald-400/60 bg-emerald-800 text-white'
+                      : 'border-rose-400/60 bg-rose-500 text-white'
                       }`}
-                      type="button"
-                      title={joinVideoEnabled ? 'Disable Video' : 'Enable Video'}
-                    >
-                      <span className="material-icons">{joinVideoEnabled ? 'videocam' : 'videocam_off'}</span>
-                    </button>
-                  </div>
+                    type="button"
+                    title={joinVideoEnabled ? 'Disable Video' : 'Enable Video'}
+                  >
+                    <span className="material-icons">{joinVideoEnabled ? 'videocam' : 'videocam_off'}</span>
+                  </button>
                 </div>
+              </div>
 
               <button
                 onClick={handleJoinMeetingSubmit}
@@ -3303,22 +3285,20 @@ export default function Dashboard() {
             <div className="mb-6 flex gap-3">
               <button
                 onClick={() => setCreateMeetingMode('instant')}
-                className={`flex-1 rounded-lg border px-4 py-2 text-sm font-semibold transition-all ${
-                  createMeetingMode === 'instant'
-                    ? 'border-indigo-400 bg-indigo-500/20 text-white'
-                    : 'border-white/10 text-slate-300 hover:border-white/30'
-                }`}
+                className={`flex-1 rounded-lg border px-4 py-2 text-sm font-semibold transition-all ${createMeetingMode === 'instant'
+                  ? 'border-indigo-400 bg-indigo-500/20 text-white'
+                  : 'border-white/10 text-slate-300 hover:border-white/30'
+                  }`}
                 type="button"
               >
                 Instant Meeting
               </button>
               <button
                 onClick={() => setCreateMeetingMode('scheduled')}
-                className={`flex-1 rounded-lg border px-4 py-2 text-sm font-semibold transition-all ${
-                  createMeetingMode === 'scheduled'
-                    ? 'border-indigo-400 bg-indigo-500/20 text-white'
-                    : 'border-white/10 text-slate-300 hover:border-white/30'
-                }`}
+                className={`flex-1 rounded-lg border px-4 py-2 text-sm font-semibold transition-all ${createMeetingMode === 'scheduled'
+                  ? 'border-indigo-400 bg-indigo-500/20 text-white'
+                  : 'border-white/10 text-slate-300 hover:border-white/30'
+                  }`}
                 type="button"
               >
                 Schedule Meeting
@@ -3335,11 +3315,10 @@ export default function Dashboard() {
                 )}
 
                 {instantMeetingDetails && (
-                  <div className={`rounded-xl border p-4 text-sm space-y-2 ${
-                    instantMeetingDetails?.meetingDbId
-                      ? 'border-emerald-500/40 bg-emerald-500/10 text-slate-200'
-                      : 'border-blue-500/40 bg-blue-500/10 text-slate-200'
-                  }`}>
+                  <div className={`rounded-xl border p-4 text-sm space-y-2 ${instantMeetingDetails?.meetingDbId
+                    ? 'border-emerald-500/40 bg-emerald-500/10 text-slate-200'
+                    : 'border-blue-500/40 bg-blue-500/10 text-slate-200'
+                    }`}>
                     <div className="flex items-center gap-2 mb-3">
                       <span className={`material-icons text-sm ${instantMeetingDetails?.meetingDbId ? 'text-emerald-400' : 'text-blue-400'}`}>
                         {instantMeetingDetails?.meetingDbId ? 'check_circle' : 'info'}
@@ -3362,13 +3341,12 @@ export default function Dashboard() {
                         {instantMeetingDetails.shareLink || (isInstantGenerating ? 'Generating...' : 'Not yet generated')}
                       </span>
                     </div>
-                    <p className={`text-xs mt-2 ${
-                      instantMeetingDetails?.meetingDbId 
-                        ? 'text-emerald-300' 
-                        : 'text-blue-300'
-                    }`}>
-                      {instantMeetingDetails?.meetingDbId 
-                        ? 'Other members can now join this meeting' 
+                    <p className={`text-xs mt-2 ${instantMeetingDetails?.meetingDbId
+                      ? 'text-emerald-300'
+                      : 'text-blue-300'
+                      }`}>
+                      {instantMeetingDetails?.meetingDbId
+                        ? 'Other members can now join this meeting'
                         : 'Click "Host Meeting" below to create and enter the meeting'}
                     </p>
                   </div>
@@ -3379,11 +3357,10 @@ export default function Dashboard() {
                   <div className="flex items-center gap-3">
                     <button
                       onClick={() => setCreateAudioEnabled((prev) => !prev)}
-                      className={`flex h-11 w-11 items-center justify-center rounded-full border transition-all ${
-                        createAudioEnabled
-                          ? 'border-emerald-400/60 bg-emerald-800 text-white'
-                          : 'border-rose-400/60 bg-rose-500 text-white'
-                      }`}
+                      className={`flex h-11 w-11 items-center justify-center rounded-full border transition-all ${createAudioEnabled
+                        ? 'border-emerald-400/60 bg-emerald-800 text-white'
+                        : 'border-rose-400/60 bg-rose-500 text-white'
+                        }`}
                       type="button"
                       title={createAudioEnabled ? 'Disable Audio' : 'Enable Audio'}
                     >
@@ -3391,11 +3368,10 @@ export default function Dashboard() {
                     </button>
                     <button
                       onClick={() => setCreateVideoEnabled((prev) => !prev)}
-                      className={`flex h-11 w-11 items-center justify-center rounded-full border transition-all ${
-                        createVideoEnabled
-                          ? 'border-emerald-400/60 bg-emerald-800 text-white'
-                          : 'border-rose-400/60 bg-rose-500 text-white'
-                      }`}
+                      className={`flex h-11 w-11 items-center justify-center rounded-full border transition-all ${createVideoEnabled
+                        ? 'border-emerald-400/60 bg-emerald-800 text-white'
+                        : 'border-rose-400/60 bg-rose-500 text-white'
+                        }`}
                       type="button"
                       title={createVideoEnabled ? 'Disable Video' : 'Enable Video'}
                     >
@@ -3463,11 +3439,10 @@ export default function Dashboard() {
                 </button>
 
                 {scheduledMeetingDetails && (
-                  <div className={`rounded-xl border p-4 text-sm space-y-2 ${
-                    scheduledMeetingDetails?.meetingDbId
-                      ? 'border-emerald-500/40 bg-emerald-500/10 text-slate-200'
-                      : 'border-blue-500/40 bg-blue-500/10 text-slate-200'
-                  }`}>
+                  <div className={`rounded-xl border p-4 text-sm space-y-2 ${scheduledMeetingDetails?.meetingDbId
+                    ? 'border-emerald-500/40 bg-emerald-500/10 text-slate-200'
+                    : 'border-blue-500/40 bg-blue-500/10 text-slate-200'
+                    }`}>
                     <div className="flex items-center justify-between">
                       <span className="text-slate-400">Meeting ID</span>
                       <span className="font-semibold">{scheduledMeetingDetails.id}</span>
@@ -3798,14 +3773,14 @@ export default function Dashboard() {
             </div>
 
             <p className="text-slate-300 text-sm mb-6 leading-relaxed">
-              You are about to permanently delete your account, all your canvases, folders, and meetings. 
+              You are about to permanently delete your account, all your canvases, folders, and meetings.
               <strong> You cannot undo this action.</strong>
             </p>
 
             <form onSubmit={handleDeleteAccount}>
               <div className="space-y-2 mb-6">
                 <label className="text-xs font-semibold text-slate-400 uppercase tracking-widest">Confirm Password</label>
-                <input 
+                <input
                   type="password"
                   value={deletePassword}
                   onChange={(e) => setDeletePassword(e.target.value)}
@@ -3817,7 +3792,7 @@ export default function Dashboard() {
               </div>
 
               <div className="flex justify-end gap-3 pt-4 border-t border-white/5">
-                <button 
+                <button
                   type="button"
                   onClick={() => setShowDeleteModal(false)}
                   className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-sm font-bold text-white transition-all disabled:opacity-50"
@@ -3825,7 +3800,7 @@ export default function Dashboard() {
                 >
                   Cancel
                 </button>
-                <button 
+                <button
                   type="submit"
                   disabled={isDeleting || !deletePassword}
                   className="px-5 py-2.5 bg-rose-600 hover:bg-rose-500 rounded-lg text-sm font-bold text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
@@ -3853,6 +3828,39 @@ export default function Dashboard() {
             </div>
             <p className="text-sm font-semibold text-slate-100">Deleting your account...</p>
           </div>
+        </div>
+      )}
+
+      {/* Guided Walkthrough */}
+      {showWalkthrough && (
+        <DashboardWalkthrough
+          step={walkthroughStep}
+          onNext={() => setWalkthroughStep(s => Math.min(s + 1, 9))}
+          onPrev={() => setWalkthroughStep(s => Math.max(s - 1, 0))}
+          onClose={() => setShowWalkthrough(false)}
+        />
+      )}
+
+      {/* Floating AI & Help Options */}
+      <HelpOptionsButton
+        onBotClick={() => setIsBotOpen(true)}
+        onWalkthroughClick={() => {
+          setWalkthroughStep(0);
+          setShowWalkthrough(true);
+        }}
+      />
+
+      {/* AI Bot Widget */}
+      {isBotOpen && (
+        <div className="fixed bottom-24 right-6 z-[100]">
+          <BotWidget
+            onClose={() => setIsBotOpen(false)}
+            onAction={() => { }}
+            contextSnapshot={{
+              view: 'dashboard',
+              activeView
+            }}
+          />
         </div>
       )}
     </div>

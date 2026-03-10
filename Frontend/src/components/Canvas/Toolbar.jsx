@@ -40,19 +40,19 @@ const Toolbar = ({
 
   return (
     <header className="bg-gradient-to-r from-[#18181b]/95 via-[#18181b]/90 to-[#09090b]/95 border-b border-zinc-800/40 p-3 flex items-stretch gap-2 shrink-0 overflow-x-auto no-scrollbar relative backdrop-blur-3xl shadow-[0_4px_24px_rgba(0,0,0,0.3)] z-50">
-      <Section title="Tools">
+      <Section title="Tools" data-tour="tools">
         <div className="grid grid-cols-3 gap-1 h-full">
-          <IconButton icon={Pencil} active={tool === 'pencil'} onClick={() => handleToolChange('pencil')} />
-          <IconButton icon={Eraser} active={tool === 'eraser'} onClick={() => handleToolChange('eraser')} />
-          <IconButton icon={TextIcon} active={tool === 'text'} onClick={() => handleToolChange('text')} />
-          <IconButton icon={MousePointer2} active={tool === 'select'} onClick={() => handleToolChange('select')} />
-          <IconButton icon={Hand} active={tool === 'hand'} onClick={() => handleToolChange('hand')} />
-          <IconButton icon={FillIcon} active={tool === 'bucket'} onClick={() => handleToolChange('bucket')} />
+          <IconButton icon={Pencil} active={tool === 'pencil'} onClick={() => handleToolChange('pencil')} title="Pencil — freehand draw" />
+          <IconButton icon={Eraser} active={tool === 'eraser'} onClick={() => handleToolChange('eraser')} title="Eraser" />
+          <IconButton icon={TextIcon} active={tool === 'text'} onClick={() => handleToolChange('text')} title="Text — add a text box" />
+          <IconButton icon={MousePointer2} active={tool === 'select'} onClick={() => handleToolChange('select')} title="Select — move & resize elements" />
+          <IconButton icon={Hand} active={tool === 'hand'} onClick={() => handleToolChange('hand')} title="Hand — pan the canvas view" />
+          <IconButton icon={FillIcon} active={tool === 'bucket'} onClick={() => handleToolChange('bucket')} title="Fill Bucket — flood-fill with current color" />
         </div>
       </Section>
 
       {isTextToolActive && (
-        <Section title="Text Formatting">
+        <Section title="Text Formatting" data-tour="shapes">
           <TextFormatting
             textFormat={textFormat}
             updateTextProp={updateTextProp}
@@ -64,12 +64,12 @@ const Toolbar = ({
       )}
 
       {!isTextToolActive && (
-        <Section title="Shapes">
+        <Section title="Shapes" data-tour="shapes">
           <ShapesPanel tool={tool} handleToolChange={handleToolChange} />
         </Section>
       )}
 
-      <Section title="Colors" className="!items-start">
+      <Section title="Colors" className="!items-start" data-tour="colors">
         <ColorPalette
           color={color}
           updateColor={updateColor}
@@ -79,7 +79,7 @@ const Toolbar = ({
         />
       </Section>
 
-      <Section title="View">
+      <Section title="View" data-tour="view">
         <ViewControls
           zoom={zoom}
           setZoom={setZoom}
