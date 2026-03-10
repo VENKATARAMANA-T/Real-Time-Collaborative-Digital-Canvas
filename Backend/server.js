@@ -32,28 +32,59 @@ const server = http.createServer(app);
 const isLocalOrigin = (origin) => !origin || /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
 const FRONTEND_URL = process.env.FRONTEND_URL; // e.g. https://your-app.example.com
 
-const allowedOrigin = (origin, cb) => {
-  if (FRONTEND_URL && origin === FRONTEND_URL) return cb(null, true);
-  if (isLocalOrigin(origin)) return cb(null, true);
-  return cb(null, false);
-};
+const allowedOrigin = [
+  'http://localhost:5173', // Local development
+  process.env.FRONTEND_URL // Deployed frontend on Vercel
+];
 
 const io = new Server(server, {
   cors: {
-    origin: allowedOrigin,
+    origin: function(origin, callback) {
+      // 1. Allow no origin (Postman/Mobile)
+      if (!origin) return callback(null, true);
+
+      // 2. Check exact matches
+      const isAllowed = allowedOrigin.includes(origin);
+      
+      // 3. Check for Vercel dynamic previews
+      const isVercelPreview = origin.endsWith('.vercel.app');
+
+      if (isAllowed || isVercelPreview) {
+        return callback(null, true);
+      }
+      
+      callback(new Error("Not allowed by CORS"));
+    },
     methods: ["GET", "POST"],
     credentials: true,
-    allowEIO3: true
+    // Required if you have older clients or specific load balancing needs
+    allowEIO3: true 
   }
 });
+
 app.set('io', io);
 socketHandler(io);
 
-app.use(cors({
-  origin: allowedOrigin,
+const corsOptions = {
+  origin: function (origin, callback) {
+    // 1. Allow internal/non-browser requests (Postman, Mobile)
+    if (!origin) return callback(null, true);
+
+    // 2. Allow exact matches from our list
+    if (allowedOrigin.includes(origin)) return callback(null, true);
+
+    // 3. Allow Vercel Preview/Branch deployments using a regex
+    // Matches patterns like: myapp-git-main-user.vercel.app
+    if (origin.endsWith('.vercel.app')) return callback(null, true);
+
+    callback(new Error('Not allowed by CORS'));
+  },
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE"],
-}));
+  allowedHeaders: ["Content-Type", "Authorization"] // Essential for preflight success
+};
+
+app.use(cors(corsOptions));
 
 // Body parser
 app.use(express.json({ limit: '20mb' }));
