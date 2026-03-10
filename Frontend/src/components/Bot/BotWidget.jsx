@@ -103,15 +103,14 @@ const BotWidget = ({ onClose, onAction, contextSnapshot }) => {
         setMessages(prev => [...prev, { role: 'assistant', content: '' }]);
 
         try {
-            const token = localStorage.getItem('token');
             const apiUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/bot/chat`;
 
             await fetchEventSource(apiUrl, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
                 },
+                credentials: 'include',
                 body: JSON.stringify({
                     message: userMessage,
                     contextSnapshot: contextSnapshot || {}
