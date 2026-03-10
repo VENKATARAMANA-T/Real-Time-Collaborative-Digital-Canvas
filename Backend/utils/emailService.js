@@ -1,44 +1,27 @@
-const nodemailer = require('nodemailer');
+// utils/email.js
+const sgMail = require('@sendgrid/mail');
 const dns = require('dns');
 
-const createTransporter = () => {
-  const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS } = process.env;
-
-  if (!SMTP_HOST || !SMTP_PORT || !SMTP_USER || !SMTP_PASS) {
-    throw new Error('SMTP configuration is incomplete');
-  }
-
-  return nodemailer.createTransport({
-    host: SMTP_HOST,
-    port: Number(SMTP_PORT),
-    secure: Number(SMTP_PORT) === 465,
-    auth: {
-      user: SMTP_USER,
-      pass: SMTP_PASS
-    }
-  });
-};
+// Load SendGrid API key from environment
+sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
 /**
- * Validate email format and verify domain can receive mail
- * Checks MX records first, then falls back to A/AAAA records (per RFC 5321)
- * On network errors (DNS unavailable), passes validation to avoid false rejections
+ * Validate email format and (optionally) verify domain exists via DNS.
+ * In cloud environments, DNS lookups may fail, so it's optional.
  */
-const validateEmail = async (email) => {
+const validateEmail = async (email, checkDNS = false) => {
   // Basic format check
   const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-  if (!emailRegex.test(email)) {
-    return false;
-  }
+  if (!emailRegex.test(email)) return false;
 
-  // Extract domain and check if it can receive mail
+  if (!checkDNS) return true; // Skip DNS check for cloud
+
   const domain = email.split('@')[1];
 
   try {
     const mxRecords = await dns.promises.resolveMx(domain);
     if (mxRecords && mxRecords.length > 0) return true;
   } catch (err) {
-    // ENOTFOUND = domain doesn't exist; other errors = DNS network issue
     if (err.code === 'ENOTFOUND') return false;
     if (err.code !== 'ENODATA') return true; // DNS unavailable, assume valid
   }
@@ -62,25 +45,35 @@ const validateEmail = async (email) => {
   return false;
 };
 
+/**
+ * Send email using SendGrid
+ */
 const sendEmail = async ({ to, subject, html, text }) => {
-  // Validate email before attempting to send
-  const isValid = await validateEmail(to);
+  // Validate email before sending
+  const isValid = await validateEmail(to, false); // false = skip DNS for cloud
   if (!isValid) {
     const err = new Error('Invalid email address. Please check and try again.');
     err.code = 'INVALID_EMAIL';
     throw err;
   }
 
-  const transporter = createTransporter();
-  const from = process.env.SMTP_FROM || process.env.SMTP_USER;
+  const from = process.env.SMTP_FROM || 'noreply@yourproject.sendgrid.net';
 
-  return transporter.sendMail({
-    from,
+  const msg = {
     to,
+    from,
     subject,
-    html,
-    text
-  });
+    text,
+    html: html || text
+  };
+
+  try {
+    await sgMail.send(msg);
+    console.log(`Email sent to ${to}`);
+  } catch (err) {
+    console.error('SendGrid error:', err.response?.body || err.message);
+    throw err;
+  }
 };
 
 module.exports = { sendEmail, validateEmail };
