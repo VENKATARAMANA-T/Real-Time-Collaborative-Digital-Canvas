@@ -300,7 +300,9 @@ exports.createMeeting = async (req, res) => {
     let startTime = new Date();
     if (isScheduled) {
       meetingStatus = 'pending';
-      startTime = new Date(`${scheduledDate}T${scheduledTime}`);
+      startTime = req.body.scheduledISO
+        ? new Date(req.body.scheduledISO)
+        : new Date(`${scheduledDate}T${scheduledTime}`);
     }
 
     // 5. Create Meeting (canvas may be null for scheduled meetings)
