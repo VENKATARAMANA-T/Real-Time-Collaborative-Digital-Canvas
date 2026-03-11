@@ -17,7 +17,7 @@ function JoinByLink() {
 
     if (!user) {
       // Not logged in — navigate to login page with redirect
-      localStorage.setItem('redirectAfterLogin', window.location.pathname);
+      localStorage.setItem('redirectAfterLogin', `/join-link/${token}`);
       navigate('/login');
       return;
     }
