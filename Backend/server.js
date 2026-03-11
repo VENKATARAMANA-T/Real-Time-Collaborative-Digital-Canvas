@@ -177,14 +177,14 @@ const startMeetingReminderScheduler = () => {
   console.log('[Reminder Scheduler] Started — checking every 30s for due meetings');
 };
 
-// 1. Connect to DB first
+//1.Connect to DB first
 connectDB().then(() => {
-  // 2. ONLY start server if DB connects successfully
+  //2. ONLY start server if DB connects successfully
   console.log('Database connected successfully. Starting server...');
   server.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
   });
-  // 3. Start the meeting reminder scheduler
+  //3.Start the meeting reminder scheduler
   startMeetingReminderScheduler();
 }).catch((err) => {
   console.log('Database connection failed. Server not started.');
