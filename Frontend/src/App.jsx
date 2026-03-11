@@ -1,5 +1,5 @@
 import './App.css'
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { HashRouter as Router, Routes, Route } from "react-router-dom";
 import PaintApp from './pages/PaintApp.jsx';
 import SharedCanvas from './pages/SharedCanvas.jsx';
 import Meeting from './pages/Meeting.jsx';
