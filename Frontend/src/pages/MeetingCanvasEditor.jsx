@@ -180,7 +180,7 @@ function MeetingCanvasEditor() {
     await handleSave();
     try {
       const { shareToken } = await canvasAPI.generateShareToken(canvasId);
-      const link = `${window.location.origin}/shared/${shareToken}`;
+      const link = `${window.location.origin}/#/shared/${shareToken}`;
       setShareLink(link);
       setShareCopied(false);
       setShowShareModal(true);

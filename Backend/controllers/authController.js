@@ -70,7 +70,7 @@ exports.registerUser = async (req, res) => {
 
     // 5. Send activation email
     const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-    const activationLink = `${baseUrl}/activate/${activationToken}`;
+    const activationLink = `${baseUrl}/#/activate/${activationToken}`;
 
     const subject = 'Activate Your CollabCanvas Account';
     const text = `Welcome to CollabCanvas! Please activate your account by clicking the following link: ${activationLink}`;
@@ -424,7 +424,7 @@ exports.forgotPassword = async (req, res) => {
     await user.save();
 
     const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-    const resetLink = `${baseUrl}/reset-password?token=${resetToken}`;
+    const resetLink = `${baseUrl}/#/reset-password?token=${resetToken}`;
 
     const subject = 'Password Reset Request';
     const text = `Use the following link to reset your password: ${resetLink}`;

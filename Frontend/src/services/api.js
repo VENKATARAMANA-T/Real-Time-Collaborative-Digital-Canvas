@@ -49,15 +49,17 @@ api.interceptors.response.use(
         // Refresh failed, avoid reload loops on public pages
         localStorage.removeItem('user');
 
+        // With HashRouter, routes are inside window.location.hash (e.g. "#/dashboard")
+        const hashPath = (window.location.hash || '#/').replace(/^#/, '');
         const isPublicPath = [
           '/', '/home', '/login', '/register', '/forgot-password', '/reset-password'
-        ].some(p => window.location.pathname === p || window.location.pathname.startsWith('/shared') || window.location.pathname.startsWith('/join-link'));
+        ].some(p => hashPath === p || hashPath.startsWith('/shared') || hashPath.startsWith('/join-link'));
 
         const hasRedirected = sessionStorage.getItem('authRedirected') === 'true';
 
         if (!isPublicPath && !hasRedirected) {
           sessionStorage.setItem('authRedirected', 'true');
-          window.location.replace('/login');
+          window.location.replace('/#/login');
         }
 
         return Promise.reject(refreshError);
