@@ -714,7 +714,8 @@ export default function Dashboard() {
       const data = await meetingAPI.create({
         name: meetingName.trim(),
         scheduledDate: scheduleDate,
-        scheduledTime: scheduleTime
+        scheduledTime: scheduleTime,
+        scheduledISO: new Date(`${scheduleDate}T${scheduleTime}`).toISOString()
       });
       setScheduledMeetingDetails({
         id: data.meetingId,
