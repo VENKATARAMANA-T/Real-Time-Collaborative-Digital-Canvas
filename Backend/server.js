@@ -177,8 +177,6 @@ const startMeetingReminderScheduler = () => {
   console.log('[Reminder Scheduler] Started — checking every 30s for due meetings');
 };
 
-
-
 // 1. Connect to DB first
 connectDB().then(() => {
   // 2. ONLY start server if DB connects successfully
