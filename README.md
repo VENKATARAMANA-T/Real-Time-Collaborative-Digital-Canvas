@@ -2,8 +2,8 @@
 
 A **full-stack, real-time collaborative digital whiteboard** that allows users to create, draw, collaborate on canvases, host video meetings with shared whiteboards, chat in real time, and manage files — all in a secure, modern environment.
 
+**Video URL :** https://youtu.be/0BK6py93VlA
 
-**VIDEO URL : https://youtu.be/0BK6py93VlA
 **Live URL :** https://real-time-collaborative-digital-can.vercel.app/
 
 
